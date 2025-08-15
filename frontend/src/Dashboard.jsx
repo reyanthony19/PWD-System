@@ -11,35 +11,39 @@ import {
   Legend,
   ResponsiveContainer,
   CartesianGrid,
+  PieChart,
+  Pie,
+  Cell,
 } from "recharts";
 
 function Dashboard() {
-  const [admins, setAdmins] = useState([]);
-  const [staff, setStaff] = useState([]);
   const [members, setMembers] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
+  const [trendData, setTrendData] = useState([]);
+
+  const COLORS = ["#10b981", "#ef4444", "#6b7280", "#f59e0b", "#3b82f6"];
 
   useEffect(() => {
-    fetchUsers();
+    fetchMembers();
     fetchCurrentUser();
+    fetchTrends();
 
     const interval = setInterval(() => {
-      fetchUsers();
+      fetchMembers();
       fetchCurrentUser();
+      fetchTrends();
     }, 5000);
 
     return () => clearInterval(interval);
   }, []);
 
-  const fetchUsers = async () => {
+  const fetchMembers = async () => {
     try {
       const res = await api.get("/users");
-      const allUsers = res.data;
-      setAdmins(allUsers.filter((user) => user.role === "admin"));
-      setStaff(allUsers.filter((user) => user.role === "staff"));
-      setMembers(allUsers.filter((user) => user.role === "member"));
+      const allMembers = res.data.filter((user) => user.role === "member");
+      setMembers(allMembers);
     } catch (err) {
-      console.error("Error loading users:", err);
+      console.error("Error loading members:", err);
     }
   };
 
@@ -52,85 +56,123 @@ function Dashboard() {
     }
   };
 
-  const chartData = [
-    { role: "Admins", count: admins.length },
-    { role: "Staff", count: staff.length },
-    { role: "Members", count: members.length },
-  ];
+  const fetchTrends = async () => {
+    try {
+      const res = await api.get("/members/status-trends");
+      setTrendData(res.data);
+    } catch (err) {
+      console.error("Error fetching trends:", err);
+    }
+  };
+
+  // Group by status
+  const statusCounts = {
+    Approved: members.filter((m) => m.status === "approved").length,
+    Rejected: members.filter((m) => m.status === "rejected").length,
+    Deceased: members.filter((m) => m.status === "deceased").length,
+    Inactive: members.filter((m) => m.status === "inactive").length,
+    Pending: members.filter((m) => m.status === "pending").length,
+  };
+
+  const totalMembers = members.length;
+  const activeMembers = statusCounts["Approved"];
+
+  const chartData = Object.keys(statusCounts).map((status) => ({
+    status,
+    count: statusCounts[status],
+  }));
 
   return (
-    <><Header />
+    <>
+      <Header />
 
       <div className="min-h-screen bg-gray-100">
-
-        <div className="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-          {/* Quick Actions */}
+        {/* Main container now uses almost full screen width */}
+        <div className="max-w-[95%] mx-auto px-8 py-6 grid grid-cols-1 lg:grid-cols-2 gap-8">
+          
+          {/* Summary Overview */}
           <section className="bg-white rounded-xl shadow p-6">
             <h2 className="text-xl font-bold text-gray-800">
               Welcome, {currentUser?.username || "..."}
             </h2>
             <h3 className="text-lg font-semibold text-gray-600 mt-2 mb-4">
-              Quick Actions
+              Members Overview
             </h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Link
-                to="/announcements"
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-700 transition"
-              >
-                📢 Post Announcement
-              </Link>
-              <Link
-                to="/staff"
-                className="bg-green-600 text-white px-4 py-2 rounded-lg shadow hover:bg-green-700 transition"
-              >
-                👨‍💼 Manage Staff
-              </Link>
-              <Link
-                to="/members"
-                className="bg-purple-600 text-white px-4 py-2 rounded-lg shadow hover:bg-purple-700 transition"
-              >
-                👥 Manage Members
-              </Link>
-              <Link
-                to="/events"
-                className="bg-yellow-500 text-white px-4 py-2 rounded-lg shadow hover:bg-yellow-600 transition"
-              >
-                📅 Manage Events
-              </Link>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              <div className="bg-blue-100 p-4 rounded-lg text-center">
+                <p className="text-2xl font-bold text-blue-700">{totalMembers}</p>
+                <p className="text-sm text-gray-600">Total Members</p>
+              </div>
+              <div className="bg-green-100 p-4 rounded-lg text-center">
+                <p className="text-2xl font-bold text-green-700">{activeMembers}</p>
+                <p className="text-sm text-gray-600">Active (Approved)</p>
+              </div>
+              <div className="bg-yellow-100 p-4 rounded-lg text-center">
+                <p className="text-2xl font-bold text-yellow-700">{statusCounts["Pending"]}</p>
+                <p className="text-sm text-gray-600">Pending</p>
+              </div>
+              <div className="bg-red-100 p-4 rounded-lg text-center">
+                <p className="text-2xl font-bold text-red-700">{statusCounts["Rejected"]}</p>
+                <p className="text-sm text-gray-600">Rejected</p>
+              </div>
+              <div className="bg-gray-200 p-4 rounded-lg text-center">
+                <p className="text-2xl font-bold text-gray-700">{statusCounts["Deceased"]}</p>
+                <p className="text-sm text-gray-600">Deceased</p>
+              </div>
+              <div className="bg-orange-100 p-4 rounded-lg text-center">
+                <p className="text-2xl font-bold text-orange-700">{statusCounts["Inactive"]}</p>
+                <p className="text-sm text-gray-600">Inactive</p>
+              </div>
             </div>
-
-            <button
-              onClick={async () => {
-                try {
-                  await api.post("/logout");
-                  window.location.href = "/login";
-                } catch (err) {
-                  console.error("Logout failed", err);
-                }
-              }}
-              className="mt-6 w-full bg-red-600 text-white px-4 py-2 rounded-lg shadow hover:bg-red-700 transition"
-            >
-              🚪 Logout
-            </button>
           </section>
 
-          {/* Users Chart */}
+          {/* Members Status - Bar Chart */}
           <section className="bg-white rounded-xl shadow p-6">
             <h3 className="text-lg font-semibold text-gray-800 mb-4">
-              Users
+              Members by Status (Bar Chart)
             </h3>
-            <div style={{ width: "100%", height: 300 }}>
+            <div style={{ width: "100%", height: 320 }}>
               <ResponsiveContainer>
                 <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="role" />
+                  <XAxis dataKey="status" />
                   <YAxis allowDecimals={false} />
                   <Tooltip />
                   <Legend />
                   <Bar dataKey="count" fill="#3b82f6" />
                 </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </section>
+
+          {/* Members Status - Pie Chart */}
+          <section className="bg-white rounded-xl shadow p-6 col-span-1 lg:col-span-2">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">
+              Status Distribution (Pie Chart)
+            </h3>
+            <div style={{ width: "100%", height: 350 }}>
+              <ResponsiveContainer>
+                <PieChart>
+                  <Pie
+                    data={chartData}
+                    dataKey="count"
+                    nameKey="status"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={120}
+                    label
+                  >
+                    {chartData.map((_, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={COLORS[index % COLORS.length]}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </PieChart>
               </ResponsiveContainer>
             </div>
           </section>

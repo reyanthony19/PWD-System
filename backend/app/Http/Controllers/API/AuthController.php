@@ -19,7 +19,7 @@ class AuthController extends Controller
             'email'    => 'required|string|email|unique:users,email',
             'password' => 'required|string|min:3',
             'role'     => 'nullable|in:admin,staff,member',
-            'status'   => 'nullable|in:pending,approved,rejected',
+            'status'   => 'nullable|in:approved,inactive,deceased,rejected,pending',
         ]);
 
         $user = User::create([
@@ -30,7 +30,6 @@ class AuthController extends Controller
             'status'   => $request->status ?? 'pending',
         ]);
 
-        // Automatically create profile based on role
         $profileData = [
             'first_name' => $request->first_name ?? '',
             'middle_name' => $request->middle_name ?? null,
@@ -45,11 +44,9 @@ class AuthController extends Controller
             case 'admin':
                 $user->adminProfile()->create($profileData);
                 break;
-
             case 'staff':
                 $user->staffProfile()->create($profileData);
                 break;
-
             case 'member':
                 $user->memberProfile()->create($profileData);
                 break;
@@ -81,11 +78,9 @@ class AuthController extends Controller
     public function logout(Request $request)
     {
         $request->user()->tokens()->delete();
-
         return response()->json(['message' => 'Logged out successfully']);
     }
 
-    // Return user with role-specific profile
     public function profile(Request $request)
     {
         $user = $request->user()->load($request->user()->role . 'Profile');
@@ -95,40 +90,35 @@ class AuthController extends Controller
     public function showUser($id)
     {
         $user = User::find($id);
-
         if (!$user) {
             return response()->json(['message' => 'User not found'], 404);
         }
-
         return response()->json($user->load($user->role . 'Profile'));
     }
 
     public function listUsers(Request $request)
     {
         $role = $request->query('role');
-
         if ($role && in_array($role, ['admin', 'staff', 'member'])) {
             $users = User::where('role', $role)->with("{$role}Profile")->get();
         } else {
             $users = User::with(['adminProfile', 'staffProfile', 'memberProfile'])->get();
         }
-
         return response()->json($users);
     }
 
     public function updateUser(Request $request, $id)
     {
-        // Prevent users from editing others unless admin
         if ($request->user()->id !== (int)$id && $request->user()->role !== 'admin') {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
         $user = User::findOrFail($id);
 
-        // Validate only what your form sends
         $validated = $request->validate([
             'username' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email,' . $id,
+            'old_password' => 'nullable|string',
             'password' => 'nullable|string|min:3',
             'first_name' => 'nullable|string|max:255',
             'middle_name' => 'nullable|string|max:255',
@@ -138,30 +128,26 @@ class AuthController extends Controller
             'address' => 'nullable|string|max:255',
         ]);
 
-        // Update users table
-        $user->username = $validated['username'];
-        $user->email = $validated['email'];
+        // ✅ Require old password if changing password
         if (!empty($validated['password'])) {
+            if (empty($validated['old_password'])) {
+                return response()->json(['message' => 'Old password is required to change password.'], 422);
+            }
+            if (!Hash::check($validated['old_password'], $user->password)) {
+                return response()->json(['message' => 'Old password is incorrect.'], 422);
+            }
             $user->password = Hash::make($validated['password']);
         }
+
+        $user->username = $validated['username'];
+        $user->email = $validated['email'];
         $user->save();
 
-        // Filter out nulls so we only update changed profile fields
         $profileData = collect($validated)
-            ->only([
-                'first_name',       
-                'middle_name',
-                'last_name',
-                'contact_number',
-                'birthdate',
-                'address'
-            ])
-            ->filter(function ($value) {
-                return $value !== null;
-            })
+            ->only(['first_name', 'middle_name', 'last_name', 'contact_number', 'birthdate', 'address'])
+            ->filter(fn($value) => $value !== null)
             ->toArray();
 
-        // Update correct profile table
         if ($user->role === 'admin') {
             $user->adminProfile()->updateOrCreate(['user_id' => $user->id], $profileData);
         } elseif ($user->role === 'staff') {
@@ -175,4 +161,21 @@ class AuthController extends Controller
             'user' => $user->load($user->role . 'Profile')
         ]);
     }
+
+    public function updateStatus(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'status' => 'required|in:approved,inactive,deceased,rejected,pending',
+        ]);
+
+        $user = User::findOrFail($id);
+        $user->status = $validated['status'];
+        $user->save();
+
+        return response()->json([
+            'message' => 'User status updated successfully.',
+            'user' => $user
+        ], 200);
+    }
+    
 }

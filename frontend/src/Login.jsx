@@ -66,16 +66,21 @@ function Login() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100">
-      <div className="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
-        <h2 className="text-2xl font-bold mb-6 text-center text-gray-800">
+    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-400 via-indigo-500 to-purple-600 px-4">
+      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md transform transition-all duration-300 hover:scale-[1.02]">
+        <h2 className="text-3xl font-extrabold mb-6 text-center text-gray-800">
           Admin Login
         </h2>
-        {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
 
-        <form onSubmit={handleLogin} className="space-y-4">
+        {error && (
+          <p className="text-red-500 text-sm mb-4 bg-red-100 p-2 rounded-md text-center">
+            {error}
+          </p>
+        )}
+
+        <form onSubmit={handleLogin} className="space-y-5">
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               Email
             </label>
             <input
@@ -84,14 +89,14 @@ function Login() {
               value={form.email}
               onChange={handleChange}
               required
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 
-                         rounded-md shadow-sm focus:outline-none focus:ring-blue-500 
-                         focus:border-blue-500 sm:text-sm"
+              className="block w-full px-4 py-2 border border-gray-300 rounded-lg 
+                         shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 
+                         focus:border-indigo-400 transition"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               Password
             </label>
             <input
@@ -100,9 +105,9 @@ function Login() {
               value={form.password}
               onChange={handleChange}
               required
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 
-                         rounded-md shadow-sm focus:outline-none focus:ring-blue-500 
-                         focus:border-blue-500 sm:text-sm"
+              className="block w-full px-4 py-2 border border-gray-300 rounded-lg 
+                         shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 
+                         focus:border-indigo-400 transition"
             />
           </div>
 
@@ -111,7 +116,7 @@ function Login() {
               type="checkbox"
               checked={rememberMe}
               onChange={() => setRememberMe(!rememberMe)}
-              className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+              className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
             />
             <label className="ml-2 block text-sm text-gray-700">
               Remember me
@@ -121,9 +126,9 @@ function Login() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded-md 
-                       hover:bg-blue-700 focus:outline-none focus:ring-2 
-                       focus:ring-blue-500 focus:ring-offset-1 transition"
+            className="w-full bg-indigo-600 text-white py-2 px-4 rounded-lg 
+                       hover:bg-indigo-700 focus:outline-none focus:ring-2 
+                       focus:ring-indigo-400 focus:ring-offset-1 transition font-semibold"
           >
             {loading ? "Loading..." : "Login"}
           </button>
@@ -132,7 +137,7 @@ function Login() {
         <p className="mt-4 text-center text-sm text-gray-600">
           <Link
             to="/forgot-password"
-            className="text-blue-600 hover:text-blue-800"
+            className="text-indigo-600 hover:text-indigo-800 transition"
           >
             Forgot Password?
           </Link>

@@ -13,7 +13,9 @@ Route::get('/user/{id}', [AuthController::class, 'showUser']);
 
 // Protected Routes (requires authentication)
 Route::middleware('auth:sanctum')->group(function () {
-    Route::get('/user', [AuthController::class, 'profile']);   // Current authenticated user's profile
+    Route::get('/user', [AuthController::class, 'profile']);   
     Route::put('/user/{id}', [AuthController::class, 'updateUser']);
-    Route::post('/logout', [AuthController::class, 'logout']); // Logout
+    Route::patch('/user/{id}/status', [AuthController::class, 'updateStatus']); // ✅ New route
+    Route::post('/logout', [AuthController::class, 'logout']);
+    
 });

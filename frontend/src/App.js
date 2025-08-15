@@ -15,6 +15,8 @@ import Dashboard from './Dashboard';
 import ForgotPassword from './ForgotPassword';
 import Profile from './Profile';
 import MemberList from './MemberList';
+import MemberProfile from './MemberProfile';
+
 // Route Guards
 const ProtectedRoute = () => {
   const token = localStorage.getItem('token');
@@ -43,6 +45,8 @@ function App() {
           <Route path="/register" element={<Register />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/member" element={<MemberList />} />
+          <Route path="/members/:id" element={<MemberProfile />} />
+
 
         </Route>
 

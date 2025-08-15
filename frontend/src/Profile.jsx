@@ -7,6 +7,7 @@ function Profile() {
   const [formData, setFormData] = useState({
     username: "",
     email: "",
+    old_password: "",
     password: "",
     first_name: "",
     middle_name: "",
@@ -15,7 +16,6 @@ function Profile() {
     birthdate: "",
     address: ""
   });
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -32,21 +32,19 @@ function Profile() {
           fetchedUser.member_profile ||
           {};
 
-        setFormData({
+        setFormData((prev) => ({
+          ...prev,
           username: fetchedUser.username || "",
           email: fetchedUser.email || "",
-          password: "",
           first_name: p.first_name || "",
           middle_name: p.middle_name || "",
           last_name: p.last_name || "",
           contact_number: p.contact_number || "",
           birthdate: p.birthdate || "",
           address: p.address || ""
-        });
+        }));
       } catch (err) {
         console.error("Failed to fetch profile:", err);
-      } finally {
-        setLoading(false);
       }
     };
 
@@ -65,54 +63,40 @@ function Profile() {
     setSaving(true);
     setMessage("");
 
-    // Only send password if it's not blank
     const payload = { ...formData };
     if (!payload.password) delete payload.password;
+    if (!payload.old_password) delete payload.old_password;
 
     try {
-      await api.put(`/user/${user.id}`, payload);
+      await api.put(`/user/${user?.id}`, payload);
       setMessage("Profile updated successfully!");
+      setFormData((prev) => ({ ...prev, old_password: "", password: "" }));
     } catch (err) {
       console.error("Failed to update profile:", err);
-      setMessage("Failed to update profile.");
+      setMessage(
+        err.response?.data?.message || "Failed to update profile."
+      );
     } finally {
       setSaving(false);
     }
   };
 
-  if (loading)
-    return (
-      <div className="flex justify-center items-center h-screen bg-gray-100">
-        <div className="flex flex-col items-center">
-          {/* Spinner */}
-          <div className="w-16 h-16 border-4 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
-          {/* Text */}
-
-        </div>
-      </div>
-    );
-
-  if (!user)
-    return (
-      <div className="flex justify-center items-center h-screen">
-        <p className="text-red-500 text-lg">Profile not found.</p>
-      </div>
-    );
+  
 
   return (
     <div className="min-h-screen bg-gray-100">
       <Header />
-
       <div className="max-w-3xl mx-auto p-6">
         <div className="bg-white rounded-lg shadow-md p-6">
           <h1 className="text-3xl font-bold mb-6 text-gray-800">Edit Profile</h1>
 
           {message && (
             <div
-              className={`mb-4 p-3 rounded ${message.includes("successfully")
+              className={`mb-4 p-3 rounded ${
+                message.includes("successfully")
                   ? "bg-green-100 text-green-700"
                   : "bg-red-100 text-red-700"
-                }`}
+              }`}
             >
               {message}
             </div>
@@ -147,10 +131,25 @@ function Profile() {
               />
             </div>
 
-            {/* Password */}
+            {/* Old Password */}
             <div>
               <label className="block text-gray-700 font-medium mb-1">
-                Password
+                Current Password
+              </label>
+              <input
+                type="password"
+                name="old_password"
+                value={formData.old_password}
+                placeholder="Enter current password to change password"
+                onChange={handleChange}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-red-300"
+              />
+            </div>
+
+            {/* New Password */}
+            <div>
+              <label className="block text-gray-700 font-medium mb-1">
+                New Password
               </label>
               <input
                 type="password"
@@ -204,14 +203,14 @@ function Profile() {
               />
             </div>
 
+            {/* Contact Number */}
             <div>
               <label className="block text-gray-700 font-medium mb-1">
                 Contact Number
               </label>
               <input
-                placeholder=""
-                type="integer"
-                maxLength={'11'}
+                type="text"
+                maxLength="11"
                 name="contact_number"
                 value={formData.contact_number}
                 onChange={handleChange}

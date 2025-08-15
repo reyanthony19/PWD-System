@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "./api";
 import Header from "./Header";
 
 function MemberList() {
   const [members, setMembers] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [sortOption, setSortOption] = useState("firstname-asc");
+
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchMembers = async () => {
@@ -18,8 +20,6 @@ function MemberList() {
       } catch (err) {
         console.error(err);
         setError("Failed to fetch members.");
-      } finally {
-        setLoading(false);
       }
     };
 
@@ -29,13 +29,15 @@ function MemberList() {
   }, []);
 
   const handleStatusChange = async (id, newStatus) => {
+    const oldMembers = [...members];
     try {
       setMembers((prev) =>
         prev.map((m) => (m.id === id ? { ...m, status: newStatus } : m))
       );
-      await api.put(`/users/${id}`, { status: newStatus });
+      await api.patch(`/user/${id}/status`, { status: newStatus });
     } catch (err) {
       console.error("Failed to update status", err);
+      setMembers(oldMembers);
     }
   };
 
@@ -55,7 +57,6 @@ function MemberList() {
     .sort((a, b) => {
       const profileA = a.member_profile || {};
       const profileB = b.member_profile || {};
-
       if (sortOption === "firstname-asc") {
         return (profileA.first_name || "").localeCompare(
           profileB.first_name || ""
@@ -75,19 +76,28 @@ function MemberList() {
       return 0;
     });
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-screen bg-gray-100">
-        <div className="flex flex-col items-center">
-          <div className="w-16 h-16 border-4 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
-        </div>
-      </div>
-    );
-  }
+  const getStatusButtonStyle = (status) => {
+    const base =
+      "px-4 py-2 rounded-lg font-semibold text-white shadow focus:outline-none focus:ring-4 focus:ring-offset-2 transition-all duration-200";
+    switch (status) {
+      case "approved":
+        return `${base} bg-green-600 focus:ring-green-300`;
+      case "inactive":
+        return `${base} bg-yellow-600 focus:ring-yellow-300`;
+      case "deceased":
+        return `${base} bg-gray-700 focus:ring-gray-400`;
+      case "rejected":
+        return `${base} bg-red-600 focus:ring-red-300`;
+      case "pending":
+        return `${base} bg-blue-600 focus:ring-blue-300`;
+      default:
+        return `${base} bg-gray-400 focus:ring-gray-300`;
+    }
+  };
 
   if (error) {
     return (
-      <div className="flex justify-center items-center min-h-screen text-red-500">
+      <div className="flex justify-center items-center min-h-screen text-red-600 font-bold text-lg">
         {error}
       </div>
     );
@@ -96,23 +106,26 @@ function MemberList() {
   return (
     <>
       <Header />
-      <div className="min-h-screen bg-gray-100">
+      <div className="min-h-screen bg-gradient-to-b from-gray-100 to-gray-200">
         <div className="max-w-7xl mx-auto p-6">
-          <h1 className="text-2xl font-bold text-gray-800 mb-6">Member List</h1>
+          <h1 className="text-3xl font-extrabold text-gray-800 mb-6">
+            Member List
+          </h1>
 
-          {/* Controls */}
-          <div className="flex flex-wrap gap-4 mb-4">
-            {/* Filter Menu */}
-            <div className="flex gap-2">
+          {/* Filter & Controls */}
+          <div className="flex flex-wrap gap-4 mb-4 items-center">
+            {/* Status Filters */}
+            <div className="flex gap-2 flex-wrap">
               {["all", "approved", "inactive", "deceased", "rejected", "pending"].map(
                 (status) => (
                   <button
                     key={status}
                     onClick={() => setStatusFilter(status)}
-                    className={`px-4 py-2 rounded-lg font-semibold transition ${statusFilter === status
-                      ? "bg-blue-600 text-white"
-                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                      }`}
+                    className={`${getStatusButtonStyle(status)} ${
+                      statusFilter === status
+                        ? "ring-4 ring-offset-2 ring-white"
+                        : ""
+                    }`}
                   >
                     {status.charAt(0).toUpperCase() + status.slice(1)}
                   </button>
@@ -123,17 +136,17 @@ function MemberList() {
             {/* Search */}
             <input
               type="text"
-              placeholder="Search by username or email"
+              placeholder="🔍 Search by username or email"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="border rounded-lg px-3 py-2 w-64"
+              className="border border-gray-400 rounded-lg px-4 py-2 w-64 focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg"
             />
 
             {/* Sort */}
             <select
               value={sortOption}
               onChange={(e) => setSortOption(e.target.value)}
-              className="border rounded-lg px-3 py-2"
+              className="border border-gray-400 rounded-lg px-4 py-2 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="firstname-asc">First Name (A–Z)</option>
               <option value="firstname-desc">First Name (Z–A)</option>
@@ -142,58 +155,50 @@ function MemberList() {
             </select>
           </div>
 
-          <div className="overflow-x-auto bg-white rounded-xl shadow">
-            <table className="min-w-full text-sm text-left border-collapse">
-              <thead className="bg-gray-200 text-gray-700 uppercase text-xs">
+          {/* Member Table */}
+          <div className="overflow-x-auto bg-white rounded-xl shadow-lg">
+            <table className="min-w-full text-base text-left border-collapse">
+              <thead className="bg-blue-700 text-white uppercase">
                 <tr>
+                  <th className="px-4 py-3">ID</th>
                   <th className="px-4 py-3">First Name</th>
                   <th className="px-4 py-3">Last Name</th>
                   <th className="px-4 py-3">Username</th>
                   <th className="px-4 py-3">Email</th>
-                  <th className="px-4 py-3">Contact Number</th>
+                  <th className="px-4 py-3">Contact</th>
                   <th className="px-4 py-3">Address</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Action</th>
-                  <th className="px-4 py-3">update</th>
-
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody>
                 {filteredMembers.length > 0 ? (
                   filteredMembers.map((member) => {
                     const profile = member.member_profile || {};
                     return (
-                      <tr key={member.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3">{profile.first_name || "-"}</td>
+                      <tr
+                        key={member.id}
+                        className="odd:bg-gray-100 even:bg-gray-50 hover:bg-yellow-100 cursor-pointer"
+                        onClick={() => navigate(`/members/${member.id}`)}
+                      >
+                        <td className="px-4 py-3">{member.id}</td>
+                        <td className="px-4 py-3 font-semibold">
+                          {profile.first_name || "-"}
+                        </td>
                         <td className="px-4 py-3">{profile.last_name || "-"}</td>
                         <td className="px-4 py-3">{member.username}</td>
                         <td className="px-4 py-3">{member.email}</td>
-
-                        <td className="px-4 py-3">
-                          {profile.contact_number || "-"}
-                        </td>
+                        <td className="px-4 py-3">{profile.contact_number || "-"}</td>
                         <td className="px-4 py-3">{profile.address || "-"}</td>
-                        <td
-                          className={`px-4 py-3 font-semibold ${member.status?.toLowerCase() === "approved"
-                            ? "text-green-600"
-                            : member.status?.toLowerCase() === "inactive"
-                              ? "text-gray-600"
-                              : member.status?.toLowerCase() === "deceased"
-                                ? "text-black"
-                                : member.status?.toLowerCase() === "rejected"
-                                  ? "text-red-600"
-                                  : "text-yellow-600"
-                            }`}
-                        >
-                          {member.status}
-                        </td>
+                        <td className="px-4 py-3">{member.status}</td>
                         <td className="px-4 py-3">
                           <select
                             value={member.status}
+                            onClick={(e) => e.stopPropagation()}
                             onChange={(e) =>
                               handleStatusChange(member.id, e.target.value)
                             }
-                            className="border rounded px-2 py-1"
+                            className="border rounded px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                           >
                             <option value="approved">Approved</option>
                             <option value="inactive">Inactive</option>
@@ -208,7 +213,7 @@ function MemberList() {
                 ) : (
                   <tr>
                     <td
-                      colSpan="10"
+                      colSpan="9"
                       className="px-4 py-3 text-center text-gray-500"
                     >
                       No members found for "{statusFilter}" status.
