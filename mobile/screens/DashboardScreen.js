@@ -38,7 +38,7 @@ export default function DashboardScreen({ navigation }) {
 
   const handleLogout = async () => {
     await AsyncStorage.clear();
-    navigation.replace('Login');
+    navigation.replace('MemberLogin');
   };
 
   return (

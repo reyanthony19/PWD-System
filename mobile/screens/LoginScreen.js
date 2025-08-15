@@ -1,5 +1,13 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, Button, StyleSheet, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  Button,
+  StyleSheet,
+  Alert,
+  TouchableOpacity  
+} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../api/api';
 
@@ -14,22 +22,29 @@ export default function LoginScreen({ navigation }) {
     }
 
     try {
+      // Send POST request to Laravel API
       const res = await api.post('/login', { email, password });
+
+      // Debug: log full API response
+      console.log('API Response:', res.data);
 
       const user = res.data.user;
 
-      // ✅ Role check — only allow staff
-      if (user.role !== 'staff') {
-        Alert.alert('Access Denied', 'Only staff accounts can log in here.');
+      // Role check — only allow staff
+      if (!user || user.role !== 'staff') {
+        Alert.alert('Invalid Credentials');
         return;
       }
 
-      // ✅ Store token + user
+      // Save token and user info
       await AsyncStorage.setItem('token', res.data.token);
       await AsyncStorage.setItem('user', JSON.stringify(user));
 
+      // Navigate to Dashboard
       navigation.replace('Dashboard');
     } catch (err) {
+      // Debug: log errors
+      console.log('Login error:', err.response?.data || err.message);
       Alert.alert('Login Failed', err.response?.data?.message || 'Invalid credentials');
     }
   };
@@ -37,6 +52,7 @@ export default function LoginScreen({ navigation }) {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Staff Login</Text>
+
       <TextInput
         style={styles.input}
         placeholder="Email"
@@ -45,6 +61,7 @@ export default function LoginScreen({ navigation }) {
         value={email}
         onChangeText={setEmail}
       />
+
       <TextInput
         style={styles.input}
         placeholder="Password"
@@ -52,7 +69,13 @@ export default function LoginScreen({ navigation }) {
         value={password}
         onChangeText={setPassword}
       />
+
       <Button title="Login" onPress={handleLogin} />
+
+      {/* Link to Member Login */}
+      <TouchableOpacity onPress={() => navigation.navigate('MemberLogin')} style={{ marginTop: 20 }}>
+        <Text style={{ color: '#2196F3', textAlign: 'center' }}>Login as Member here</Text>
+      </TouchableOpacity>
     </View>
   );
 }

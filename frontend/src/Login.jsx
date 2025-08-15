@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import api from './api';
+import api from './api'; // your Axios instance
 
 function Login() {
   const [form, setForm] = useState({ email: '', password: '' });
@@ -9,6 +9,7 @@ function Login() {
   const [rememberMe, setRememberMe] = useState(false);
   const navigate = useNavigate();
 
+  // Load stored credentials if "Remember me" was previously checked
   useEffect(() => {
     const storedEmail = localStorage.getItem('email');
     const storedPassword = localStorage.getItem('password');
@@ -39,18 +40,19 @@ function Login() {
     try {
       const response = await api.post('/login', form);
 
-      // Check if user role is 'admin'
+      // Only allow admin login
       if (response.data.user?.role !== 'admin') {
         setError('Access denied. You must be an admin to login.');
         setLoading(false);
         return;
       }
 
-      // Save token on successful admin login
+      // Save token to localStorage
       localStorage.setItem('token', response.data.token);
 
       if (rememberMe) {
         localStorage.setItem('email', form.email);
+        localStorage.setItem('password', form.password);
         localStorage.setItem('rememberMe', 'true');
       } else {
         localStorage.removeItem('email');
@@ -67,56 +69,48 @@ function Login() {
   };
 
   return (
-    <center>
-      <div className='login-body'>
-        <div className="wrapper">
-          <form className="login-form" onSubmit={handleLogin}>
-            <h1>Login Admin</h1>
-            {error && <div className="error-msg">{error}</div>}
-
-            <div className='input-box'>
-              <input
-                type="email"
-                name="email"
-                placeholder="Email"
-                value={form.email}
-                onChange={handleChange}
-                required
-              />
-            </div>
-
-            <div className='input-box'>
-              <input
-                type="password"
-                name="password"
-                placeholder="Password"
-                value={form.password}
-                onChange={handleChange}
-                required
-              />
-            </div>
-
-            <div className='remember-forgot'>
-              <label>
-                <input
-                  type='checkbox'
-                  checked={rememberMe}
-                  onChange={() => setRememberMe(!rememberMe)}
-                />
-                Remember me
-                <Link to="/forgot-password">Forgot Password?</Link>
-              </label>
-            </div>
-
-            <div>
-              <button className="btn btn-primary" disabled={loading}>
-                {loading ? <span className="loading-text">Loading in</span> : 'Login'}
-              </button>
-            </div>
-          </form>
+    <div style={{ maxWidth: '400px', margin: '50px auto' }}>
+      <h2>Admin Login</h2>
+      {error && <p style={{ color: 'red' }}>{error}</p>}
+      <form onSubmit={handleLogin}>
+        <div>
+          <label>Email</label>
+          <input
+            type="email"
+            name="email"
+            value={form.email}
+            onChange={handleChange}
+            required
+          />
         </div>
-      </div>
-    </center>
+        <div>
+          <label>Password</label>
+          <input
+            type="password"
+            name="password"
+            value={form.password}
+            onChange={handleChange}
+            required
+          />
+        </div>
+        <div>
+          <label>
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={() => setRememberMe(!rememberMe)}
+            />{' '}
+            Remember me
+          </label>
+        </div>
+        <button type="submit" disabled={loading}>
+          {loading ? 'Loading...' : 'Login'}
+        </button>
+      </form>
+      <p>
+        <Link to="/forgot-password">Forgot Password?</Link>
+      </p>
+    </div>
   );
 }
 

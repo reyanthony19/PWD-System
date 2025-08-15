@@ -3,6 +3,9 @@
 namespace App\Http\Controllers\API;
 
 use App\Models\User;
+use App\Models\AdminProfile;
+use App\Models\StaffProfile;
+use App\Models\MemberProfile;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use App\Http\Controllers\Controller;
@@ -12,23 +15,49 @@ class AuthController extends Controller
     public function register(Request $request)
     {
         $request->validate([
-            'name'     => 'required|string|max:255',
+            'username'     => 'required|string|max:255',
             'email'    => 'required|string|email|unique:users,email',
             'password' => 'required|string|min:3',
-            'role'     => 'nullable|in:admin,staff,member',  // Optional role input
+            'role'     => 'nullable|in:admin,staff,member',
+            'status'   => 'nullable|in:pending,approved,rejected',
         ]);
 
         $user = User::create([
-            'name'     => $request->name,
+            'username'     => $request->username,
             'email'    => $request->email,
             'password' => bcrypt($request->password),
-            'role'     => $request->role ?? 'member',  // default role 'member' if not provided
-            'status'   => 'pending',  // default status for new user
+            'role'     => $request->role ?? 'member',
+            'status'   => $request->status ?? 'pending',
         ]);
+
+        // Automatically create profile based on role
+        $profileData = [
+            'first_name' => $request->first_name ?? '',
+            'middle_name' => $request->middle_name ?? null,
+            'last_name'  => $request->last_name ?? '',
+            'email'      => $user->email,
+            'contact_number'      => $request->contact_number ?? null,
+            'birthdate'  => $request->birthdate ?? null,
+            'address'    => $request->address ?? null,
+        ];
+
+        switch ($user->role) {
+            case 'admin':
+                $user->adminProfile()->create($profileData);
+                break;
+
+            case 'staff':
+                $user->staffProfile()->create($profileData);
+                break;
+
+            case 'member':
+                $user->memberProfile()->create($profileData);
+                break;
+        }
 
         $token = $user->createToken('token')->plainTextToken;
 
-        return response()->json(['user' => $user, 'token' => $token], 201);
+        return response()->json(['user' => $user->load($user->role . 'Profile'), 'token' => $token], 201);
     }
 
     public function login(Request $request)
@@ -46,7 +75,7 @@ class AuthController extends Controller
 
         $token = $user->createToken('token')->plainTextToken;
 
-        return response()->json(['user' => $user, 'token' => $token], 200);
+        return response()->json(['user' => $user->load($user->role . 'Profile'), 'token' => $token], 200);
     }
 
     public function logout(Request $request)
@@ -56,9 +85,11 @@ class AuthController extends Controller
         return response()->json(['message' => 'Logged out successfully']);
     }
 
+    // Return user with role-specific profile
     public function profile(Request $request)
     {
-        return response()->json($request->user());
+        $user = $request->user()->load($request->user()->role . 'Profile');
+        return response()->json($user);
     }
 
     public function showUser($id)
@@ -69,33 +100,24 @@ class AuthController extends Controller
             return response()->json(['message' => 'User not found'], 404);
         }
 
-        return response()->json($user);
+        return response()->json($user->load($user->role . 'Profile'));
     }
 
-    // Updated listUsers to support filtering by role via query param: ?role=admin
     public function listUsers(Request $request)
     {
         $role = $request->query('role');
 
         if ($role && in_array($role, ['admin', 'staff', 'member'])) {
-            $users = User::where('role', $role)->get();
+            $users = User::where('role', $role)->with("{$role}Profile")->get();
         } else {
-            $users = User::all();
+            $users = User::with(['adminProfile', 'staffProfile', 'memberProfile'])->get();
         }
 
         return response()->json($users);
     }
 
-    /**
-     * Update the specified user's profile.
-     *
-     * @param \Illuminate\Http\Request $request
-     * @param int $id
-     * @return \Illuminate\Http\JsonResponse
-     */
     public function updateUser(Request $request, $id)
     {
-        // Allow admins to update any user; regular users only their own profile
         if ($request->user()->id !== (int)$id && $request->user()->role !== 'admin') {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
@@ -108,7 +130,6 @@ class AuthController extends Controller
             'password' => 'nullable|string|min:3',
         ];
 
-        // Only admins can update the role
         if ($request->user()->role === 'admin') {
             $rules['role'] = 'required|in:admin,staff,member';
             $rules['status'] = 'sometimes|in:pending,approved,rejected';
@@ -116,23 +137,14 @@ class AuthController extends Controller
 
         $validated = $request->validate($rules);
 
-        $user->name = $validated['name'];
-        $user->email = $validated['email'];
+        $user->update([
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'password' => !empty($validated['password']) ? Hash::make($validated['password']) : $user->password,
+            'role' => $validated['role'] ?? $user->role,
+            'status' => $validated['status'] ?? $user->status,
+        ]);
 
-        if (!empty($validated['password'])) {
-            $user->password = Hash::make($validated['password']);
-        }
-
-        if (isset($validated['role'])) {
-            $user->role = $validated['role'];
-        }
-
-        if (isset($validated['status'])) {
-            $user->status = $validated['status'];
-        }
-
-        $user->save();
-
-        return response()->json(['message' => 'User updated successfully.']);
+        return response()->json(['message' => 'User updated successfully', 'user' => $user->load($user->role . 'Profile')]);
     }
 }

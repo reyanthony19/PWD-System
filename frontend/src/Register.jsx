@@ -5,10 +5,17 @@ import Header from './Header';
 
 function Register() {
   const [form, setForm] = useState({
-    name: '',
+    username: '',
+    first_name: '',
+    middle_name: '',
+    last_name: '',
     email: '',
-    role: 'member',  // default to 'member'
+    role: 'member',       // default role
+    status: 'approved',   // default status
     password: '',
+    contact_number: '',
+    birthdate: '',
+    address: '',
   });
 
   const [error, setError] = useState('');
@@ -27,9 +34,29 @@ function Register() {
 
     try {
       await api.post('/register', form);
+
+      // Reset form but keep defaults for role/status
+      setForm({
+        username: '',
+        first_name: '',
+        middle_name: '',
+        last_name: '',
+        email: '',
+        role: 'member',
+        status: 'approved',
+        password: '',
+        contact_number: '',
+        birthdate: '',
+        address: '',
+      });
+
       setShowModal(true);
     } catch (err) {
-      const errorMessage = err.response?.data?.message || 'Registration failed. Please try again.';
+      // Handle Laravel validation errors
+      const errors = err.response?.data?.errors;
+      const errorMessage = errors
+        ? Object.values(errors).flat().join(', ')
+        : err.response?.data?.message || 'Registration failed. Please try again.';
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -44,26 +71,59 @@ function Register() {
   return (
     <center>
       <Header />
-      <div className='login-body'>
+      <div className="login-body">
         <div className="wrapper">
           <form className="login-form" onSubmit={handleRegister}>
             <h1>Register</h1>
             {error && <div className="error-msg">{error}</div>}
 
+            {/* Username */}
             <div className="input-box">
-              <box-icon type="solid" name="user"></box-icon>
               <input
                 type="text"
-                name="name"
-                placeholder="Full Name"
-                value={form.name}
+                name="username"
+                placeholder="Username"
+                value={form.username}
+                onChange={handleChange}
+                required
+              />
+            </div>
+
+            {/* Personal Info */}
+            <div className="input-box">
+              <input
+                type="text"
+                name="first_name"
+                placeholder="First Name"
+                value={form.first_name}
                 onChange={handleChange}
                 required
               />
             </div>
 
             <div className="input-box">
-              <box-icon type="solid" name="envelope"></box-icon>
+              <input
+                type="text"
+                name="middle_name"
+                placeholder="Middle Name"
+                value={form.middle_name}
+                onChange={handleChange}
+              />
+            </div>
+
+            <div className="input-box">
+              <input
+                type="text"
+                name="last_name"
+                placeholder="Last Name"
+                value={form.last_name}
+                onChange={handleChange}
+                required
+              />
+            </div>
+
+            {/* Email & Password */}
+            <div className="input-box">
               <input
                 type="email"
                 name="email"
@@ -75,22 +135,6 @@ function Register() {
             </div>
 
             <div className="input-box">
-              <label htmlFor="role">Role</label>
-              <select
-                name="role"
-                id="role"
-                value={form.role}
-                onChange={handleChange}
-                required
-              >
-                <option value="member">Member</option>
-                <option value="staff">Staff</option>
-                <option value="admin">Admin</option>
-              </select>
-            </div>
-
-            <div className="input-box">
-              <box-icon type="solid" name="lock"></box-icon>
               <input
                 type="password"
                 name="password"
@@ -99,6 +143,53 @@ function Register() {
                 onChange={handleChange}
                 required
               />
+            </div>
+
+            {/* Contact Number */}
+            <div className="input-box">
+              <input
+                type="text"
+                name="contact_number"
+                placeholder="Phone Number"
+                value={form.contact_number}
+                onChange={handleChange}
+              />
+            </div>
+
+            {/* Birthdate */}
+            <div className="input-box">
+              <input
+                type="date"
+                name="birthdate"
+                value={form.birthdate}
+                onChange={handleChange}
+              />
+            </div>
+
+            {/* Address */}
+            <div className="input-box">
+              <input
+                type="text"
+                name="address"
+                placeholder="Address"
+                value={form.address}
+                onChange={handleChange}
+              />
+            </div>
+
+            {/* Role Selection */}
+            <div className="input-box">
+              <label htmlFor="role">Role</label>
+              <select
+                name="role"
+                id="role"
+                value={form.role}
+                onChange={handleChange}
+                required
+              >
+                <option value="staff">Staff</option>
+                <option value="admin">Admin</option>
+              </select>
             </div>
 
             <div>
@@ -110,6 +201,7 @@ function Register() {
         </div>
       </div>
 
+      {/* Success Modal */}
       {showModal && (
         <div className="modal-overlay">
           <div className="modal-box">
