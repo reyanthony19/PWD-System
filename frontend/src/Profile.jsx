@@ -87,9 +87,7 @@ function Profile() {
           {/* Spinner */}
           <div className="w-16 h-16 border-4 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
           {/* Text */}
-          <p className="mt-4 text-gray-600 text-lg animate-pulse">
-            Loading profile...
-          </p>
+
         </div>
       </div>
     );
@@ -111,11 +109,10 @@ function Profile() {
 
           {message && (
             <div
-              className={`mb-4 p-3 rounded ${
-                message.includes("successfully")
+              className={`mb-4 p-3 rounded ${message.includes("successfully")
                   ? "bg-green-100 text-green-700"
                   : "bg-red-100 text-red-700"
-              }`}
+                }`}
             >
               {message}
             </div>
@@ -207,13 +204,14 @@ function Profile() {
               />
             </div>
 
-            {/* Phone */}
             <div>
               <label className="block text-gray-700 font-medium mb-1">
-                Phone
+                Contact Number
               </label>
               <input
-                type="text"
+                placeholder=""
+                type="integer"
+                maxLength={'11'}
                 name="contact_number"
                 value={formData.contact_number}
                 onChange={handleChange}

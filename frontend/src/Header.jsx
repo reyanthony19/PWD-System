@@ -25,18 +25,20 @@ function Header() {
           >
             Dashboard
           </Link>
-          <Link
-            to="/profile"
-            className="text-white font-bold text-lg px-4 py-2 rounded-lg hover:bg-blue-700 focus:bg-blue-700 transition-colors"
-          >
-            Profile
-          </Link>
+          
           <Link
             to="/member"
             className="text-white font-bold text-lg px-4 py-2 rounded-lg hover:bg-blue-700 focus:bg-blue-700 transition-colors"
           >
             Member List
           </Link>
+          <Link
+            to="/profile"
+            className="text-white font-bold text-lg px-4 py-2 rounded-lg hover:bg-blue-700 focus:bg-blue-700 transition-colors"
+          >
+            Profile
+          </Link>
+
           <a
             href="/logout"
             onClick={handleLogout}
