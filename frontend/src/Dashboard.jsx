@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import api from './api';
-import Header from './Header';
+import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import api from "./api";
+import Header from "./Header";
 import {
   BarChart,
   Bar,
@@ -10,8 +10,8 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-  CartesianGrid
-} from 'recharts';
+  CartesianGrid,
+} from "recharts";
 
 function Dashboard() {
   const [admins, setAdmins] = useState([]);
@@ -22,84 +22,102 @@ function Dashboard() {
   useEffect(() => {
     fetchUsers();
     fetchCurrentUser();
+
     const interval = setInterval(() => {
       fetchUsers();
       fetchCurrentUser();
     }, 5000);
+
     return () => clearInterval(interval);
   }, []);
 
   const fetchUsers = async () => {
     try {
-      const res = await api.get('/users');
+      const res = await api.get("/users");
       const allUsers = res.data;
-      setAdmins(allUsers.filter(user => user.role === 'admin'));
-      setStaff(allUsers.filter(user => user.role === 'staff'));
-      setMembers(allUsers.filter(user => user.role === 'member'));
+      setAdmins(allUsers.filter((user) => user.role === "admin"));
+      setStaff(allUsers.filter((user) => user.role === "staff"));
+      setMembers(allUsers.filter((user) => user.role === "member"));
     } catch (err) {
-      console.error('Error loading users:', err);
+      console.error("Error loading users:", err);
     }
   };
 
   const fetchCurrentUser = async () => {
     try {
-      const res = await api.get('/user');
+      const res = await api.get("/user");
       setCurrentUser(res.data);
     } catch (err) {
-      console.error('Error fetching current user:', err);
+      console.error("Error fetching current user:", err);
     }
   };
 
   const chartData = [
-    { role: 'Admins', count: admins.length },
-    { role: 'Staff', count: staff.length },
-    { role: 'Members', count: members.length }
+    { role: "Admins", count: admins.length },
+    { role: "Staff", count: staff.length },
+    { role: "Members", count: members.length },
   ];
 
   return (
-    <div className="bg-gray-50 min-h-screen">
+    <div className="min-h-screen bg-gray-100">
       <Header />
-
-      <div className="max-w-6xl mx-auto p-6 space-y-6">
+      <div className="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
         {/* Quick Actions */}
-        <section className="bg-white shadow-md rounded-lg p-6">
-          <h2 className="text-2xl font-semibold mb-2">
-            Welcome, {currentUser?.username || '...'}
+        <section className="bg-white rounded-xl shadow p-6">
+          <h2 className="text-xl font-bold text-gray-800">
+            Welcome, {currentUser?.username || "..."}
           </h2>
-          <h3 className="text-lg text-gray-600 mb-4">Quick Actions</h3>
+          <h3 className="text-lg font-semibold text-gray-600 mt-2 mb-4">
+            Quick Actions
+          </h3>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Link
               to="/announcements"
-              className="flex items-center justify-center bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-lg shadow transition"
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-700 transition"
             >
               📢 Post Announcement
             </Link>
             <Link
               to="/staff"
-              className="flex items-center justify-center bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg shadow transition"
+              className="bg-green-600 text-white px-4 py-2 rounded-lg shadow hover:bg-green-700 transition"
             >
               👨‍💼 Manage Staff
             </Link>
             <Link
               to="/members"
-              className="flex items-center justify-center bg-purple-500 hover:bg-purple-600 text-white py-3 rounded-lg shadow transition"
+              className="bg-purple-600 text-white px-4 py-2 rounded-lg shadow hover:bg-purple-700 transition"
             >
               👥 Manage Members
             </Link>
             <Link
               to="/events"
-              className="flex items-center justify-center bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-lg shadow transition"
+              className="bg-yellow-500 text-white px-4 py-2 rounded-lg shadow hover:bg-yellow-600 transition"
             >
               📅 Manage Events
             </Link>
           </div>
+
+          <button
+            onClick={async () => {
+              try {
+                await api.post("/logout");
+                window.location.href = "/login";
+              } catch (err) {
+                console.error("Logout failed", err);
+              }
+            }}
+            className="mt-6 w-full bg-red-600 text-white px-4 py-2 rounded-lg shadow hover:bg-red-700 transition"
+          >
+            🚪 Logout
+          </button>
         </section>
 
-        {/* Chart */}
-        <section className="bg-white shadow-md rounded-lg p-6">
-          <h3 className="text-lg font-semibold mb-4">Users Overview</h3>
-          <div className="w-full h-72">
+        {/* Users Chart */}
+        <section className="bg-white rounded-xl shadow p-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">Users</h3>
+          <div style={{ width: "100%", height: 300 }}>
             <ResponsiveContainer>
               <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" />

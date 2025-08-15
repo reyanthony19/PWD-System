@@ -118,33 +118,61 @@ class AuthController extends Controller
 
     public function updateUser(Request $request, $id)
     {
+        // Prevent users from editing others unless admin
         if ($request->user()->id !== (int)$id && $request->user()->role !== 'admin') {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
         $user = User::findOrFail($id);
 
-        $rules = [
-            'name' => 'required|string|max:255',
+        // Validate only what your form sends
+        $validated = $request->validate([
+            'username' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email,' . $id,
             'password' => 'nullable|string|min:3',
-        ];
-
-        if ($request->user()->role === 'admin') {
-            $rules['role'] = 'required|in:admin,staff,member';
-            $rules['status'] = 'sometimes|in:pending,approved,rejected';
-        }
-
-        $validated = $request->validate($rules);
-
-        $user->update([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'password' => !empty($validated['password']) ? Hash::make($validated['password']) : $user->password,
-            'role' => $validated['role'] ?? $user->role,
-            'status' => $validated['status'] ?? $user->status,
+            'first_name' => 'nullable|string|max:255',
+            'middle_name' => 'nullable|string|max:255',
+            'last_name' => 'nullable|string|max:255',
+            'contact_number' => 'nullable|string|max:20',
+            'birthdate' => 'nullable|date',
+            'address' => 'nullable|string|max:255',
         ]);
 
-        return response()->json(['message' => 'User updated successfully', 'user' => $user->load($user->role . 'Profile')]);
+        // Update users table
+        $user->username = $validated['username'];
+        $user->email = $validated['email'];
+        if (!empty($validated['password'])) {
+            $user->password = Hash::make($validated['password']);
+        }
+        $user->save();
+
+        // Filter out nulls so we only update changed profile fields
+        $profileData = collect($validated)
+            ->only([
+                'first_name',       
+                'middle_name',
+                'last_name',
+                'contact_number',
+                'birthdate',
+                'address'
+            ])
+            ->filter(function ($value) {
+                return $value !== null;
+            })
+            ->toArray();
+
+        // Update correct profile table
+        if ($user->role === 'admin') {
+            $user->adminProfile()->updateOrCreate(['user_id' => $user->id], $profileData);
+        } elseif ($user->role === 'staff') {
+            $user->staffProfile()->updateOrCreate(['user_id' => $user->id], $profileData);
+        } elseif ($user->role === 'member') {
+            $user->memberProfile()->updateOrCreate(['user_id' => $user->id], $profileData);
+        }
+
+        return response()->json([
+            'message' => 'Profile updated successfully!',
+            'user' => $user->load($user->role . 'Profile')
+        ]);
     }
 }
