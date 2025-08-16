@@ -13,15 +13,20 @@ return new class extends Migration
     {
         Schema::create('member_documents', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('member_profile_id')->constrained('member_profiles')
+
+            $table->foreignId('member_profile_id')
+                ->constrained('member_profiles')
                 ->onUpdate('restrict')
                 ->onDelete('cascade');
 
-            $table->string('document_type', 255); // e.g. "Medical Certificate"
-            $table->string('file_path', 255)->nullable(); // uploaded copy
-            $table->enum('status', ['pending', 'approved', 'rejected'])->default('pending'); // review status
-            $table->boolean('hard_copy_received')->default(false); // for physical submission
-            $table->text('remarks')->nullable(); // feedback if rejected
+            // ✅ renamed to snake_case and fixed nullable
+            $table->string('barangay_indigency', 255)->nullable();
+            $table->string('medical_certificate', 255)->nullable();
+            $table->string('picture_2x2', 255)->nullable();
+            $table->string('birth_certificate', 255)->nullable();
+
+            $table->boolean('hard_copy_received')->default(false);
+            $table->text('remarks')->nullable();
 
             $table->timestamps();
         });

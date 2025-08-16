@@ -16,7 +16,9 @@ import ForgotPassword from './ForgotPassword';
 import Profile from './Profile';
 import MemberList from './MemberList';
 import MemberProfile from './MemberProfile';
-
+import StaffList from './StaffList';
+import StaffProfile from './StaffProfile';
+import MemberRegister from './MemberRegister';
 // Route Guards
 const ProtectedRoute = () => {
   const token = localStorage.getItem('token');
@@ -42,10 +44,17 @@ function App() {
         {/* Protected Routes */}
         <Route element={<ProtectedRoute />}>
           <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/register" element={<Register />} />
           <Route path="/profile" element={<Profile />} />
+
           <Route path="/member" element={<MemberList />} />
+          <Route path="/member/register" element={<MemberRegister />} />
           <Route path="/members/:id" element={<MemberProfile />} />
+
+
+          <Route path="/staff" element={<StaffList />} />
+          <Route path="/staff/:id" element={<StaffProfile />} />
+          <Route path="/register" element={<Register />} />
+
 
 
         </Route>

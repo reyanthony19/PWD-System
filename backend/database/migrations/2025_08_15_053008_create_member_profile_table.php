@@ -19,17 +19,21 @@ return new class extends Migration
             $table->string('first_name', 255);
             $table->string('middle_name', 255)->nullable();
             $table->string('last_name', 255);
-            $table->string('id_number', 255);
+            $table->string('id_number')->unique();
+            $table->string('contact_number')->nullable();
             $table->date('birthdate');
             $table->string('sex', 255);
-            $table->string('disability_type', 255); // now just a string
-            $table->string('barangay', 255); // now just a string
+            $table->string('guardian_full_name', 255)->nullable();
+            $table->string('guardian_relationship', 255)->nullable(); // e.g., Parent, Sibling, Caregiver
+            $table->string('guardian_contact_number', 50)->nullable();
+            $table->string('guardian_address', 255)->nullable();
+            $table->string('disability_type', 255);
+            $table->string('barangay', 255);
             $table->string('address', 255);
             $table->string('blood_type', 255)->nullable();
             $table->string('sss_number', 255)->nullable();
             $table->string('philhealth_number', 255)->nullable();
             $table->string('qr_code', 255)->nullable();
-            $table->enum('status', ['pending', 'approved', 'rejected'])->default('pending');
             $table->timestamps();
         });
     }

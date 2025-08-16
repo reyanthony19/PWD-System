@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-import Header from "./Header";
 import api from "./api";
+import Layout from "./Layout"; // ✅ use the layout
 
 function Profile() {
   const [user, setUser] = useState(null);
@@ -73,19 +73,14 @@ function Profile() {
       setFormData((prev) => ({ ...prev, old_password: "", password: "" }));
     } catch (err) {
       console.error("Failed to update profile:", err);
-      setMessage(
-        err.response?.data?.message || "Failed to update profile."
-      );
+      setMessage(err.response?.data?.message || "Failed to update profile.");
     } finally {
       setSaving(false);
     }
   };
 
-  
-
   return (
-    <div className="min-h-screen bg-gray-100">
-      <Header />
+    <Layout>
       <div className="max-w-3xl mx-auto p-6">
         <div className="bg-white rounded-lg shadow-md p-6">
           <h1 className="text-3xl font-bold mb-6 text-gray-800">Edit Profile</h1>
@@ -259,7 +254,7 @@ function Profile() {
           </form>
         </div>
       </div>
-    </div>
+    </Layout>
   );
 }
 

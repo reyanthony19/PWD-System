@@ -18,6 +18,7 @@ class MemberProfileFactory extends Factory
             'middle_name' => $this->faker->optional()->firstName(),
             'last_name' => $this->faker->lastName(),
             'id_number' => strtoupper($this->faker->bothify('ID-####')),
+            'guardian' => $this->faker->optional()->name(), // ✅ New guardian field
             'birthdate' => $this->faker->date(),
             'sex' => $this->faker->randomElement(['male', 'female']),
             'disability_type' => $this->faker->word(),
@@ -27,7 +28,6 @@ class MemberProfileFactory extends Factory
             'sss_number' => $this->faker->optional()->numerify('##-#######-#'),
             'philhealth_number' => $this->faker->optional()->numerify('##-#########-#'),
             'qr_code' => strtoupper($this->faker->bothify('QR-####')),
-            'status' => $this->faker->randomElement(['pending', 'approved', 'rejected']),
         ];
     }
 

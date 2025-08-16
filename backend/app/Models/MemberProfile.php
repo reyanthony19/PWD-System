@@ -19,6 +19,10 @@ class MemberProfile extends Model
         'id_number',
         'birthdate',
         'sex',
+        'guardian_full_name',
+        'guardian_relationship',
+        'guardian_contact_number',
+        'guardian_address',
         'disability_type',
         'barangay',
         'address',
@@ -26,12 +30,10 @@ class MemberProfile extends Model
         'sss_number',
         'philhealth_number',
         'qr_code',
-        'status',
     ];
 
     protected $casts = [
         'birthdate' => 'date',
-        'status' => 'string',
     ];
 
     public function user()
@@ -40,7 +42,22 @@ class MemberProfile extends Model
     }
 
     /**
-     * Correct plural relationship name
+     * Auto-generate member ID when creating
+     */
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($member) {
+            if (empty($member->id_number)) {
+                $latestId = self::max('id') + 1;
+                $member->id_number = now()->format('Y-m') . '-' . str_pad($latestId, 4, '0', STR_PAD_LEFT);
+            }
+        });
+    }
+
+    /**
+     * A member can have many documents
      */
     public function documents()
     {

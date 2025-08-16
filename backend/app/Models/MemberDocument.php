@@ -13,9 +13,10 @@ class MemberDocument extends Model
 
     protected $fillable = [
         'member_profile_id',
-        'document_type',
-        'file_path',
-        'status',
+        'barangay_indigency',
+        'medical_certificate',
+        'picture_2x2',
+        'birth_certificate',
         'hard_copy_received',
         'remarks',
     ];
@@ -25,7 +26,7 @@ class MemberDocument extends Model
     ];
 
     /**
-     * Each document belongs to a specific member profile.
+     * Each document record belongs to a specific member profile.
      */
     public function memberProfile()
     {

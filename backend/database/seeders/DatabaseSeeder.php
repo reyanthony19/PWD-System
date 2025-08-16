@@ -22,23 +22,6 @@ class DatabaseSeeder extends Seeder
             'status' => 'approved',
         ])->has(AdminProfile::factory())->create();
 
-        // Staff with profile
-        User::factory()->state([
-            'username' => 'factorystaff',
-            'role' => 'staff',
-            'status' => 'approved',
-        ])->has(StaffProfile::factory())->create();
-
-        // 5 members with profiles and 3 documents each
-        User::factory(5)->state([
-            'role' => 'member',
-            'status' => 'pending',
-        ])->create()
-          ->each(function ($user) {
-              MemberProfile::factory()->create([
-                  'user_id' => $user->id, // important to avoid NULL error
-              ]);
-              // Documents are automatically created in MemberProfileFactory
-          });
+      
     }
 }
