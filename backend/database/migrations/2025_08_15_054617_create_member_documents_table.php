@@ -6,9 +6,6 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('member_documents', function (Blueprint $table) {
@@ -16,25 +13,22 @@ return new class extends Migration
 
             $table->foreignId('member_profile_id')
                 ->constrained('member_profiles')
-                ->onUpdate('restrict')
+                ->onUpdate('cascade')
                 ->onDelete('cascade');
 
-            // ✅ renamed to snake_case and fixed nullable
-            $table->string('barangay_indigency', 255)->nullable();
-            $table->string('medical_certificate', 255)->nullable();
-            $table->string('picture_2x2', 255)->nullable();
-            $table->string('birth_certificate', 255)->nullable();
+            // Fixed required files
+            $table->string('barangay_indigency')->nullable();
+            $table->string('medical_certificate')->nullable();
+            $table->string('picture_2x2')->nullable();
+            $table->string('birth_certificate')->nullable();
 
-            $table->boolean('hard_copy_received')->default(false);
+            // Optional remarks (e.g., "pending", "needs clearer copy")
             $table->text('remarks')->nullable();
 
             $table->timestamps();
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('member_documents');

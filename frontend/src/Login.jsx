@@ -66,82 +66,95 @@ function Login() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-400 via-indigo-500 to-purple-600 px-4">
-      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md transform transition-all duration-300 hover:scale-[1.02]">
-        <h2 className="text-3xl font-extrabold mb-6 text-center text-gray-800">
-          Admin Login
-        </h2>
+    <div className="flex items-center justify-center min-h-screen bg-gray-100 px-4">
+      <div className="flex w-full max-w-4xl bg-white rounded-lg shadow-lg overflow-hidden">
+        {/* Left Panel with Logo & BG */}
+        <div className="hidden md:flex md:w-1/2 bg-blue-900 items-center justify-center p-6">
+          <img
+            src="images/PDAO LOGO.png" // 🔹 Replace with your logo path
+            alt="Logo"
+            className="w-48 h-48 object-contain"
+          />
+        </div>
 
-        {error && (
-          <p className="text-red-500 text-sm mb-4 bg-red-100 p-2 rounded-md text-center">
-            {error}
+        {/* Right Panel with Form */}
+        <div className="w-full md:w-1/2 p-8">
+          <h2 className="text-2xl font-bold mb-2 text-gray-800 text-center">
+            Login
+          </h2>
+          <p className="text-sm text-yellow-600 mb-6 text-center font-medium">
+            ⚠️ Only Admins are allowed to log in.
           </p>
-        )}
 
-        <form onSubmit={handleLogin} className="space-y-5">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Email
-            </label>
-            <input
-              type="email"
-              name="email"
-              value={form.email}
-              onChange={handleChange}
-              required
-              className="block w-full px-4 py-2 border border-gray-300 rounded-lg 
-                         shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 
-                         focus:border-indigo-400 transition"
-            />
-          </div>
+          {error && (
+            <p className="text-red-500 text-sm mb-4 bg-red-100 p-2 rounded-md text-center">
+              {error}
+            </p>
+          )}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Password
-            </label>
-            <input
-              type="password"
-              name="password"
-              value={form.password}
-              onChange={handleChange}
-              required
-              className="block w-full px-4 py-2 border border-gray-300 rounded-lg 
-                         shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 
-                         focus:border-indigo-400 transition"
-            />
-          </div>
+          <form onSubmit={handleLogin} className="space-y-5">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Email
+              </label>
+              <input
+                type="email"
+                name="email"
+                value={form.email}
+                onChange={handleChange}
+                required
+                className="block w-full px-4 py-2 border border-gray-300 rounded-lg 
+                           focus:outline-none focus:ring-2 focus:ring-indigo-400 
+                           focus:border-indigo-400"
+              />
+            </div>
 
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              checked={rememberMe}
-              onChange={() => setRememberMe(!rememberMe)}
-              className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
-            />
-            <label className="ml-2 block text-sm text-gray-700">
-              Remember me
-            </label>
-          </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Password
+              </label>
+              <input
+                type="password"
+                name="password"
+                value={form.password}
+                onChange={handleChange}
+                required
+                className="block w-full px-4 py-2 border border-gray-300 rounded-lg 
+                           focus:outline-none focus:ring-2 focus:ring-indigo-400 
+                           focus:border-indigo-400"
+              />
+            </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-indigo-600 text-white py-2 px-4 rounded-lg 
-                       hover:bg-indigo-700 focus:outline-none focus:ring-2 
-                       focus:ring-indigo-400 focus:ring-offset-1 transition font-semibold"
-          >
-            {loading ? "Loading..." : "Login"}
-          </button>
-        </form>
+            <div className="flex items-center justify-between">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={() => setRememberMe(!rememberMe)}
+                  className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                />
+                <span className="ml-2 text-sm text-gray-700">Remember me</span>
+              </label>
 
-        <p className="mt-4 text-center text-sm text-gray-600">
-          <Link
-            to="/forgot-password"
-            className="text-indigo-600 hover:text-indigo-800 transition"
-          >
-            Forgot Password?
-          </Link>
-        </p>
+              <Link
+                to="/forgot-password"
+                className="text-sm text-indigo-600 hover:text-indigo-800 transition"
+              >
+                Forgot Password?
+              </Link>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-indigo-600 text-white py-2 px-4 rounded-lg 
+                         hover:bg-indigo-700 focus:outline-none focus:ring-2 
+                         focus:ring-indigo-400 focus:ring-offset-1 transition font-semibold"
+            >
+              {loading ? "Loading..." : "Sign In"}
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   );

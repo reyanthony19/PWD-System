@@ -1,10 +1,8 @@
 <?php
 
+use SimpleSoftwareIO\QrCode\Facades\QrCode;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\API\AuthController;
-use App\Http\Controllers\API\BookController;
-use App\Http\Controllers\API\StudentController;
-use App\Http\Controllers\API\BorrowingController;
+use Illuminate\Support\Facades\Storage; 
 /*
 |--------------------------------------------------------------------------
 | Web Routes
@@ -15,6 +13,15 @@ use App\Http\Controllers\API\BorrowingController;
 | be assigned to the "web" middleware group. Make something great!
 |
 */
+
+Route::get('/test-qr', function () {
+    Storage::disk('public')->makeDirectory('qrcodes');
+    $file = "qrcodes/test.png";
+    $qr = QrCode::format('png')->size(300)->generate('TEST123');
+    Storage::disk('public')->put($file, $qr);
+    return response()->json(['success' => true, 'file' => $file]);
+});
+
 
 Route::get('/', function () {
     return view('welcome');

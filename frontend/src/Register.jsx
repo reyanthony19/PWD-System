@@ -34,7 +34,7 @@ function Register() {
     setLoading(true);
 
     try {
-      await api.post("/register", form);
+      await api.post("/staff/register", form);
 
       // Reset form but keep defaults for role/status
       setForm({

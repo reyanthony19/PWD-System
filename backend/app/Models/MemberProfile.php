@@ -9,14 +9,13 @@ class MemberProfile extends Model
 {
     use HasFactory;
 
-    protected $table = 'member_profiles';
-
     protected $fillable = [
         'user_id',
         'first_name',
         'middle_name',
         'last_name',
         'id_number',
+        'contact_number',
         'birthdate',
         'sex',
         'guardian_full_name',
@@ -32,35 +31,19 @@ class MemberProfile extends Model
         'qr_code',
     ];
 
-    protected $casts = [
-        'birthdate' => 'date',
-    ];
-
+    /**
+     * A member profile belongs to a user
+     */
     public function user()
     {
         return $this->belongsTo(User::class);
     }
 
     /**
-     * Auto-generate member ID when creating
-     */
-    protected static function boot()
-    {
-        parent::boot();
-
-        static::creating(function ($member) {
-            if (empty($member->id_number)) {
-                $latestId = self::max('id') + 1;
-                $member->id_number = now()->format('Y-m') . '-' . str_pad($latestId, 4, '0', STR_PAD_LEFT);
-            }
-        });
-    }
-
-    /**
-     * A member can have many documents
+     * A member profile has one set of documents
      */
     public function documents()
     {
-        return $this->hasMany(MemberDocument::class);
+        return $this->hasOne(MemberDocument::class, 'member_profile_id');
     }
 }
