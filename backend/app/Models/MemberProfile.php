@@ -44,6 +44,6 @@ class MemberProfile extends Model
      */
     public function documents()
     {
-        return $this->hasOne(MemberDocument::class, 'member_profile_id');
+        return $this->hasOne(MemberDocument::class);
     }
 }

@@ -7,7 +7,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\DB;
-use SimpleSoftwareIO\QrCode\Facades\QrCode;
 use Illuminate\Support\Facades\Storage;
 
 class AuthController extends Controller
@@ -129,24 +128,16 @@ class AuthController extends Controller
 
                     $profile->documents()->create([
                         'barangay_indigency'  => $request->hasFile('barangay_indigency')
-                            ? $request->file('barangay_indigency')->store('documents', 'public') : null,
+                            ? Storage::url($request->file('barangay_indigency')->store('documents', 'public')) : null,
                         'medical_certificate' => $request->hasFile('medical_certificate')
-                            ? $request->file('medical_certificate')->store('documents', 'public') : null,
+                            ? Storage::url($request->file('medical_certificate')->store('documents', 'public')) : null,
                         'picture_2x2'         => $request->hasFile('picture_2x2')
-                            ? $request->file('picture_2x2')->store('documents', 'public') : null,
+                            ? Storage::url($request->file('picture_2x2')->store('documents', 'public')) : null,
                         'birth_certificate'   => $request->hasFile('birth_certificate')
-                            ? $request->file('birth_certificate')->store('documents', 'public') : null,
+                            ? Storage::url($request->file('birth_certificate')->store('documents', 'public')) : null,
                         'hard_copy_received'  => $validated['hard_copy_received'] ?? false,
                         'remarks'             => $validated['remarks'] ?? null,
                     ]);
-
-                    $qrFileName = "qrcodes/member-{$profile->id}.png";
-                    Storage::disk('public')->put(
-                        $qrFileName,
-                        QrCode::format('png')->size(300)->generate($idNumber)
-                    );
-                    $profile->qr_code = $qrFileName;
-                    $profile->save();
                     break;
             }
 
@@ -212,13 +203,12 @@ class AuthController extends Controller
      * Show specific user
      */
     public function showUser($id)
-    {
-        $user = User::find($id);
-        if (!$user) {
-            return response()->json(['message' => 'User not found'], 404);
-        }
-        return response()->json($user->load($user->role . 'Profile'));
-    }
+{
+    $user = User::with('memberProfile.documents', 'adminProfile')
+                ->findOrFail($id);
+
+    return response()->json($user);
+}
 
     /**
      * List users

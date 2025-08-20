@@ -104,28 +104,7 @@ class MemberController extends Controller
                 'remarks'             => $request->remarks ?? null,
             ]);
 
-            // ✅ Safe GD-based QR Code generation
-            try {
-                Storage::disk('public')->makeDirectory('qrcodes');
 
-                $qrFileName = "qrcodes/member-{$profile->id}.png";
-
-                $qrImage = QrCode::format('png') // PNG works with GD
-                    ->size(300)
-                    ->errorCorrection('H') // High error correction
-                    ->generate($idNumber);
-
-                Storage::disk('public')->put($qrFileName, $qrImage);
-
-                $profile->qr_code = $qrFileName;
-                $profile->save();
-            } catch (\Throwable $qrError) {
-                // Continue registration but report QR issue
-                return response()->json([
-                    'message' => 'Member registered but QR generation failed',
-                    'error'   => $qrError->getMessage(),
-                ], 500);
-            }
 
             DB::commit();
 
@@ -133,7 +112,6 @@ class MemberController extends Controller
                 'message' => 'Member registered successfully',
                 'user'    => $user->load('memberProfile.documents'),
             ], 201);
-
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json([

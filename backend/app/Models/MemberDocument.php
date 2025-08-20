@@ -1,4 +1,4 @@
-<?php 
+<?php
 
 namespace App\Models;
 
@@ -18,6 +18,7 @@ class MemberDocument extends Model
         'remarks',
     ];
 
+    
     public function memberProfile()
     {
         return $this->belongsTo(MemberProfile::class);
