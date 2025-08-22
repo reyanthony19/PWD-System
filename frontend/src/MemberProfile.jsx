@@ -1,29 +1,21 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import api from "./api";
 import Layout from "./Layout";
+import QRCode from "qrcode.react"; // ✅ QR Code library
+import { useReactToPrint } from "react-to-print"; // ✅ Print support
 
 function MemberProfile() {
   const { id } = useParams();
   const [member, setMember] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const printRef = useRef();
 
   useEffect(() => {
     const fetchMember = async () => {
       try {
         const res = await api.get(`/user/${id}`);
-        console.log("✅ Full API response:", res.data);
-
-        // Log documents only if role is member
-        if (res.data.role === "member" && res.data.member_profile?.documents) {
-          console.log("📂 Documents data:", res.data.member_profile.documents);
-        } else {
-          console.warn(
-            `⚠️ No documents for this user (role: ${res.data.role})`
-          );
-        }
-
         setMember(res.data);
       } catch (err) {
         console.error("❌ Error fetching member:", err);
@@ -33,14 +25,16 @@ function MemberProfile() {
       }
     };
 
-    if (id) {
-      console.log("🔍 Fetching member with ID:", id);
-      fetchMember();
-    } else {
+    if (id) fetchMember();
+    else {
       setError("Invalid member ID.");
       setLoading(false);
     }
   }, [id]);
+
+  const handlePrint = useReactToPrint({
+    content: () => printRef.current,
+  });
 
   if (loading)
     return (
@@ -63,40 +57,34 @@ function MemberProfile() {
       </Layout>
     );
 
-  // Role-based profile/documents
   const profile = member.role === "member" ? member.member_profile || {} : {};
-  const documents =
-    member.role === "member" ? profile.documents || {} : {};
+  const documents = member.role === "member" ? profile.documents || {} : {};
 
-  const fields = member.role === "member"
-    ? [
-        { label: "First Name", value: profile.first_name },
-        { label: "Middle Name", value: profile.middle_name },
-        { label: "Last Name", value: profile.last_name },
-        { label: "ID Number", value: profile.id_number },
-        { label: "Birthdate", value: profile.birthdate },
-        { label: "Sex", value: profile.sex },
-        { label: "Guardian Full Name", value: profile.guardian_full_name },
-        { label: "Guardian Relationship", value: profile.guardian_relationship },
-        { label: "Guardian Contact Number", value: profile.guardian_contact_number },
-        { label: "Guardian Address", value: profile.guardian_address },
-        { label: "Disability Type", value: profile.disability_type },
-        { label: "Barangay", value: profile.barangay },
-        { label: "Address", value: profile.address },
-        { label: "Blood Type", value: profile.blood_type },
-        { label: "SSS Number", value: profile.sss_number },
-        { label: "PhilHealth Number", value: profile.philhealth_number },
-      ]
-    : [];
+  const fields = [
+    { label: "First Name", value: profile.first_name },
+    { label: "Middle Name", value: profile.middle_name },
+    { label: "Last Name", value: profile.last_name },
+    { label: "ID Number", value: profile.id_number },
+    { label: "Birthdate", value: profile.birthdate },
+    { label: "Sex", value: profile.sex },
+    { label: "Guardian Full Name", value: profile.guardian_full_name },
+    { label: "Guardian Relationship", value: profile.guardian_relationship },
+    { label: "Guardian Contact Number", value: profile.guardian_contact_number },
+    { label: "Guardian Address", value: profile.guardian_address },
+    { label: "Disability Type", value: profile.disability_type },
+    { label: "Barangay", value: profile.barangay },
+    { label: "Address", value: profile.address },
+    { label: "Blood Type", value: profile.blood_type },
+    { label: "SSS Number", value: profile.sss_number },
+    { label: "PhilHealth Number", value: profile.philhealth_number },
+  ];
 
-  const docFields = member.role === "member"
-    ? [
-        { label: "Barangay Indigency", value: documents.barangay_indigency },
-        { label: "Medical Certificate", value: documents.medical_certificate },
-        { label: "2x2 Picture", value: documents.picture_2x2 },
-        { label: "Birth Certificate", value: documents.birth_certificate },
-      ]
-    : [];
+  const docFields = [
+    { label: "Barangay Indigency", value: documents.barangay_indigency },
+    { label: "Medical Certificate", value: documents.medical_certificate },
+    { label: "2x2 Picture", value: documents.picture_2x2 },
+    { label: "Birth Certificate", value: documents.birth_certificate },
+  ];
 
   return (
     <Layout>
@@ -105,8 +93,7 @@ function MemberProfile() {
           {/* Header */}
           <div className="bg-blue-600 p-6">
             <h1 className="text-3xl font-bold text-white">
-              {profile.first_name || member.username || "-"}{" "}
-              {profile.last_name || ""}
+              {profile.first_name || member.username || "-"} {profile.last_name || ""}
             </h1>
             <p className="text-blue-100 capitalize">{member.role} Profile</p>
           </div>
@@ -114,23 +101,17 @@ function MemberProfile() {
           {/* Profile Information */}
           <div className="p-6">
             <h2 className="text-xl font-semibold mb-4">Personal Information</h2>
-            {fields.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {fields.map((field, index) => (
-                  <div key={index}>
-                    <p className="text-gray-500 text-sm">{field.label}</p>
-                    <p className="font-medium">{field.value || "-"}</p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-500 italic">
-                No detailed profile available for this role.
-              </p>
-            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {fields.map((field, index) => (
+                <div key={index}>
+                  <p className="text-gray-500 text-sm">{field.label}</p>
+                  <p className="font-medium">{field.value || "-"}</p>
+                </div>
+              ))}
+            </div>
           </div>
 
-          {/* Document Section (only for members) */}
+          {/* Documents */}
           {member.role === "member" && (
             <div className="p-6 border-t">
               <h2 className="text-xl font-semibold mb-4">Documents</h2>
@@ -148,6 +129,56 @@ function MemberProfile() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* ID Card Section */}
+          {member.role === "member" && (
+            <div className="p-6 border-t">
+              <h2 className="text-xl font-semibold mb-4">ID Card</h2>
+              <div ref={printRef} className="flex flex-col md:flex-row gap-6">
+                {/* Front Side */}
+                <div className="w-80 h-48 border rounded-lg shadow-md p-4 bg-blue-50 relative">
+                  <h3 className="font-bold text-lg text-blue-700">PWD ID</h3>
+                  <p className="text-sm text-gray-600">
+                    {profile.first_name} {profile.middle_name} {profile.last_name}
+                  </p>
+                  <p className="text-sm">ID: {profile.id_number}</p>
+                  <p className="text-sm">Barangay: {profile.barangay}</p>
+                  <div className="absolute bottom-2 right-2">
+                    <QRCode value={profile.id_number || "N/A"} size={64} />
+                  </div>
+                </div>
+
+                {/* Back Side */}
+                <div className="w-80 h-48 border rounded-lg shadow-md p-4 bg-gray-100">
+                  <p className="text-sm">
+                    <span className="font-bold">Birthdate:</span> {profile.birthdate}
+                  </p>
+                  <p className="text-sm">
+                    <span className="font-bold">Blood Type:</span> {profile.blood_type}
+                  </p>
+                  <p className="text-sm">
+                    <span className="font-bold">Guardian:</span>{" "}
+                    {profile.guardian_full_name}
+                  </p>
+                  <p className="text-sm">
+                    <span className="font-bold">Contact:</span>{" "}
+                    {profile.guardian_contact_number}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-6">
+                    This card is property of the Municipality. If found, please return to
+                    the nearest Barangay Hall.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={handlePrint}
+                className="mt-4 bg-green-600 text-white px-4 py-2 rounded shadow hover:bg-green-700"
+              >
+                🖨️ Print ID
+              </button>
             </div>
           )}
 

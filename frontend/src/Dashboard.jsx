@@ -18,35 +18,34 @@ import Layout from "./Layout";
 function Dashboard() {
   const [members, setMembers] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   const COLORS = ["#10b981", "#ef4444", "#6b7280", "#f59e0b", "#3b82f6"];
 
   useEffect(() => {
-    fetchMembers();
-    fetchCurrentUser();
-    const interval = setInterval(() => {
-      fetchMembers();
-      fetchCurrentUser();
-    }, 5000);
+    const fetchData = async () => {
+      try {
+        await Promise.all([fetchMembers(), fetchCurrentUser()]);
+      } catch (err) {
+        console.error("Error loading dashboard:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+    const interval = setInterval(fetchData, 50000);
     return () => clearInterval(interval);
   }, []);
 
   const fetchMembers = async () => {
-    try {
-      const res = await api.get("/users");
-      setMembers(res.data.filter((user) => user.role === "member"));
-    } catch (err) {
-      console.error("Error loading members:", err);
-    }
+    const res = await api.get("/users");
+    setMembers(res.data.filter((user) => user.role === "member"));
   };
 
   const fetchCurrentUser = async () => {
-    try {
-      const res = await api.get("/user");
-      setCurrentUser(res.data);
-    } catch (err) {
-      console.error("Error fetching current user:", err);
-    }
+    const res = await api.get("/user");
+    setCurrentUser(res.data);
   };
 
   // Group by status
@@ -63,6 +62,20 @@ function Dashboard() {
     count: statusCounts[status],
   }));
 
+  if (loading) {
+    return (
+      <Layout>
+        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 text-blue-700">
+          <div className="w-20 h-20 border-8 border-blue-200 border-t-blue-700 rounded-full animate-spin"></div>
+          <p className="mt-4 text-xl font-semibold animate-pulse">
+            Loading Dashboard...
+          </p>
+          <p className="text-gray-600 text-sm">Please wait a moment 🧑‍🦽</p>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
       <div className="p-6 bg-gray-100 min-h-screen">
@@ -77,7 +90,7 @@ function Dashboard() {
             <p className="text-gray-600 mt-2 mb-6">Members Overview</p>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              {Object.entries(statusCounts).map(([status, count], i) => {
+              {Object.entries(statusCounts).map(([status, count]) => {
                 const colorClasses = {
                   Approved: "bg-green-100 text-green-700",
                   Pending: "bg-yellow-100 text-yellow-700",

@@ -8,6 +8,7 @@ function StaffList() {
   const [error, setError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [sortOption, setSortOption] = useState("firstname-asc");
+  const [loading, setLoading] = useState(true);
 
   const navigate = useNavigate();
 
@@ -18,6 +19,9 @@ function StaffList() {
         setStaffs(res.data);
       } catch (err) {
         console.error(err);
+        setError("Failed to load staff list.");
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -58,6 +62,20 @@ function StaffList() {
       return 0;
     });
 
+  if (loading) {
+    return (
+      <Layout>
+        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 text-blue-700">
+          <div className="w-20 h-20 border-8 border-blue-200 border-t-blue-700 rounded-full animate-spin"></div>
+          <p className="mt-4 text-xl font-semibold animate-pulse">
+            Loading Staff List...
+          </p>
+          <p className="text-gray-600 text-sm">Please wait a moment 🧑‍💼</p>
+        </div>
+      </Layout>
+    );
+  }
+
   if (error) {
     return (
       <Layout>
@@ -70,35 +88,31 @@ function StaffList() {
 
   return (
     <Layout>
-      <div className="min-h-screen bg-gradient-to-b from-gray-100 to-gray-200">
-        <div className="max-w-7xl mx-auto p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-extrabold text-gray-800">
-              Staff List
-            </h1>
+      <div className="p-6 bg-gray-100 min-h-screen">
+        <h1 className="text-3xl font-bold text-gray-800 mb-6">Staff List</h1>
 
-          </div>
-
-          {/* Search & Sort Controls */}
-          <div className="flex flex-wrap gap-4 mb-4 items-center">
+        {/* Search & Sort Controls */}
+        <section className="bg-white rounded-xl shadow p-6 mb-6">
+          <div className="flex flex-wrap gap-4 items-center">
             <input
               type="text"
               placeholder="🔍 Search by name or ID"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="border border-gray-400 rounded-lg px-4 py-2 w-64 focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg"
+              className="border border-gray-300 rounded-lg px-4 py-2 w-64 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
             />
 
             <select
               value={sortOption}
               onChange={(e) => setSortOption(e.target.value)}
-              className="border border-gray-400 rounded-lg px-4 py-2 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="firstname-asc">First Name (A–Z)</option>
               <option value="firstname-desc">First Name (Z–A)</option>
               <option value="date-newest">Date Registered (Newest)</option>
               <option value="date-oldest">Date Registered (Oldest)</option>
             </select>
+
             <button
               onClick={() => navigate("/register")}
               className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg shadow transition duration-200"
@@ -106,10 +120,12 @@ function StaffList() {
               + Add Staff
             </button>
           </div>
+        </section>
 
-          {/* Staff Table */}
-          <div className="overflow-x-auto bg-white rounded-xl shadow-lg">
-            <table className="min-w-full text-base text-left border-collapse">
+        {/* Staff Table */}
+        <section className="bg-white rounded-xl shadow p-6">
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm text-left border-collapse">
               <thead className="bg-blue-700 text-white uppercase">
                 <tr>
                   <th className="px-4 py-3">User ID</th>
@@ -138,9 +154,7 @@ function StaffList() {
                         <td className="px-4 py-3">{profile.last_name}</td>
                         <td className="px-4 py-3">{profile.middle_name}</td>
                         <td className="px-4 py-3">{staff.email}</td>
-                        <td className="px-4 py-3">
-                          {profile.contact_number}
-                        </td>
+                        <td className="px-4 py-3">{profile.contact_number}</td>
                         <td className="px-4 py-3">{profile.address}</td>
                       </tr>
                     );
@@ -158,7 +172,7 @@ function StaffList() {
               </tbody>
             </table>
           </div>
-        </div>
+        </section>
       </div>
     </Layout>
   );
