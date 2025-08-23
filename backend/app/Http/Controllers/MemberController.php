@@ -64,11 +64,11 @@ class MemberController extends Controller
                 'email'    => $validated['email'],
                 'password' => Hash::make($validated['password']),
                 'role'     => 'member',
-                'status'   => $status,
+                'status'   => 'approved',
             ]);
 
             // Generate id_number if not provided
-            $idNumber = $request->id_number ?? 'MEM-' . str_pad($user->id, 6, '0', STR_PAD_LEFT);
+            $idNumber = $request->id_number ?? 'PDAO-' . str_pad($user->id, 4, '0', STR_PAD_LEFT);
 
             // Create Member Profile
             $profile = $user->memberProfile()->create([

@@ -46,6 +46,11 @@ function StaffProfile() {
   if (loading) {
     return (
       <Layout>
+        <div className="flex flex-col items-center justify-center py-20 text-blue-700">
+          <div className="w-16 h-16 border-8 border-blue-200 border-t-blue-700 rounded-full animate-spin"></div>
+          <p className="mt-4 text-xl font-semibold animate-pulse">Loading Staff Profile...</p>
+          <p className="text-gray-600 text-sm">Please wait a moment 🧑‍🦽</p>
+        </div>
       </Layout>
     );
   }

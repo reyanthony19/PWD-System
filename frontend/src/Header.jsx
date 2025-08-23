@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "./api";
 import { FaBars, FaUserCircle } from "react-icons/fa";
@@ -9,6 +9,8 @@ function Header({ sidebarOpen, setSidebarOpen }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [fadeOut, setFadeOut] = useState(false);
 
+  const sidebarRef = useRef(null);
+
   useEffect(() => {
     fetchCurrentUser();
   }, []);
@@ -16,11 +18,11 @@ function Header({ sidebarOpen, setSidebarOpen }) {
   useEffect(() => {
     let timer;
     if (dropdownOpen) {
-      setFadeOut(false); // reset fade
+      setFadeOut(false);
       timer = setTimeout(() => {
         setFadeOut(true);
-        setTimeout(() => setDropdownOpen(false), 500); // wait for fade animation
-      }, 3000); // stays open 3s
+        setTimeout(() => setDropdownOpen(false), 500);
+      }, 3000);
     }
     return () => clearTimeout(timer);
   }, [dropdownOpen]);
@@ -40,10 +42,27 @@ function Header({ sidebarOpen, setSidebarOpen }) {
     navigate("/login");
   };
 
+  // 👉 Close sidebar when clicking outside of it
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        sidebarRef.current &&
+        !sidebarRef.current.contains(event.target) &&
+        sidebarOpen
+      ) {
+        setSidebarOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [sidebarOpen, setSidebarOpen]);
+
   return (
     <>
       {/* Sidebar */}
       <aside
+        ref={sidebarRef}
         className={`fixed top-16 left-0 h-full bg-blue-900 text-white w-64 transition-transform duration-300 z-50 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
@@ -70,7 +89,7 @@ function Header({ sidebarOpen, setSidebarOpen }) {
           >
             Member List
           </Link>
-          
+
           <Link
             to="/staff"
             className="text-white font-medium hover:bg-white hover:text-blue-900 p-2 rounded transition-colors duration-200"
@@ -86,12 +105,7 @@ function Header({ sidebarOpen, setSidebarOpen }) {
           <button onClick={() => setSidebarOpen(!sidebarOpen)}>
             <FaBars size={20} />
           </button>
-          {/* Logo */}
-          <img
-            src="/images/PDAO LOGO.png"
-            alt=""
-            className="h-10 w-auto"
-          />
+          <img src="/images/PDAO LOGO.png" alt="" className="h-10 w-auto" />
           <span className="font-bold text-lg">PWD System</span>
         </div>
 
