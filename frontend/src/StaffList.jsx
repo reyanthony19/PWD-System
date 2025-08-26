@@ -3,11 +3,20 @@ import { useNavigate } from "react-router-dom";
 import api from "./api";
 import Layout from "./Layout";
 
+const theme = {
+  primary: "from-sky-600 to-sky-400",
+  primaryText: "text-sky-600",
+  secondaryText: "text-sky-400",
+  cardBg: "bg-white",
+  footerBg: "bg-sky-700",
+  chartColors: ["#0ea5e9", "#38bdf8", "#7dd3fc", "#0284c7", "#0369a1"],
+};
+
 function StaffList() {
   const [staffs, setStaffs] = useState([]);
   const [error, setError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const [sortOption, setSortOption] = useState("firstname-asc");
+  const [sortOption, setSortOption] = useState("name-asc");
   const [loading, setLoading] = useState(true);
 
   const navigate = useNavigate();
@@ -34,24 +43,24 @@ function StaffList() {
     .filter((s) => {
       const term = searchTerm.toLowerCase();
       const profile = s.staff_profile || {};
+      const fullName = `${profile.first_name || ""} ${profile.middle_name || ""} ${profile.last_name || ""}`.trim();
       return (
-        profile.first_name?.toLowerCase().includes(term) ||
-        profile.last_name?.toLowerCase().includes(term) ||
-        s.id.toString().includes(term)
+        fullName.toLowerCase().includes(term) ||
+        s.id.toString().includes(term) ||
+        s.email?.toLowerCase().includes(term)
       );
     })
     .sort((a, b) => {
       const profileA = a.staff_profile || {};
       const profileB = b.staff_profile || {};
-      if (sortOption === "firstname-asc") {
-        return (profileA.first_name || "").localeCompare(
-          profileB.first_name || ""
-        );
+      const nameA = `${profileA.first_name || ""} ${profileA.middle_name || ""} ${profileA.last_name || ""}`.trim();
+      const nameB = `${profileB.first_name || ""} ${profileB.middle_name || ""} ${profileB.last_name || ""}`.trim();
+
+      if (sortOption === "name-asc") {
+        return nameA.localeCompare(nameB);
       }
-      if (sortOption === "firstname-desc") {
-        return (profileB.first_name || "").localeCompare(
-          profileA.first_name || ""
-        );
+      if (sortOption === "name-desc") {
+        return nameB.localeCompare(nameA);
       }
       if (sortOption === "date-newest") {
         return new Date(b.created_at) - new Date(a.created_at);
@@ -65,8 +74,12 @@ function StaffList() {
   if (loading) {
     return (
       <Layout>
-        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 text-blue-700">
-          <div className="w-20 h-20 border-8 border-blue-200 border-t-blue-700 rounded-full animate-spin"></div>
+        <div
+          className={`flex flex-col items-center justify-center min-h-screen bg-gray-100 ${theme.primaryText}`}
+        >
+          <div
+            className="w-20 h-20 border-8 border-sky-200 border-t-sky-600 rounded-full animate-spin"
+          ></div>
           <p className="mt-4 text-xl font-semibold animate-pulse">
             Loading Staff List...
           </p>
@@ -89,33 +102,35 @@ function StaffList() {
   return (
     <Layout>
       <div className="p-6 bg-gray-100 min-h-screen">
-        <h1 className="text-3xl font-bold text-gray-800 mb-6">Staff List</h1>
+        <h1 className={`text-3xl font-bold ${theme.primaryText} mb-6`}>
+          Staff List
+        </h1>
 
         {/* Search & Sort Controls */}
-        <section className="bg-white rounded-xl shadow p-6 mb-6">
+        <section className={`${theme.cardBg} rounded-xl shadow p-6 mb-6`}>
           <div className="flex flex-wrap gap-4 items-center">
             <input
               type="text"
-              placeholder="🔍 Search by name or ID"
+              placeholder="🔍 Search by name, email or ID"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="border border-gray-300 rounded-lg px-4 py-2 w-64 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              className="border border-gray-300 rounded-lg px-4 py-2 w-64 focus:outline-none focus:ring-2 focus:ring-sky-500 text-sm"
             />
 
             <select
               value={sortOption}
               onChange={(e) => setSortOption(e.target.value)}
-              className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
             >
-              <option value="firstname-asc">First Name (A–Z)</option>
-              <option value="firstname-desc">First Name (Z–A)</option>
+              <option value="name-asc">Full Name (A–Z)</option>
+              <option value="name-desc">Full Name (Z–A)</option>
               <option value="date-newest">Date Registered (Newest)</option>
               <option value="date-oldest">Date Registered (Oldest)</option>
             </select>
 
             <button
               onClick={() => navigate("/register")}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg shadow transition duration-200"
+              className="bg-sky-600 hover:bg-sky-700 text-white px-5 py-2 rounded-lg shadow transition duration-200"
             >
               + Add Staff
             </button>
@@ -123,15 +138,13 @@ function StaffList() {
         </section>
 
         {/* Staff Table */}
-        <section className="bg-white rounded-xl shadow p-6">
+        <section className={`${theme.cardBg} rounded-xl shadow p-6`}>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm text-left border-collapse">
-              <thead className="bg-blue-700 text-white uppercase">
+              <thead className="bg-sky-700 text-white uppercase">
                 <tr>
                   <th className="px-4 py-3">User ID</th>
-                  <th className="px-4 py-3">First Name</th>
-                  <th className="px-4 py-3">Last Name</th>
-                  <th className="px-4 py-3">Middle Name</th>
+                  <th className="px-4 py-3">Full Name</th>
                   <th className="px-4 py-3">Email</th>
                   <th className="px-4 py-3">Contact Number</th>
                   <th className="px-4 py-3">Address</th>
@@ -141,18 +154,15 @@ function StaffList() {
                 {filteredStaffs.length > 0 ? (
                   filteredStaffs.map((staff) => {
                     const profile = staff.staff_profile || {};
+                    const fullName = `${profile.first_name || ""} ${profile.middle_name || ""} ${profile.last_name || ""}`.replace(/\s+/g, " ").trim();
                     return (
                       <tr
                         key={staff.id}
-                        className="odd:bg-gray-100 even:bg-gray-50 hover:bg-yellow-100 cursor-pointer"
+                        className="odd:bg-gray-100 even:bg-gray-50 hover:bg-sky-100 cursor-pointer"
                         onClick={() => navigate(`/staff/${staff.id}`)}
                       >
                         <td className="px-4 py-3">{staff.id}</td>
-                        <td className="px-4 py-3 font-semibold">
-                          {profile.first_name}
-                        </td>
-                        <td className="px-4 py-3">{profile.last_name}</td>
-                        <td className="px-4 py-3">{profile.middle_name}</td>
+                        <td className="px-4 py-3">{fullName}</td>
                         <td className="px-4 py-3">{staff.email}</td>
                         <td className="px-4 py-3">{profile.contact_number}</td>
                         <td className="px-4 py-3">{profile.address}</td>
@@ -162,7 +172,7 @@ function StaffList() {
                 ) : (
                   <tr>
                     <td
-                      colSpan="7"
+                      colSpan="5"
                       className="px-4 py-3 text-center text-gray-500"
                     >
                       No staff found.

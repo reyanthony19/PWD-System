@@ -3,6 +3,18 @@ import { Link, useNavigate } from "react-router-dom";
 import api from "./api";
 import { FaBars, FaUserCircle } from "react-icons/fa";
 
+// 🎨 Sky Blue Theme
+const theme = {
+  primary: "from-sky-600 to-sky-400",
+  primaryText: "text-sky-600",
+  secondaryText: "text-sky-400",
+  cardBg: "bg-white",
+  footerBg: "bg-sky-700",
+  sidebarBg: "bg-sky-700",
+  topbarBg: "bg-sky-700",
+  linkHover: "hover:bg-white hover:text-sky-700",
+};
+
 function Header({ sidebarOpen, setSidebarOpen }) {
   const navigate = useNavigate();
   const [currentUser, setCurrentUser] = useState(null);
@@ -10,6 +22,7 @@ function Header({ sidebarOpen, setSidebarOpen }) {
   const [fadeOut, setFadeOut] = useState(false);
 
   const sidebarRef = useRef(null);
+  const toggleBtnRef = useRef(null); // 👉 new ref for FaBars button
 
   useEffect(() => {
     fetchCurrentUser();
@@ -42,12 +55,14 @@ function Header({ sidebarOpen, setSidebarOpen }) {
     navigate("/login");
   };
 
-  // 👉 Close sidebar when clicking outside of it
+  // 👉 Close sidebar when clicking outside (ignore FaBars button)
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (
         sidebarRef.current &&
         !sidebarRef.current.contains(event.target) &&
+        toggleBtnRef.current &&
+        !toggleBtnRef.current.contains(event.target) && // ignore clicks on FaBars
         sidebarOpen
       ) {
         setSidebarOpen(false);
@@ -63,36 +78,34 @@ function Header({ sidebarOpen, setSidebarOpen }) {
       {/* Sidebar */}
       <aside
         ref={sidebarRef}
-        className={`fixed top-16 left-0 h-full bg-blue-900 text-white w-64 transition-transform duration-300 z-50 ${
+        className={`fixed top-16 left-0 h-full ${theme.sidebarBg} text-white w-64 transition-transform duration-300 z-50 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <button onClick={() => setSidebarOpen(false)}>
-          <div className="flex items-center justify-between p-4 border-b border-blue-900">
-            <h1 className="text-xl font-bold">
-              PERSONS WITH THIS ABILITY AFFAIR OFFICE
-            </h1>
-          </div>
-        </button>
+        <div className="flex items-center justify-between p-4 border-b border-sky-600">
+          <h1 className="text-lg font-bold leading-tight">
+            PERSONS WITH THIS ABILITY AFFAIR OFFICE
+          </h1>
+        </div>
 
-        <nav className="flex flex-col p-10 space-y-4">
+        <nav className="flex flex-col p-6 space-y-4">
           <Link
             to="/dashboard"
-            className="text-white font-medium hover:bg-white hover:text-blue-900 p-2 rounded transition-colors duration-200"
+            className={`text-white font-medium p-2 rounded transition-colors duration-200 ${theme.linkHover}`}
           >
             Dashboard
           </Link>
 
           <Link
             to="/member"
-            className="text-white font-medium hover:bg-white hover:text-blue-900 p-2 rounded transition-colors duration-200"
+            className={`text-white font-medium p-2 rounded transition-colors duration-200 ${theme.linkHover}`}
           >
             Member List
           </Link>
 
           <Link
             to="/staff"
-            className="text-white font-medium hover:bg-white hover:text-blue-900 p-2 rounded transition-colors duration-200"
+            className={`text-white font-medium p-2 rounded transition-colors duration-200 ${theme.linkHover}`}
           >
             Manage Staff
           </Link>
@@ -100,12 +113,17 @@ function Header({ sidebarOpen, setSidebarOpen }) {
       </aside>
 
       {/* Top bar */}
-      <header className="fixed top-0 left-0 w-full bg-blue-900 text-white shadow-md flex items-center justify-between px-4 py-3 z-40">
+      <header
+        className={`fixed top-0 left-0 w-full ${theme.topbarBg} text-white shadow-md flex items-center justify-between px-4 py-3 z-40`}
+      >
         <div className="flex items-center space-x-3">
-          <button onClick={() => setSidebarOpen(!sidebarOpen)}>
+          <button
+            ref={toggleBtnRef}
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+          >
             <FaBars size={20} />
           </button>
-          <img src="/images/PDAO LOGO.png" alt="" className="h-10 w-auto" />
+          <img src="/images/PDAO LOGO.png" alt="PDAO Logo" className="h-10 w-auto" />
           <span className="font-bold text-lg">PWD System</span>
         </div>
 

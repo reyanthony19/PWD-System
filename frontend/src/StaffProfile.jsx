@@ -4,6 +4,16 @@ import api from "./api";
 import Layout from "./Layout";
 import { Trash2 } from "lucide-react"; // ✅ delete icon
 
+// ✅ Theme applied here
+const theme = {
+  primary: "from-sky-600 to-sky-400",
+  primaryText: "text-sky-600",
+  secondaryText: "text-sky-400",
+  cardBg: "bg-white",
+  footerBg: "bg-sky-700",
+  chartColors: ["#0ea5e9", "#38bdf8", "#7dd3fc", "#0284c7", "#0369a1"],
+};
+
 function StaffProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -46,9 +56,13 @@ function StaffProfile() {
   if (loading) {
     return (
       <Layout>
-        <div className="flex flex-col items-center justify-center py-20 text-blue-700">
-          <div className="w-16 h-16 border-8 border-blue-200 border-t-blue-700 rounded-full animate-spin"></div>
-          <p className="mt-4 text-xl font-semibold animate-pulse">Loading Staff Profile...</p>
+        <div className="flex flex-col items-center justify-center py-20">
+          <div
+            className={`w-16 h-16 border-8 border-sky-200 border-t-sky-600 rounded-full animate-spin`}
+          ></div>
+          <p className={`mt-4 text-xl font-semibold animate-pulse ${theme.primaryText}`}>
+            Loading Staff Profile...
+          </p>
           <p className="text-gray-600 text-sm">Please wait a moment 🧑‍🦽</p>
         </div>
       </Layout>
@@ -85,14 +99,16 @@ function StaffProfile() {
   return (
     <Layout>
       <div className="p-6 max-w-4xl mx-auto">
-        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-          <div className="bg-blue-600 p-6">
+        <div className={`${theme.cardBg} rounded-lg shadow-lg overflow-hidden`}>
+          {/* ✅ Header with theme gradient */}
+          <div className={`bg-gradient-to-r ${theme.primary} p-6`}>
             <h1 className="text-3xl font-bold text-white">
               {profile.first_name || "-"} {profile.last_name || "-"}
             </h1>
-            <p className="text-blue-100">Staff Profile</p>
+            <p className="text-sky-100">Staff Profile</p>
           </div>
 
+          {/* ✅ Fields */}
           <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
             {fields.map((field, index) => (
               <div key={index}>
@@ -106,7 +122,7 @@ function StaffProfile() {
           <div className="p-6 border-t flex justify-between items-center">
             <Link
               to="/staff"
-              className="text-blue-600 hover:underline font-medium"
+              className={`${theme.primaryText} hover:underline font-medium`}
             >
               ← Back to List
             </Link>

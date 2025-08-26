@@ -9,6 +9,7 @@ function Profile() {
     email: "",
     old_password: "",
     password: "",
+    password_confirmation: "", // ✅ new field
     first_name: "",
     middle_name: "",
     last_name: "",
@@ -17,8 +18,11 @@ function Profile() {
     address: "",
   });
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
+
+  // ✅ modal states
+  const [showModal, setShowModal] = useState(false);
+  const [modalMessage, setModalMessage] = useState("");
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -64,22 +68,45 @@ function Profile() {
   const handleUpdate = async (e) => {
     e.preventDefault();
     setSaving(true);
-    setMessage("");
+
+    // ✅ Password confirmation check
+    if (formData.password && formData.password !== formData.password_confirmation) {
+      setModalMessage("New password and confirmation do not match.");
+      setShowModal(true);
+      setSaving(false);
+      return;
+    }
 
     const payload = { ...formData };
     if (!payload.password) delete payload.password;
     if (!payload.old_password) delete payload.old_password;
+    if (!payload.password_confirmation) delete payload.password_confirmation;
 
     try {
       await api.put(`/user/${user?.id}`, payload);
-      setMessage("Profile updated successfully!");
-      setFormData((prev) => ({ ...prev, old_password: "", password: "" }));
+
+      // ✅ show success modal
+      setModalMessage("Profile updated successfully!");
+      setShowModal(true);
+
+      // clear password fields after success
+      setFormData((prev) => ({
+        ...prev,
+        old_password: "",
+        password: "",
+        password_confirmation: "",
+      }));
     } catch (err) {
       console.error("Failed to update profile:", err);
-      setMessage(err.response?.data?.message || "Failed to update profile.");
+      setModalMessage(err.response?.data?.message || "Failed to update profile.");
+      setShowModal(true);
     } finally {
       setSaving(false);
     }
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
   };
 
   if (loading) {
@@ -104,18 +131,6 @@ function Profile() {
             <h1 className="text-3xl font-bold mb-6 text-gray-800">
               Edit Profile
             </h1>
-
-            {message && (
-              <div
-                className={`mb-4 p-3 rounded ${
-                  message.includes("successfully")
-                    ? "bg-green-100 text-green-700"
-                    : "bg-red-100 text-red-700"
-                }`}
-              >
-                {message}
-              </div>
-            )}
 
             <form onSubmit={handleUpdate} className="space-y-4">
               {/* Username */}
@@ -161,19 +176,34 @@ function Profile() {
                 />
               </div>
 
-              {/* New Password */}
-              <div>
-                <label className="block text-gray-700 font-medium mb-1">
-                  New Password
-                </label>
-                <input
-                  type="password"
-                  name="password"
-                  value={formData.password}
-                  placeholder="Leave blank to keep current password"
-                  onChange={handleChange}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-blue-300"
-                />
+              {/* New Password + Confirmation */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-gray-700 font-medium mb-1">
+                    New Password
+                  </label>
+                  <input
+                    type="password"
+                    name="password"
+                    value={formData.password}
+                    placeholder="Leave blank to keep current password"
+                    onChange={handleChange}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-blue-300"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-700 font-medium mb-1">
+                    Confirm New Password
+                  </label>
+                  <input
+                    type="password"
+                    name="password_confirmation"
+                    value={formData.password_confirmation}
+                    placeholder="Re-enter new password"
+                    onChange={handleChange}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-blue-300"
+                  />
+                </div>
               </div>
 
               {/* First Name */}
@@ -275,6 +305,24 @@ function Profile() {
           </section>
         </div>
       </div>
+
+      {/* ✅ Success / Error Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-sm text-center">
+            <h3 className="text-lg font-semibold mb-2">
+              {modalMessage.includes("successfully") ? "Success" : "Error"}
+            </h3>
+            <p className="text-gray-600 mb-4">{modalMessage}</p>
+            <button
+              onClick={closeModal}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }
