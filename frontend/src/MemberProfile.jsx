@@ -42,8 +42,8 @@ function MemberProfile() {
   if (loading)
     return (
       <Layout>
-        <div className="flex flex-col items-center justify-center py-20 text-blue-700">
-          <div className="w-16 h-16 border-8 border-blue-200 border-t-blue-700 rounded-full animate-spin"></div>
+        <div className="flex flex-col items-center justify-center py-20 text-sky-600">
+          <div className="w-16 h-16 border-8 border-sky-200 border-t-sky-600 rounded-full animate-spin"></div>
           <p className="mt-4 text-xl font-semibold animate-pulse">
             Loading Member Profile...
           </p>
@@ -314,7 +314,7 @@ function MemberProfile() {
 
               <button
                 onClick={handlePrint}
-                className="no-print mt-4 bg-sky-700 text-white px-4 py-2 rounded shadow hover:bg-blue-700"
+                className="no-print mt-4 bg-sky-600 text-white px-4 py-2 rounded shadow hover:bg-sky-900"
               >
                 🖨️ Print ID
               </button>

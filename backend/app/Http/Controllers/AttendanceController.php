@@ -1,0 +1,89 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Attendance;
+use App\Models\Event;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+
+class AttendanceController extends Controller
+{
+    /**
+     * Display a listing of attendances.
+     */
+    public function index(Event $event)
+    {
+        $attendances = Attendance::with(['user','event', 'scannedBy'])
+            ->where('event_id', $event->id)
+            ->latest()
+            ->paginate(20);
+
+        return response()->json($attendances);
+    }
+
+    /**
+     * Store a new attendance record (scan QR).
+     */
+    public function store(Request $request, Event $event)
+    {
+        $validated = $request->validate([
+            'user_id' => 'required|exists:users,id',
+        ]);
+
+        $attendance = Attendance::firstOrCreate(
+            [
+                'user_id'  => $validated['user_id'],
+                'event_id' => $event->id,
+            ],
+            [
+                'scanned_by' => Auth::id(),
+                'scanned_at' => now(),
+            ]
+        );
+
+        return response()->json([
+            'message'    => 'Attendance recorded successfully.',
+            'attendance' => $attendance->load(['user', 'scannedBy']),
+        ], 201);
+    }
+
+    /**
+     * Show a specific attendance.
+     */
+    public function show(Attendance $attendance)
+    {
+        $attendance->load(['user', 'event', 'scannedBy']);
+        return response()->json($attendance);
+    }
+
+    /**
+     * Update attendance (e.g., adjust scanned_by or scanned_at).
+     */
+    public function update(Request $request, Attendance $attendance)
+    {
+        $validated = $request->validate([
+            'scanned_by' => 'nullable|exists:users,id',
+            'scanned_at' => 'nullable|date',
+        ]);
+
+        $attendance->update($validated);
+
+        return response()->json([
+            'message'    => 'Attendance updated successfully.',
+            'attendance' => $attendance,
+        ]);
+    }
+
+    /**
+     * Delete attendance (remove from event).
+     */
+    public function destroy(Attendance $attendance)
+    {
+        $attendance->delete();
+
+        return response()->json([
+            'message' => 'Attendance removed successfully.'
+        ]);
+    }
+}

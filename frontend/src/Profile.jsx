@@ -109,11 +109,12 @@ function Profile() {
     setShowModal(false);
   };
 
+  // ✅ Loading state themed
   if (loading) {
     return (
       <Layout>
-        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 text-blue-700">
-          <div className="w-20 h-20 border-8 border-blue-200 border-t-blue-700 rounded-full animate-spin"></div>
+        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 text-sky-600">
+          <div className="w-20 h-20 border-8 border-sky-200 border-t-sky-600 rounded-full animate-spin"></div>
           <p className="mt-4 text-xl font-semibold animate-pulse">
             Loading Profile...
           </p>
@@ -143,7 +144,7 @@ function Profile() {
                   name="username"
                   value={formData.username}
                   onChange={handleChange}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-blue-300"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-sky-300"
                 />
               </div>
 
@@ -157,7 +158,7 @@ function Profile() {
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-blue-300"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-sky-300"
                 />
               </div>
 
@@ -188,7 +189,7 @@ function Profile() {
                     value={formData.password}
                     placeholder="Leave blank to keep current password"
                     onChange={handleChange}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-blue-300"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-sky-300"
                   />
                 </div>
                 <div>
@@ -201,7 +202,7 @@ function Profile() {
                     value={formData.password_confirmation}
                     placeholder="Re-enter new password"
                     onChange={handleChange}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-blue-300"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-sky-300"
                   />
                 </div>
               </div>
@@ -216,7 +217,7 @@ function Profile() {
                   name="first_name"
                   value={formData.first_name}
                   onChange={handleChange}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-blue-300"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-sky-300"
                 />
               </div>
 
@@ -230,7 +231,7 @@ function Profile() {
                   name="middle_name"
                   value={formData.middle_name}
                   onChange={handleChange}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-blue-300"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-sky-300"
                 />
               </div>
 
@@ -244,7 +245,7 @@ function Profile() {
                   name="last_name"
                   value={formData.last_name}
                   onChange={handleChange}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-blue-300"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-sky-300"
                 />
               </div>
 
@@ -259,7 +260,7 @@ function Profile() {
                   name="contact_number"
                   value={formData.contact_number}
                   onChange={handleChange}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-blue-300"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-sky-300"
                 />
               </div>
 
@@ -273,7 +274,7 @@ function Profile() {
                   name="birthdate"
                   value={formData.birthdate}
                   onChange={handleChange}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-blue-300"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-sky-300"
                 />
               </div>
 
@@ -287,7 +288,7 @@ function Profile() {
                   name="address"
                   value={formData.address}
                   onChange={handleChange}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-blue-300"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-sky-300"
                 />
               </div>
 
@@ -296,7 +297,7 @@ function Profile() {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="bg-blue-600 text-white px-6 py-2 rounded-lg shadow hover:bg-blue-700 transition disabled:opacity-50"
+                  className="bg-sky-600 text-white px-6 py-2 rounded-lg shadow hover:bg-sky-700 transition disabled:opacity-50"
                 >
                   {saving ? "Saving..." : "Update Profile"}
                 </button>
@@ -316,7 +317,7 @@ function Profile() {
             <p className="text-gray-600 mb-4">{modalMessage}</p>
             <button
               onClick={closeModal}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+              className="bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded"
             >
               Close
             </button>

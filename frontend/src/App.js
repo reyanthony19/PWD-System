@@ -19,6 +19,11 @@ import MemberProfile from './MemberProfile';
 import StaffList from './StaffList';
 import StaffProfile from './StaffProfile';
 import MemberRegister from './MemberRegister';
+import Events from './Events';
+import Attendances from './Attendances';
+import CreateEvent from './CreateEvent';
+
+
 // Route Guards
 const ProtectedRoute = () => {
   const token = localStorage.getItem('token');
@@ -54,9 +59,9 @@ function App() {
           <Route path="/staff" element={<StaffList />} />
           <Route path="/staff/:id" element={<StaffProfile />} />
           <Route path="/register" element={<Register />} />
-
-
-
+          <Route path="/events" element={<Events />} />
+          <Route path="/attendances" element={<Attendances />} />
+          <Route path="/events/create" element={<CreateEvent />} />
         </Route>
 
         {/* Default Redirect */}

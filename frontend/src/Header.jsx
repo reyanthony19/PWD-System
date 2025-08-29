@@ -78,9 +78,8 @@ function Header({ sidebarOpen, setSidebarOpen }) {
       {/* Sidebar */}
       <aside
         ref={sidebarRef}
-        className={`fixed top-16 left-0 h-full ${theme.sidebarBg} text-white w-64 transition-transform duration-300 z-50 ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
+        className={`fixed top-16 left-0 h-full ${theme.sidebarBg} text-white w-64 transition-transform duration-300 z-50 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
       >
         <div className="flex items-center justify-between p-4 border-b border-sky-600">
           <h1 className="text-lg font-bold leading-tight">
@@ -109,6 +108,15 @@ function Header({ sidebarOpen, setSidebarOpen }) {
           >
             Manage Staff
           </Link>
+
+          <Link
+            to="/events"
+            className={`text-white font-medium p-2 rounded transition-colors duration-200 ${theme.linkHover}`}
+          >
+            Manage Events
+          </Link>
+
+
         </nav>
       </aside>
 
@@ -137,9 +145,8 @@ function Header({ sidebarOpen, setSidebarOpen }) {
 
           {dropdownOpen && (
             <div
-              className={`absolute right-0 mt-2 w-48 bg-white text-black rounded shadow-lg transition-opacity duration-500 ${
-                fadeOut ? "opacity-0" : "opacity-100"
-              }`}
+              className={`absolute right-0 mt-2 w-48 bg-white text-black rounded shadow-lg transition-opacity duration-500 ${fadeOut ? "opacity-0" : "opacity-100"
+                }`}
             >
               <div className="px-4 py-2 border-b">
                 <p className="font-semibold">{currentUser?.username}</p>

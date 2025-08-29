@@ -130,8 +130,8 @@ function MemberList() {
             onChange={(e) => setSortOption(e.target.value)}
             className="border border-gray-300 rounded-lg px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-sky-500"
           >
-            <option value="firstname-asc">First Name (A–Z)</option>
-            <option value="firstname-desc">First Name (Z–A)</option>
+            <option value="firstname-asc">Ascending (A–Z)</option>
+            <option value="firstname-desc">Descending (Z–A)</option>
             <option value="date-newest">Date Registered (Newest)</option>
             <option value="date-oldest">Date Registered (Oldest)</option>
           </select>
@@ -140,7 +140,7 @@ function MemberList() {
             onClick={() => navigate("/member/register")}
             className="ml-auto bg-sky-600 hover:bg-sky-700 text-white px-5 py-2 rounded-lg shadow font-semibold transition"
           >
-            ➕ Add Member
+            Add Member
           </button>
         </div>
 
