@@ -22,7 +22,7 @@ import MemberRegister from './MemberRegister';
 import Events from './Events';
 import Attendances from './Attendances';
 import CreateEvent from './CreateEvent';
-
+import Print from './Print';
 
 // Route Guards
 const ProtectedRoute = () => {
@@ -54,7 +54,7 @@ function App() {
           <Route path="/member" element={<MemberList />} />
           <Route path="/member/register" element={<MemberRegister />} />
           <Route path="/members/:id" element={<MemberProfile />} />
-
+          <Route path="/print/:id" element={<Print />} />
 
           <Route path="/staff" element={<StaffList />} />
           <Route path="/staff/:id" element={<StaffProfile />} />
@@ -62,6 +62,7 @@ function App() {
           <Route path="/events" element={<Events />} />
           <Route path="/attendances" element={<Attendances />} />
           <Route path="/events/create" element={<CreateEvent />} />
+
         </Route>
 
         {/* Default Redirect */}

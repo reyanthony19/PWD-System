@@ -92,6 +92,20 @@ function MemberList() {
     { key: "deceased", label: "Deceased", icon: <UserX size={18} />, color: "bg-gray-200 text-gray-700" },
   ];
 
+  if (loading) {
+    return (
+      <Layout>
+        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 text-sky-600">
+          <div className="w-20 h-20 border-8 border-sky-200 border-t-sky-600 rounded-full animate-spin"></div>
+          <p className="mt-4 text-xl font-semibold animate-pulse">
+            Loading Members...
+          </p>
+          <p className="text-gray-600 text-sm">Please wait a moment 🧑‍🦽</p>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
       <div className="p-6 bg-gray-100 min-h-screen">
@@ -144,70 +158,61 @@ function MemberList() {
           </button>
         </div>
 
-        {/* Loading State */}
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 text-sky-600">
-            <div className="w-16 h-16 border-8 border-sky-200 border-t-sky-600 rounded-full animate-spin"></div>
-            <p className="mt-4 text-xl font-semibold animate-pulse">Loading Members...</p>
-            <p className="text-gray-600 text-sm">Please wait a moment 🧑‍🦽</p>
-          </div>
-        ) : (
-          <div className={`${theme.cardBg} overflow-x-auto rounded-xl shadow`}>
-            <table className="min-w-full text-base text-left">
-              <thead className={`${theme.footerBg} text-white uppercase`}>
+        <div className={`${theme.cardBg} overflow-x-auto rounded-xl shadow`}>
+          <table className="min-w-full text-base text-left">
+            <thead className={`${theme.footerBg} text-white uppercase`}>
+              <tr>
+                <th className="px-4 py-3">Full Name</th>
+                <th className="px-4 py-3">Username</th>
+                <th className="px-4 py-3">Email</th>
+                <th className="px-4 py-3">Contact</th>
+                <th className="px-4 py-3">Address</th>
+                <th className="px-4 py-3">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredMembers.length > 0 ? (
+                filteredMembers.map((member) => {
+                  const profile = member.member_profile || {};
+                  const fullName = `${profile.first_name || ""} ${profile.middle_name ? profile.middle_name + " " : ""}${profile.last_name || ""}`.trim();
+                  return (
+                    <tr
+                      key={member.id}
+                      className="odd:bg-gray-50 even:bg-gray-100 hover:bg-sky-50 cursor-pointer"
+                      onClick={() => navigate(`/members/${member.id}`)}
+                    >
+                      <td className="px-4 py-3">{fullName}</td>
+                      <td className="px-4 py-3">{member.username}</td>
+                      <td className="px-4 py-3">{member.email}</td>
+                      <td className="px-4 py-3">{profile.contact_number}</td>
+                      <td className="px-4 py-3">{profile.address}</td>
+                      <td className="px-4 py-3">
+                        <select
+                          value={member.status}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => handleStatusChange(member.id, e.target.value)}
+                          className="border rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500"
+                        >
+                          <option value="approved">✅ Approved</option>
+                          <option value="inactive">⏸ Inactive</option>
+                          <option value="deceased">⚰️ Deceased</option>
+                          <option value="rejected">❌ Rejected</option>
+                          <option value="pending">⏳ Pending</option>
+                        </select>
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
                 <tr>
-                  <th className="px-4 py-3">Full Name</th>
-                  <th className="px-4 py-3">Username</th>
-                  <th className="px-4 py-3">Email</th>
-                  <th className="px-4 py-3">Contact</th>
-                  <th className="px-4 py-3">Address</th>
-                  <th className="px-4 py-3">Status</th>
+                  <td colSpan="9" className="px-4 py-6 text-center text-gray-600 text-lg">
+                    No members found for "{statusFilter}" status.
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {filteredMembers.length > 0 ? (
-                  filteredMembers.map((member) => {
-                    const profile = member.member_profile || {};
-                    const fullName = `${profile.first_name || ""} ${profile.middle_name ? profile.middle_name + " " : ""}${profile.last_name || ""}`.trim();
-                    return (
-                      <tr
-                        key={member.id}
-                        className="odd:bg-gray-50 even:bg-gray-100 hover:bg-sky-50 cursor-pointer"
-                        onClick={() => navigate(`/members/${member.id}`)}
-                      >
-                        <td className="px-4 py-3 font-semibold">{fullName}</td>
-                        <td className="px-4 py-3">{member.username}</td>
-                        <td className="px-4 py-3">{member.email}</td>
-                        <td className="px-4 py-3">{profile.contact_number}</td>
-                        <td className="px-4 py-3">{profile.address}</td>
-                        <td className="px-4 py-3">
-                          <select
-                            value={member.status}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={(e) => handleStatusChange(member.id, e.target.value)}
-                            className="border rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500"
-                          >
-                            <option value="approved">✅ Approved</option>
-                            <option value="inactive">⏸ Inactive</option>
-                            <option value="deceased">⚰️ Deceased</option>
-                            <option value="rejected">❌ Rejected</option>
-                            <option value="pending">⏳ Pending</option>
-                          </select>
-                        </td>
-                      </tr>
-                    );
-                  })
-                ) : (
-                  <tr>
-                    <td colSpan="9" className="px-4 py-6 text-center text-gray-600 text-lg">
-                      No members found for "{statusFilter}" status.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </Layout>
   );

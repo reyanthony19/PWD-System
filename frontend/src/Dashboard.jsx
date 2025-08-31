@@ -14,9 +14,9 @@ import {
   Cell,
 } from "recharts";
 import Layout from "./Layout";
-import Footer from "./Footer"; // ✅ Import new footer
+import Footer from "./Footer";
 
-// THEME COLORS (you can swap easily later)
+// 🎨 Sky Blue Theme (same as Header)
 const theme = {
   primary: "from-sky-600 to-sky-400",
   primaryText: "text-sky-600",
@@ -56,7 +56,7 @@ function Dashboard() {
     setCurrentUser(res.data);
   };
 
-  // Group by status
+  // ✅ Group by status
   const statusCounts = {
     Approved: members.filter((m) => m.status === "approved").length,
     Rejected: members.filter((m) => m.status === "rejected").length,
@@ -73,9 +73,9 @@ function Dashboard() {
   if (loading) {
     return (
       <Layout>
-        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 text-sky-600">
+        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
           <div className="w-20 h-20 border-8 border-sky-200 border-t-sky-600 rounded-full animate-spin"></div>
-          <p className="mt-4 text-xl font-semibold animate-pulse">
+          <p className="mt-4 text-xl font-semibold text-sky-600 animate-pulse">
             Loading Dashboard...
           </p>
           <p className="text-gray-600 text-sm">Please wait a moment 🧑‍🦽</p>
@@ -84,18 +84,17 @@ function Dashboard() {
     );
   }
 
-
   return (
     <Layout>
       <div className="bg-gray-50 min-h-screen">
         {/* Hero Section */}
         <section
-          className={`relative bg-gradient-to-r ${theme.primary} text-white py-16 px-6 text-center`}
+          className={`relative bg-gradient-to-r ${theme.primary} text-white py-16 px-6 text-center shadow`}
         >
-          <h1 className="text-4xl md:text-6xl font-extrabold mb-4">
+          <h1 className="text-4xl md:text-6xl font-extrabold mb-4 drop-shadow-md">
             Welcome, {currentUser?.username || "..."}
           </h1>
-          <p className="max-w-2xl mx-auto text-lg md:text-xl">
+          <p className="max-w-2xl mx-auto text-lg md:text-xl opacity-90">
             Here’s an overview of member statistics and status distribution.
           </p>
         </section>
@@ -114,7 +113,7 @@ function Dashboard() {
               return (
                 <div
                   key={status}
-                  className={`p-6 rounded-xl text-center shadow hover:shadow-lg transition ${colorClasses[status]}`}
+                  className={`p-6 rounded-xl text-center shadow-md hover:shadow-lg transition ${colorClasses[status]}`}
                 >
                   <p className="text-3xl font-bold">{count}</p>
                   <p className="text-sm font-medium">{status}</p>
@@ -141,6 +140,7 @@ function Dashboard() {
                     <Bar
                       dataKey="count"
                       fill={theme.chartColors[0]} // Primary chart color
+                      radius={[8, 8, 0, 0]}
                     />
                   </BarChart>
                 </ResponsiveContainer>
@@ -167,7 +167,9 @@ function Dashboard() {
                       {chartData.map((_, index) => (
                         <Cell
                           key={index}
-                          fill={theme.chartColors[index % theme.chartColors.length]}
+                          fill={
+                            theme.chartColors[index % theme.chartColors.length]
+                          }
                         />
                       ))}
                     </Pie>

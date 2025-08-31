@@ -9,7 +9,7 @@ function Profile() {
     email: "",
     old_password: "",
     password: "",
-    password_confirmation: "", // ✅ new field
+    password_confirmation: "",
     first_name: "",
     middle_name: "",
     last_name: "",
@@ -69,7 +69,6 @@ function Profile() {
     e.preventDefault();
     setSaving(true);
 
-    // ✅ Password confirmation check
     if (formData.password && formData.password !== formData.password_confirmation) {
       setModalMessage("New password and confirmation do not match.");
       setShowModal(true);
@@ -85,11 +84,9 @@ function Profile() {
     try {
       await api.put(`/user/${user?.id}`, payload);
 
-      // ✅ show success modal
       setModalMessage("Profile updated successfully!");
       setShowModal(true);
 
-      // clear password fields after success
       setFormData((prev) => ({
         ...prev,
         old_password: "",
@@ -109,7 +106,6 @@ function Profile() {
     setShowModal(false);
   };
 
-  // ✅ Loading state themed
   if (loading) {
     return (
       <Layout>
@@ -128,176 +124,222 @@ function Profile() {
     <Layout>
       <div className="p-6 bg-gray-100 min-h-screen">
         <div className="max-w-3xl mx-auto">
-          <section className="bg-white rounded-xl shadow p-6">
-            <h1 className="text-3xl font-bold mb-6 text-gray-800">
+          <section className="bg-white rounded-xl shadow-lg p-8">
+            <h1 className="text-3xl font-bold mb-8 text-gray-800">
               Edit Profile
             </h1>
 
-            <form onSubmit={handleUpdate} className="space-y-4">
+            <form onSubmit={handleUpdate} className="space-y-6">
               {/* Username */}
-              <div>
-                <label className="block text-gray-700 font-medium mb-1">
-                  Username
-                </label>
+              <div className="relative">
                 <input
                   type="text"
                   name="username"
                   value={formData.username}
                   onChange={handleChange}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-sky-300"
+                  required
+                  className="peer w-full border border-gray-300 rounded-lg px-4 pt-5 pb-2 
+                             focus:outline-none focus:ring-2 focus:ring-sky-400 
+                             placeholder-transparent"
+                  placeholder="Username"
                 />
+                <label
+                  htmlFor="username"
+                  className="absolute left-4 top-2 text-gray-500 text-sm transition-all
+                             peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400
+                             peer-focus:top-2 peer-focus:text-sm peer-focus:text-sky-600"
+                >
+                  Username
+                </label>
               </div>
 
               {/* Email */}
-              <div>
-                <label className="block text-gray-700 font-medium mb-1">
-                  Email
-                </label>
+              <div className="relative">
                 <input
                   type="email"
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-sky-300"
+                  required
+                  className="peer w-full border border-gray-300 rounded-lg px-4 pt-5 pb-2 
+                             focus:outline-none focus:ring-2 focus:ring-sky-400 
+                             placeholder-transparent"
+                  placeholder="Email"
                 />
+                <label
+                  htmlFor="email"
+                  className="absolute left-4 top-2 text-gray-500 text-sm transition-all
+                             peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400
+                             peer-focus:top-2 peer-focus:text-sm peer-focus:text-sky-600"
+                >
+                  Email
+                </label>
               </div>
 
-              {/* Old Password */}
-              <div>
-                <label className="block text-gray-700 font-medium mb-1">
-                  Current Password
-                </label>
+              {/* Current Password */}
+              <div className="relative">
                 <input
                   type="password"
                   name="old_password"
                   value={formData.old_password}
-                  placeholder="Enter current password to change password"
                   onChange={handleChange}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-red-300"
+                  placeholder="Enter current password"
+                  className="peer w-full border border-gray-300 rounded-lg px-4 pt-5 pb-2 
+                             focus:outline-none focus:ring-2 focus:ring-red-400 
+                             placeholder-transparent"
                 />
+                <label
+                  htmlFor="old_password"
+                  className="absolute left-4 top-2 text-gray-500 text-sm transition-all
+                             peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400
+                             peer-focus:top-2 peer-focus:text-sm peer-focus:text-red-500"
+                >
+                  Current Password
+                </label>
               </div>
 
-              {/* New Password + Confirmation */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-gray-700 font-medium mb-1">
-                    New Password
-                  </label>
+              {/* New Password & Confirm */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="relative">
                   <input
                     type="password"
                     name="password"
                     value={formData.password}
-                    placeholder="Leave blank to keep current password"
                     onChange={handleChange}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-sky-300"
+                    placeholder="New Password"
+                    className="peer w-full border border-gray-300 rounded-lg px-4 pt-5 pb-2 
+                               focus:outline-none focus:ring-2 focus:ring-sky-400 
+                               placeholder-transparent"
                   />
-                </div>
-                <div>
-                  <label className="block text-gray-700 font-medium mb-1">
-                    Confirm New Password
+                  <label
+                    htmlFor="password"
+                    className="absolute left-4 top-2 text-gray-500 text-sm transition-all
+                               peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400
+                               peer-focus:top-2 peer-focus:text-sm peer-focus:text-sky-600"
+                  >
+                    New Password
                   </label>
+                </div>
+
+                <div className="relative">
                   <input
                     type="password"
                     name="password_confirmation"
                     value={formData.password_confirmation}
-                    placeholder="Re-enter new password"
                     onChange={handleChange}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-sky-300"
+                    placeholder="Confirm Password"
+                    className="peer w-full border border-gray-300 rounded-lg px-4 pt-5 pb-2 
+                               focus:outline-none focus:ring-2 focus:ring-sky-400 
+                               placeholder-transparent"
                   />
+                  <label
+                    htmlFor="password_confirmation"
+                    className="absolute left-4 top-2 text-gray-500 text-sm transition-all
+                               peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400
+                               peer-focus:top-2 peer-focus:text-sm peer-focus:text-sky-600"
+                  >
+                    Confirm Password
+                  </label>
                 </div>
               </div>
 
-              {/* First Name */}
-              <div>
-                <label className="block text-gray-700 font-medium mb-1">
-                  First Name
-                </label>
-                <input
-                  type="text"
-                  name="first_name"
-                  value={formData.first_name}
-                  onChange={handleChange}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-sky-300"
-                />
-              </div>
-
-              {/* Middle Name */}
-              <div>
-                <label className="block text-gray-700 font-medium mb-1">
-                  Middle Name
-                </label>
-                <input
-                  type="text"
-                  name="middle_name"
-                  value={formData.middle_name}
-                  onChange={handleChange}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-sky-300"
-                />
-              </div>
-
-              {/* Last Name */}
-              <div>
-                <label className="block text-gray-700 font-medium mb-1">
-                  Last Name
-                </label>
-                <input
-                  type="text"
-                  name="last_name"
-                  value={formData.last_name}
-                  onChange={handleChange}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-sky-300"
-                />
+              {/* Names */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {["first_name", "middle_name", "last_name"].map((field, idx) => (
+                  <div key={idx} className="relative">
+                    <input
+                      type="text"
+                      name={field}
+                      value={formData[field]}
+                      onChange={handleChange}
+                      placeholder={field.replace("_", " ")}
+                      className="peer w-full border border-gray-300 rounded-lg px-4 pt-5 pb-2 
+                                 focus:outline-none focus:ring-2 focus:ring-sky-400 
+                                 placeholder-transparent"
+                    />
+                    <label
+                      htmlFor={field}
+                      className="absolute left-4 top-2 text-gray-500 text-sm capitalize transition-all
+                                 peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400
+                                 peer-focus:top-2 peer-focus:text-sm peer-focus:text-sky-600"
+                    >
+                      {field.replace("_", " ")}
+                    </label>
+                  </div>
+                ))}
               </div>
 
               {/* Contact Number */}
-              <div>
-                <label className="block text-gray-700 font-medium mb-1">
-                  Contact Number
-                </label>
+              <div className="relative">
                 <input
                   type="text"
                   maxLength="11"
                   name="contact_number"
                   value={formData.contact_number}
                   onChange={handleChange}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-sky-300"
+                  placeholder="Contact Number"
+                  className="peer w-full border border-gray-300 rounded-lg px-4 pt-5 pb-2 
+                             focus:outline-none focus:ring-2 focus:ring-sky-400 
+                             placeholder-transparent"
                 />
+                <label
+                  htmlFor="contact_number"
+                  className="absolute left-4 top-2 text-gray-500 text-sm transition-all
+                             peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400
+                             peer-focus:top-2 peer-focus:text-sm peer-focus:text-sky-600"
+                >
+                  Contact Number
+                </label>
               </div>
 
               {/* Birthdate */}
-              <div>
-                <label className="block text-gray-700 font-medium mb-1">
-                  Birthdate
-                </label>
+              <div className="relative">
                 <input
                   type="date"
                   name="birthdate"
                   value={formData.birthdate}
                   onChange={handleChange}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-sky-300"
+                  className="peer w-full border border-gray-300 rounded-lg px-4 pt-5 pb-2 
+                             focus:outline-none focus:ring-2 focus:ring-sky-400"
                 />
+                <label
+                  htmlFor="birthdate"
+                  className="absolute left-4 top-2 text-gray-500 text-sm transition-all
+                             peer-focus:text-sky-600"
+                >
+                  Birthdate
+                </label>
               </div>
 
               {/* Address */}
-              <div>
-                <label className="block text-gray-700 font-medium mb-1">
-                  Address
-                </label>
+              <div className="relative">
                 <input
                   type="text"
                   name="address"
                   value={formData.address}
                   onChange={handleChange}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring focus:ring-sky-300"
+                  placeholder="Address"
+                  className="peer w-full border border-gray-300 rounded-lg px-4 pt-5 pb-2 
+                             focus:outline-none focus:ring-2 focus:ring-sky-400 
+                             placeholder-transparent"
                 />
+                <label
+                  htmlFor="address"
+                  className="absolute left-4 top-2 text-gray-500 text-sm transition-all
+                             peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400
+                             peer-focus:top-2 peer-focus:text-sm peer-focus:text-sky-600"
+                >
+                  Address
+                </label>
               </div>
 
-              {/* Submit Button */}
+              {/* Submit */}
               <div>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="bg-sky-600 text-white px-6 py-2 rounded-lg shadow hover:bg-sky-700 transition disabled:opacity-50"
+                  className="w-full bg-sky-600 text-white px-6 py-3 rounded-lg shadow-md 
+                             hover:bg-sky-700 transition disabled:opacity-50"
                 >
                   {saving ? "Saving..." : "Update Profile"}
                 </button>
@@ -312,7 +354,7 @@ function Profile() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
           <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-sm text-center">
             <h3 className="text-lg font-semibold mb-2">
-              {modalMessage.includes("successfully") ? "Success" : "Error"}
+              {modalMessage.includes("successfully") ? "✅ Success" : "⚠️ Error"}
             </h3>
             <p className="text-gray-600 mb-4">{modalMessage}</p>
             <button
