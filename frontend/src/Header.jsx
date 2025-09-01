@@ -1,4 +1,4 @@
-import  { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "./api";
 import {
@@ -92,6 +92,7 @@ function Header({ sidebarOpen, setSidebarOpen }) {
     { to: "/member", label: "Member List", icon: Users, gradient: "from-green-500 to-emerald-500" },
     { to: "/staff", label: "Manage Staff", icon: Shield, gradient: "from-purple-500 to-violet-500" },
     { to: "/events", label: "Manage Events", icon: Calendar, gradient: "from-orange-500 to-red-500" },
+    { to: "/benefits/list", label: "Manage Benefits", icon: BarChart3, gradient: "from-yellow-500 to-orange-500" }, // <-- Added
   ];
 
   return (
@@ -190,11 +191,11 @@ function Header({ sidebarOpen, setSidebarOpen }) {
               <Menu size={20} />
             </button>
             <div className="flex items-center space-x-3">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+              <div className="w-12 h-12 rounded-xl overflow-hidden flex items-center justify-center shadow-md">
                 <img
                   src="/images/PDAO LOGO.png"
                   alt="PWD Logo"
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-contain"
                 />
               </div>
               <div className="hidden sm:block">

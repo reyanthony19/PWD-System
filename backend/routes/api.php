@@ -4,8 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\StaffController;
 use App\Http\Controllers\MemberController;
-use App\Http\Controllers\EventController;
-use App\Http\Controllers\AttendanceController;
+use App\Http\Controllers\BenefitController;
 
 /*
 |--------------------------------------------------------------------------
@@ -20,9 +19,7 @@ Route::post('/login', [AuthController::class, 'login']);
 // Member registration
 Route::post('/member/register', [MemberController::class, 'register']);
 
-// Staff registration
-Route::post('/staff/register', [StaffController::class, 'register']);
-
+// Public Benefits (members can view benefits)
 
 /*
 |--------------------------------------------------------------------------
@@ -30,7 +27,11 @@ Route::post('/staff/register', [StaffController::class, 'register']);
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth:sanctum')->group(function () {
-    // Common user endpoints
+    /*
+    |--------------------------------------------------------------------------
+    | Authenticated User Management
+    |--------------------------------------------------------------------------
+    */
     Route::get('/user', [AuthController::class, 'profile']);
     Route::get('/users', [AuthController::class, 'listUsers']);
     Route::get('/user/{id}', [AuthController::class, 'showUser']);
@@ -41,19 +42,20 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /*
     |--------------------------------------------------------------------------
-    | Event Routes
+    | Benefits Management (Admin/Staff)
     |--------------------------------------------------------------------------
     */
-    Route::apiResource('events', EventController::class);
+    // CRUD for benefits
+    Route::post('/benefits', [BenefitController::class, 'storeBenefit']);
+    Route::put('/benefits/{benefit}', [BenefitController::class, 'updateBenefit']);
+    Route::delete('/benefits/{benefit}', [BenefitController::class, 'destroyBenefit']);
+    Route::get('/benefits-lists', [BenefitController::class, 'listBenefits']);
+    Route::get('/benefits/{benefit}', [BenefitController::class, 'showBenefit']);
 
-    /*
-    |--------------------------------------------------------------------------
-    | Attendance Routes (Flat)
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/attendances', [AttendanceController::class, 'index']);   // list/filter
-    Route::post('/attendances', [AttendanceController::class, 'store']); // add attendance
-    Route::get('/attendances/{attendance}', [AttendanceController::class, 'show']); 
-    Route::put('/attendances/{attendance}', [AttendanceController::class, 'update']);
-    Route::delete('/attendances/{attendance}', [AttendanceController::class, 'destroy']);
+    // CRUD for benefit records
+    Route::get('/benefit-records', [BenefitController::class, 'indexRecords']);
+    Route::post('/benefit-records', [BenefitController::class, 'storeRecord']);
+    Route::get('/benefit-records/{record}', [BenefitController::class, 'showRecord']);
+    Route::put('/benefit-records/{record}', [BenefitController::class, 'updateRecord']);
+    Route::delete('/benefit-records/{record}', [BenefitController::class, 'destroyRecord']);
 });

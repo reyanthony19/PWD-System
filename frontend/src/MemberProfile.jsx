@@ -9,6 +9,9 @@ function MemberProfile() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // 🔹 Define API URL (set REACT_APP_API_URL in .env)
+  const API_URL = process.env.REACT_APP_API_URL || "http://127.0.0.1:8000";
+
   useEffect(() => {
     const fetchMember = async () => {
       try {
@@ -63,8 +66,8 @@ function MemberProfile() {
     .join(" ")
     .trim();
 
-  // 🔹 Documents (make sure backend sends something like profile.documents = ["/storage/id.jpg", ...])
-  const documents = profile.documents || [];
+  // 🔹 Documents (object with filenames)
+  const docs = profile.documents || {};
 
   return (
     <Layout>
@@ -109,22 +112,37 @@ function MemberProfile() {
           </div>
 
           {/* 📂 Documents Section */}
-          {documents.length > 0 && (
+          {Object.values(docs).some(Boolean) && (
             <div className="p-6 border-t">
               <h2 className="text-xl font-semibold mb-4 text-sky-700">Documents</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                {documents.map((doc, i) => (
-                  <div key={i} className="border rounded-lg overflow-hidden shadow-sm">
-                    <img
-                      src={doc.startsWith("http") ? doc : `${import.meta.env.VITE_API_URL}${doc}`}
-                      alt={`Document ${i + 1}`}
-                      className="w-full h-48 object-cover hover:scale-105 transition"
-                    />
-                    <div className="p-2 text-center text-sm text-gray-600">
-                      Document {i + 1}
-                    </div>
-                  </div>
-                ))}
+                {[
+                  { label: "Barangay Indigency", file: docs.barangay_indigency },
+                  { label: "Medical Certificate", file: docs.medical_certificate },
+                  { label: "2x2 Picture", file: docs.picture_2x2 },
+                  { label: "Birth Certificate", file: docs.birth_certificate },
+                ].map(
+                  (doc, i) =>
+                    doc.file && (
+                      <div
+                        key={i}
+                        className="border rounded-lg overflow-hidden shadow-sm"
+                      >
+                        <img
+                          src={
+                            doc.file.startsWith("http")
+                              ? doc.file
+                              : `${API_URL}/storage/${doc.file}`
+                          }
+                          alt={doc.label}
+                          className="w-full h-48 object-cover hover:scale-105 transition"
+                        />
+                        <div className="p-2 text-center text-sm text-gray-600">
+                          {doc.label}
+                        </div>
+                      </div>
+                    )
+                )}
               </div>
             </div>
           )}

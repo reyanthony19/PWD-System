@@ -24,7 +24,7 @@ function Events() {
     const fetchEvents = async () => {
       try {
         const res = await api.get("/events");
-        setEvents(res.data.data || res.data); // handle pagination or raw
+        setEvents(res.data.data || res.data);
       } catch (err) {
         console.error(err);
         setError("Failed to load events.");
@@ -63,11 +63,9 @@ function Events() {
   if (loading) {
     return (
       <Layout>
-        <div
-          className={`flex flex-col items-center justify-center min-h-screen bg-gray-100 ${theme.primaryText}`}
-        >
+        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
           <div className="w-20 h-20 border-8 border-sky-200 border-t-sky-600 rounded-full animate-spin"></div>
-          <p className="mt-4 text-xl font-semibold animate-pulse">
+          <p className="mt-4 text-xl font-semibold text-sky-600 animate-pulse">
             Loading Events...
           </p>
           <p className="text-gray-600 text-sm">Please wait a moment 📅</p>
@@ -88,13 +86,14 @@ function Events() {
 
   return (
     <Layout>
-      <div className="p-6 bg-gray-100 min-h-screen">
+      <div className="p-6 bg-gray-50 min-h-screen">
+        {/* Header */}
         <h1 className={`text-3xl font-bold ${theme.primaryText} mb-6`}>
           Manage Events
         </h1>
 
         {/* Search & Sort Controls */}
-        <section className={`${theme.cardBg} rounded-xl shadow p-6 mb-6`}>
+        <section className={`${theme.cardBg} rounded-2xl shadow p-6 mb-6`}>
           <div className="flex flex-wrap gap-4 items-center">
             <input
               type="text"
@@ -116,7 +115,7 @@ function Events() {
 
             <button
               onClick={() => navigate("/events/create")}
-              className="bg-sky-600 hover:bg-sky-700 text-white px-5 py-2 rounded-lg shadow transition duration-200"
+              className="ml-auto bg-sky-600 hover:bg-sky-700 text-white px-5 py-2 rounded-lg shadow transition duration-200"
             >
               + Create Event
             </button>
@@ -124,10 +123,10 @@ function Events() {
         </section>
 
         {/* Events Table */}
-        <section className={`${theme.cardBg} rounded-xl shadow p-6`}>
+        <section className={`${theme.cardBg} rounded-2xl shadow p-6`}>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm text-left border-collapse">
-              <thead className="bg-sky-700 text-white uppercase">
+              <thead className="bg-sky-600 text-white uppercase">
                 <tr>
                   <th className="px-4 py-3">Event Title</th>
                   <th className="px-4 py-3">Date</th>
@@ -139,21 +138,27 @@ function Events() {
                   filteredEvents.map((event) => (
                     <tr
                       key={event.id}
-                      onClick={() => navigate(`/attendances?event_id=${event.id}`)}
+                      onClick={() =>
+                        navigate(`/attendances?event_id=${event.id}`)
+                      }
                       className="odd:bg-gray-100 even:bg-gray-50 hover:bg-sky-100 cursor-pointer transition"
                     >
-                      <td className="px-4 py-3">{event.title}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 font-medium text-gray-700">
+                        {event.title}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">
                         {new Date(event.event_date).toLocaleDateString()}
                       </td>
-                      <td className="px-4 py-3">{event.location}</td>
+                      <td className="px-4 py-3 text-gray-600">
+                        {event.location}
+                      </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
                     <td
                       colSpan="3"
-                      className="px-4 py-3 text-center text-gray-500"
+                      className="px-4 py-6 text-center text-gray-500"
                     >
                       No events found.
                     </td>

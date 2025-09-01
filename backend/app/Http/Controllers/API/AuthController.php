@@ -57,7 +57,7 @@ class AuthController extends Controller
     public function showUser($id)
     {
         $user = User::with('memberProfile.documents', 'adminProfile', 'staffProfile')
-                    ->findOrFail($id);
+            ->findOrFail($id);
 
         return response()->json($user);
     }
@@ -93,6 +93,14 @@ class AuthController extends Controller
             'email'        => 'required|email|unique:users,email,' . $id,
             'old_password' => 'nullable|string',
             'password'     => 'nullable|string|min:3',
+
+            // profile fields
+            'first_name'     => 'nullable|string|max:255',
+            'middle_name'    => 'nullable|string|max:255',
+            'last_name'      => 'nullable|string|max:255',
+            'contact_number' => 'nullable|string|max:50',
+            'birthdate'      => 'nullable|date',
+            'address'        => 'nullable|string|max:500',
         ];
 
         $validated = $request->validate($rules);
@@ -108,12 +116,31 @@ class AuthController extends Controller
             $user->password = Hash::make($validated['password']);
         }
 
+        // Update users table
         $user->username = $validated['username'];
         $user->email    = $validated['email'];
         $user->save();
 
+        // Update profile table depending on role
+        $profileData = collect($validated)->only([
+            'first_name',
+            'middle_name',
+            'last_name',
+            'contact_number',
+            'birthdate',
+            'address'
+        ])->toArray();
+
+        if ($role === 'admin' && $user->adminProfile) {
+            $user->adminProfile->update($profileData);
+        } elseif ($role === 'staff' && $user->staffProfile) {
+            $user->staffProfile->update($profileData);
+        } elseif ($role === 'member' && $user->memberProfile) {
+            $user->memberProfile->update($profileData);
+        }
+
         return response()->json([
-            'message' => 'User updated successfully!',
+            'message' => 'User and profile updated successfully!',
             'user'    => $user->load($role . 'Profile')
         ]);
     }

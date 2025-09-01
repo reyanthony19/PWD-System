@@ -2,16 +2,15 @@ import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import api from "./api";
 import Layout from "./Layout";
-import { Trash2 } from "lucide-react"; // ✅ delete icon
+import { Trash2 } from "lucide-react";
 
-// ✅ Theme applied here
+// ✅ Theme applied consistently
 const theme = {
   primary: "from-sky-600 to-sky-400",
   primaryText: "text-sky-600",
   secondaryText: "text-sky-400",
   cardBg: "bg-white",
   footerBg: "bg-sky-700",
-  chartColors: ["#0ea5e9", "#38bdf8", "#7dd3fc", "#0284c7", "#0369a1"],
 };
 
 function StaffProfile() {
@@ -20,7 +19,7 @@ function StaffProfile() {
   const [staff, setStaff] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [showDeleteModal, setShowDeleteModal] = useState(false); // ✅ modal state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   useEffect(() => {
     const fetchStaff = async () => {
@@ -46,7 +45,7 @@ function StaffProfile() {
   const handleDelete = async () => {
     try {
       await api.delete(`/user/${id}`);
-      navigate("/staff"); // ✅ redirect back to staff list
+      navigate("/staff");
     } catch (err) {
       console.error("Error deleting staff:", err);
       alert(err.response?.data?.message || "Failed to delete staff.");
@@ -87,11 +86,25 @@ function StaffProfile() {
 
   const profile = staff.staff_profile || {};
 
+  // ✅ Format birthdate (avoid ugly ISO string)
+  const formatDate = (dateStr) => {
+    if (!dateStr) return "-";
+    try {
+      return new Date(dateStr).toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
   const fields = [
     { label: "First Name", value: profile.first_name },
     { label: "Last Name", value: profile.last_name },
     { label: "Middle Name", value: profile.middle_name },
-    { label: "Birthdate", value: profile.birthdate },
+    { label: "Birthdate", value: formatDate(profile.birthdate) }, // ✅ fixed formatting
     { label: "Contact Number", value: profile.contact_number },
     { label: "Address", value: profile.address },
   ];
@@ -100,7 +113,7 @@ function StaffProfile() {
     <Layout>
       <div className="p-6 max-w-4xl mx-auto">
         <div className={`${theme.cardBg} rounded-lg shadow-lg overflow-hidden`}>
-          {/* ✅ Header with theme gradient */}
+          {/* ✅ Header */}
           <div className={`bg-gradient-to-r ${theme.primary} p-6`}>
             <h1 className="text-3xl font-bold text-white">
               {profile.first_name || "-"} {profile.last_name || "-"}
@@ -108,7 +121,7 @@ function StaffProfile() {
             <p className="text-sky-100">Staff Profile</p>
           </div>
 
-          {/* ✅ Fields */}
+          {/* ✅ Details */}
           <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
             {fields.map((field, index) => (
               <div key={index}>
@@ -118,7 +131,7 @@ function StaffProfile() {
             ))}
           </div>
 
-          {/* ✅ Back & Delete inline */}
+          {/* ✅ Back & Delete buttons */}
           <div className="p-6 border-t flex justify-between items-center">
             <Link
               to="/staff"

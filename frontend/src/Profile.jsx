@@ -130,51 +130,33 @@ function Profile() {
             </h1>
 
             <form onSubmit={handleUpdate} className="space-y-6">
-              {/* Username */}
-              <div className="relative">
-                <input
-                  type="text"
-                  name="username"
-                  value={formData.username}
-                  onChange={handleChange}
-                  required
-                  className="peer w-full border border-gray-300 rounded-lg px-4 pt-5 pb-2 
-                             focus:outline-none focus:ring-2 focus:ring-sky-400 
-                             placeholder-transparent"
-                  placeholder="Username"
-                />
-                <label
-                  htmlFor="username"
-                  className="absolute left-4 top-2 text-gray-500 text-sm transition-all
-                             peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400
-                             peer-focus:top-2 peer-focus:text-sm peer-focus:text-sky-600"
-                >
-                  Username
-                </label>
-              </div>
-
-              {/* Email */}
-              <div className="relative">
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  required
-                  className="peer w-full border border-gray-300 rounded-lg px-4 pt-5 pb-2 
-                             focus:outline-none focus:ring-2 focus:ring-sky-400 
-                             placeholder-transparent"
-                  placeholder="Email"
-                />
-                <label
-                  htmlFor="email"
-                  className="absolute left-4 top-2 text-gray-500 text-sm transition-all
-                             peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400
-                             peer-focus:top-2 peer-focus:text-sm peer-focus:text-sky-600"
-                >
-                  Email
-                </label>
-              </div>
+              {/* Generic Floating Input */}
+              {[
+                { name: "username", type: "text", label: "Username" },
+                { name: "email", type: "email", label: "Email" },
+              ].map((f) => (
+                <div key={f.name} className="relative">
+                  <input
+                    type={f.type}
+                    name={f.name}
+                    value={formData[f.name]}
+                    onChange={handleChange}
+                    required
+                    placeholder=" "
+                    className="peer w-full border border-gray-300 rounded-lg px-4 pt-5 pb-2
+                               focus:outline-none focus:ring-2 focus:ring-sky-400"
+                  />
+                  <label
+                    htmlFor={f.name}
+                    className="absolute left-4 top-2 text-gray-500 text-sm transition-all
+                               peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400
+                               peer-focus:top-2 peer-focus:text-sm peer-focus:text-sky-600
+                               peer-not-placeholder-shown:top-2 peer-not-placeholder-shown:text-sm peer-not-placeholder-shown:text-gray-700"
+                  >
+                    {f.label}
+                  </label>
+                </div>
+              ))}
 
               {/* Current Password */}
               <div className="relative">
@@ -183,85 +165,69 @@ function Profile() {
                   name="old_password"
                   value={formData.old_password}
                   onChange={handleChange}
-                  placeholder="Enter current password"
-                  className="peer w-full border border-gray-300 rounded-lg px-4 pt-5 pb-2 
-                             focus:outline-none focus:ring-2 focus:ring-red-400 
-                             placeholder-transparent"
+                  placeholder=" "
+                  className="peer w-full border border-gray-300 rounded-lg px-4 pt-5 pb-2
+                             focus:outline-none focus:ring-2 focus:ring-red-400"
                 />
                 <label
                   htmlFor="old_password"
                   className="absolute left-4 top-2 text-gray-500 text-sm transition-all
                              peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400
-                             peer-focus:top-2 peer-focus:text-sm peer-focus:text-red-500"
+                             peer-focus:top-2 peer-focus:text-sm peer-focus:text-red-500
+                             peer-not-placeholder-shown:top-2 peer-not-placeholder-shown:text-sm peer-not-placeholder-shown:text-gray-700"
                 >
                   Current Password
                 </label>
               </div>
 
-              {/* New Password & Confirm */}
+              {/* New + Confirm Password */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="relative">
-                  <input
-                    type="password"
-                    name="password"
-                    value={formData.password}
-                    onChange={handleChange}
-                    placeholder="New Password"
-                    className="peer w-full border border-gray-300 rounded-lg px-4 pt-5 pb-2 
-                               focus:outline-none focus:ring-2 focus:ring-sky-400 
-                               placeholder-transparent"
-                  />
-                  <label
-                    htmlFor="password"
-                    className="absolute left-4 top-2 text-gray-500 text-sm transition-all
-                               peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400
-                               peer-focus:top-2 peer-focus:text-sm peer-focus:text-sky-600"
-                  >
-                    New Password
-                  </label>
-                </div>
-
-                <div className="relative">
-                  <input
-                    type="password"
-                    name="password_confirmation"
-                    value={formData.password_confirmation}
-                    onChange={handleChange}
-                    placeholder="Confirm Password"
-                    className="peer w-full border border-gray-300 rounded-lg px-4 pt-5 pb-2 
-                               focus:outline-none focus:ring-2 focus:ring-sky-400 
-                               placeholder-transparent"
-                  />
-                  <label
-                    htmlFor="password_confirmation"
-                    className="absolute left-4 top-2 text-gray-500 text-sm transition-all
-                               peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400
-                               peer-focus:top-2 peer-focus:text-sm peer-focus:text-sky-600"
-                  >
-                    Confirm Password
-                  </label>
-                </div>
+                {[
+                  { name: "password", label: "New Password" },
+                  { name: "password_confirmation", label: "Confirm Password" },
+                ].map((f) => (
+                  <div key={f.name} className="relative">
+                    <input
+                      type="password"
+                      name={f.name}
+                      value={formData[f.name]}
+                      onChange={handleChange}
+                      placeholder=" "
+                      className="peer w-full border border-gray-300 rounded-lg px-4 pt-5 pb-2
+                                 focus:outline-none focus:ring-2 focus:ring-sky-400"
+                    />
+                    <label
+                      htmlFor={f.name}
+                      className="absolute left-4 top-2 text-gray-500 text-sm transition-all
+                                 peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400
+                                 peer-focus:top-2 peer-focus:text-sm peer-focus:text-sky-600
+                                 peer-not-placeholder-shown:top-2 peer-not-placeholder-shown:text-sm peer-not-placeholder-shown:text-gray-700"
+                    >
+                      {f.label}
+                    </label>
+                  </div>
+                ))}
               </div>
 
               {/* Names */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {["first_name", "middle_name", "last_name"].map((field, idx) => (
-                  <div key={idx} className="relative">
+                {["first_name", "middle_name", "last_name"].map((field) => (
+                  <div key={field} className="relative">
                     <input
                       type="text"
                       name={field}
                       value={formData[field]}
                       onChange={handleChange}
-                      placeholder={field.replace("_", " ")}
-                      className="peer w-full border border-gray-300 rounded-lg px-4 pt-5 pb-2 
-                                 focus:outline-none focus:ring-2 focus:ring-sky-400 
-                                 placeholder-transparent"
+                      placeholder=" "
+                      className="peer w-full border border-gray-300 rounded-lg px-4 pt-5 pb-2
+                                 focus:outline-none focus:ring-2 focus:ring-sky-400"
                     />
                     <label
                       htmlFor={field}
                       className="absolute left-4 top-2 text-gray-500 text-sm capitalize transition-all
                                  peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400
-                                 peer-focus:top-2 peer-focus:text-sm peer-focus:text-sky-600"
+                                 peer-focus:top-2 peer-focus:text-sm peer-focus:text-sky-600
+                                 peer-not-placeholder-shown:top-2 peer-not-placeholder-shown:text-sm peer-not-placeholder-shown:text-gray-700"
                     >
                       {field.replace("_", " ")}
                     </label>
@@ -277,16 +243,16 @@ function Profile() {
                   name="contact_number"
                   value={formData.contact_number}
                   onChange={handleChange}
-                  placeholder="Contact Number"
-                  className="peer w-full border border-gray-300 rounded-lg px-4 pt-5 pb-2 
-                             focus:outline-none focus:ring-2 focus:ring-sky-400 
-                             placeholder-transparent"
+                  placeholder=" "
+                  className="peer w-full border border-gray-300 rounded-lg px-4 pt-5 pb-2
+                             focus:outline-none focus:ring-2 focus:ring-sky-400"
                 />
                 <label
                   htmlFor="contact_number"
                   className="absolute left-4 top-2 text-gray-500 text-sm transition-all
                              peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400
-                             peer-focus:top-2 peer-focus:text-sm peer-focus:text-sky-600"
+                             peer-focus:top-2 peer-focus:text-sm peer-focus:text-sky-600
+                             peer-not-placeholder-shown:top-2 peer-not-placeholder-shown:text-sm peer-not-placeholder-shown:text-gray-700"
                 >
                   Contact Number
                 </label>
@@ -299,13 +265,14 @@ function Profile() {
                   name="birthdate"
                   value={formData.birthdate}
                   onChange={handleChange}
-                  className="peer w-full border border-gray-300 rounded-lg px-4 pt-5 pb-2 
+                  className="peer w-full border border-gray-300 rounded-lg px-4 pt-5 pb-2
                              focus:outline-none focus:ring-2 focus:ring-sky-400"
                 />
                 <label
                   htmlFor="birthdate"
                   className="absolute left-4 top-2 text-gray-500 text-sm transition-all
-                             peer-focus:text-sky-600"
+                             peer-focus:text-sky-600
+                             peer-not-placeholder-shown:top-2 peer-not-placeholder-shown:text-sm peer-not-placeholder-shown:text-gray-700"
                 >
                   Birthdate
                 </label>
@@ -318,16 +285,16 @@ function Profile() {
                   name="address"
                   value={formData.address}
                   onChange={handleChange}
-                  placeholder="Address"
-                  className="peer w-full border border-gray-300 rounded-lg px-4 pt-5 pb-2 
-                             focus:outline-none focus:ring-2 focus:ring-sky-400 
-                             placeholder-transparent"
+                  placeholder=" "
+                  className="peer w-full border border-gray-300 rounded-lg px-4 pt-5 pb-2
+                             focus:outline-none focus:ring-2 focus:ring-sky-400"
                 />
                 <label
                   htmlFor="address"
                   className="absolute left-4 top-2 text-gray-500 text-sm transition-all
                              peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400
-                             peer-focus:top-2 peer-focus:text-sm peer-focus:text-sky-600"
+                             peer-focus:top-2 peer-focus:text-sm peer-focus:text-sky-600
+                             peer-not-placeholder-shown:top-2 peer-not-placeholder-shown:text-sm peer-not-placeholder-shown:text-gray-700"
                 >
                   Address
                 </label>
@@ -338,7 +305,7 @@ function Profile() {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="w-full bg-sky-600 text-white px-6 py-3 rounded-lg shadow-md 
+                  className="w-full bg-sky-600 text-white px-6 py-3 rounded-lg shadow-md
                              hover:bg-sky-700 transition disabled:opacity-50"
                 >
                   {saving ? "Saving..." : "Update Profile"}
@@ -349,7 +316,7 @@ function Profile() {
         </div>
       </div>
 
-      {/* ✅ Success / Error Modal */}
+      {/* ✅ Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
           <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-sm text-center">

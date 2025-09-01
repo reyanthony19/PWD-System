@@ -109,12 +109,16 @@ function MemberList() {
   return (
     <Layout>
       <div className="p-6 bg-gray-100 min-h-screen">
-        <h1 className={`text-3xl font-bold ${theme.primaryText} mb-6`}>
+        {/* Title */}
+        <h1 className={`text-3xl font-bold ${theme.primaryText} mb-2`}>
           👥 Member List
         </h1>
+        <p className="text-gray-600 mb-6">
+          Manage and review all registered members in the system.
+        </p>
 
         {/* Controls */}
-        <div className={`${theme.cardBg} rounded-xl shadow p-4 mb-6 flex flex-wrap gap-4 items-center`}>
+        <div className={`${theme.cardBg} rounded-xl shadow p-4 mb-6 flex flex-col md:flex-row flex-wrap gap-4 items-center`}>
           {/* Status Filters */}
           <div className="flex gap-2 flex-wrap">
             {statusOptions.map(({ key, label, icon, color }) => (
@@ -135,7 +139,7 @@ function MemberList() {
             placeholder="🔍 Search by username or email"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="border border-gray-300 rounded-lg px-4 py-2 w-72 text-base focus:outline-none focus:ring-2 focus:ring-sky-500"
+            className="border border-gray-300 rounded-lg px-4 py-2 w-full md:w-72 text-base focus:outline-none focus:ring-2 focus:ring-sky-500"
           />
 
           {/* Sort */}
@@ -154,11 +158,12 @@ function MemberList() {
             onClick={() => navigate("/member/register")}
             className="ml-auto bg-sky-600 hover:bg-sky-700 text-white px-5 py-2 rounded-lg shadow font-semibold transition"
           >
-            Add Member
+            + Add Member
           </button>
         </div>
 
-        <div className={`${theme.cardBg} overflow-x-auto rounded-xl shadow`}>
+        {/* Table */}
+        <div className={`${theme.cardBg} overflow-x-auto rounded-xl shadow border border-gray-200`}>
           <table className="min-w-full text-base text-left">
             <thead className={`${theme.footerBg} text-white uppercase`}>
               <tr>
@@ -178,7 +183,7 @@ function MemberList() {
                   return (
                     <tr
                       key={member.id}
-                      className="odd:bg-gray-50 even:bg-gray-100 hover:bg-sky-50 cursor-pointer"
+                      className="odd:bg-gray-50 even:bg-gray-100 hover:bg-sky-50 cursor-pointer transition hover:scale-[.99]"
                       onClick={() => navigate(`/members/${member.id}`)}
                     >
                       <td className="px-4 py-3">{fullName}</td>
@@ -205,8 +210,10 @@ function MemberList() {
                 })
               ) : (
                 <tr>
-                  <td colSpan="9" className="px-4 py-6 text-center text-gray-600 text-lg">
-                    No members found for "{statusFilter}" status.
+                  <td colSpan="9" className="px-4 py-8 text-center text-gray-600 text-lg">
+                    🚫 {statusFilter === "all"
+                      ? "No members found in the system."
+                      : `No members found for "${statusFilter}" filter.`}
                   </td>
                 </tr>
               )}
