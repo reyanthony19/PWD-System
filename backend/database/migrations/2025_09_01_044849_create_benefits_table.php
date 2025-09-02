@@ -11,7 +11,7 @@ return new class extends Migration {
         Schema::create('benefits', function (Blueprint $table) {
             $table->id();
             $table->string('name');                          // e.g., "Cash Assistance", "Relief Goods"
-            $table->enum('type', ['cash', 'relief'])->default('cash');
+            $table->string('type')->default('cash');        // e.g., "cash" or "relief"
             $table->decimal('amount', 12, 2)->nullable();    // for cash benefits
             $table->string('unit')->nullable();              // e.g., "pack" for relief goods
             $table->enum('status', ['active', 'inactive'])->default('active');
@@ -34,8 +34,8 @@ return new class extends Migration {
                 ->cascadeOnUpdate()
                 ->cascadeOnDelete();
 
-            // Staff/admin who processed the distribution
-            $table->foreignId('processed_by')
+            // Staff/admin who scanned the distribution
+            $table->foreignId('scanned_by')
                 ->nullable()
                 ->constrained('users')
                 ->nullOnDelete();

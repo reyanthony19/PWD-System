@@ -1,9 +1,166 @@
+// MemberRegister.jsx
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { User, Mail, Lock, Phone, Calendar, MapPin, Users, FileText, Upload, CheckCircle } from "lucide-react";
 import api from "./api";
 import Layout from "./Layout";
 
+/* ---------------------------
+   Validation & formatting helpers
+   --------------------------- */
+function validateSSS(sssNumber) {
+  const digits = (sssNumber || "").replace(/\D/g, "");
+  if (digits.length !== 10) return false;
+  if (digits === "0000000000" || digits === "1234567890") return false;
+  const firstTwo = parseInt(digits.slice(0, 2));
+  if (firstTwo < 1 || firstTwo > 98) return false;
+  return true;
+}
+
+function validatePhilHealth(philHealthNumber) {
+  const digits = (philHealthNumber || "").replace(/\D/g, "");
+  if (digits.length !== 12) return false;
+  if (digits === "000000000000") return false;
+  const firstTwo = parseInt(digits.slice(0, 2));
+  if (firstTwo < 1 || firstTwo > 99) return false;
+  return true;
+}
+
+function getFieldError(fieldName, value) {
+  if (!value) return "";
+
+  if (fieldName === "sss_number" && !validateSSS(value)) {
+    return "Invalid SSS format (should be XX-XXXXXXX-X with 10 digits)";
+  }
+
+  if (fieldName === "philhealth_number" && !validatePhilHealth(value)) {
+    return "Invalid PhilHealth format (should be XX-XXXXXXXXX-X with 12 digits)";
+  }
+
+  return "";
+}
+
+function formatSSS(value = "") {
+  const digits = value.replace(/\D/g, "");
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 9) return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}-${digits.slice(2, 9)}-${digits.slice(9, 10)}`;
+}
+
+function formatPhilHealth(value = "") {
+  const digits = value.replace(/\D/g, "");
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 11) return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}-${digits.slice(2, 11)}-${digits.slice(11, 12)}`;
+}
+
+/* ---------------------------
+   Floating components (top-level so they don't remount)
+   --------------------------- */
+function FloatingInput({ name, label, type = "text", required = false, maxLength, value, onChange, onBlur, icon: Icon, ...rest }) {
+  const error = getFieldError(name, value);
+  const hasError = error !== "";
+
+  return (
+    <div className="relative group">
+      <div className="relative">
+        {Icon && (
+          <div
+            className={`absolute left-3 top-1/2 transform -translate-y-1/2 transition-colors duration-200 z-10
+              ${hasError ? "text-red-400" : "text-gray-400 group-focus-within:text-blue-500"}`}
+          >
+            <Icon size={18} />
+          </div>
+        )}
+        <input
+          type={type}
+          name={name}
+          value={value}
+          onChange={onChange}
+          onBlur={onBlur}
+          required={required}
+          maxLength={maxLength}
+          className={`w-full border-2 rounded-xl bg-white/80 backdrop-blur-sm text-gray-900 
+              transition-all duration-200 peer placeholder-transparent
+              ${Icon ? "pl-12 pr-4 py-4" : "px-4 py-4"}
+              ${hasError
+                ? "border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-100"
+                : "border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-gray-300"
+              }`}
+          placeholder={label}
+          {...rest}
+        />
+        <label
+          className={`absolute transition-all duration-200 pointer-events-none
+              ${Icon ? "left-12" : "left-4"}
+              ${value || type === "date"
+              ? "top-2 text-xs font-medium"
+              : "top-1/2 transform -translate-y-1/2 text-base"
+            }
+              ${hasError
+              ? "text-red-500"
+              : "text-gray-500 peer-focus:text-blue-600 peer-focus:top-2 peer-focus:text-xs peer-focus:font-medium peer-focus:transform-none"
+            }`}
+        >
+          {label} {required && <span className="text-red-500">*</span>}
+        </label>
+      </div>
+
+      {hasError && (
+        <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-sm text-red-600 flex items-center">
+            <svg className="w-4 h-4 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+            {error}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FloatingSelect({ name, label, options, value, onChange, required = false, icon: Icon }) {
+  return (
+    <div className="relative group">
+      <div className="relative">
+        {Icon && (
+          <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors duration-200 z-10">
+            <Icon size={18} />
+          </div>
+        )}
+        <select
+          name={name}
+          value={value}
+          onChange={onChange}
+          required={required}
+          className={`w-full border-2 border-gray-200 rounded-xl bg-white/80 backdrop-blur-sm text-gray-900 
+            transition-all duration-200 cursor-pointer hover:border-gray-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 peer
+            ${Icon ? "pl-12 pr-4 py-4" : "px-4 py-4"}`}
+        >
+          <option value=""></option>
+          {options.map((option) => (
+            <option key={option.value} value={option.value} className="text-gray-900">
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <label
+          className={`absolute transition-all duration-200 pointer-events-none
+            ${Icon ? "left-12" : "left-4"}
+            ${value ? "top-2 text-xs font-medium text-blue-600" : "top-1/2 transform -translate-y-1/2 text-base text-gray-500"}
+            peer-focus:top-2 peer-focus:text-xs peer-focus:font-medium peer-focus:text-blue-600 peer-focus:transform-none`}
+        >
+          {label} {required && <span className="text-red-500">*</span>}
+        </label>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------
+   Main component
+   --------------------------- */
 function MemberRegister() {
   const [form, setForm] = useState({
     username: "",
@@ -11,10 +168,10 @@ function MemberRegister() {
     middle_name: "",
     last_name: "",
     email: "",
-    role: "member", // always member
+    role: "member",
     password: "",
     contact_number: "",
-    birthdate: "1999-01-01", // Default to 25 years old (more realistic)
+    birthdate: "1999-01-01",
     address: "",
     sex: "",
     disability_type: "",
@@ -41,52 +198,6 @@ function MemberRegister() {
   const [showModal, setShowModal] = useState(false);
   const navigate = useNavigate();
 
-  // Validation functions
-  const validateSSS = (sssNumber) => {
-    // Remove dashes and check if it's exactly 10 digits
-    const digits = sssNumber.replace(/\D/g, '');
-    if (digits.length !== 10) return false;
-
-    // Basic SSS validation: should not be all zeros or sequential
-    if (digits === '0000000000' || digits === '1234567890') return false;
-
-    // Check if first two digits are valid (01-98)
-    const firstTwo = parseInt(digits.slice(0, 2));
-    if (firstTwo < 1 || firstTwo > 98) return false;
-
-    return true;
-  };
-
-  const validatePhilHealth = (philHealthNumber) => {
-    // Remove dashes and check if it's exactly 12 digits
-    const digits = philHealthNumber.replace(/\D/g, '');
-    if (digits.length !== 12) return false;
-
-    // Basic PhilHealth validation
-    if (digits === '000000000000') return false;
-
-    // Check if it starts with valid prefixes (01-19 are common)
-    const firstTwo = parseInt(digits.slice(0, 2));
-    if (firstTwo < 1 || firstTwo > 99) return false;
-
-    return true;
-  };
-
-  const getFieldError = (fieldName, value) => {
-    if (!value) return '';
-
-    if (fieldName === 'sss_number' && !validateSSS(value)) {
-      return 'Invalid SSS format (should be XX-XXXXXXX-X with 10 digits)';
-    }
-
-    if (fieldName === 'philhealth_number' && !validatePhilHealth(value)) {
-      return 'Invalid PhilHealth format (should be XX-XXXXXXXXX-X with 12 digits)';
-    }
-
-    return '';
-  };
-
-  // Barangay options for Municipality of Opol (14 barangays)
   const barangayOptions = [
     "Awang", "Bagocboc", "Barra", "Bonbon", "Cauyonan", "Igpit",
     "Limonda", "Luyong Bonbon", "Malanang", "Nangcaon", "Patag",
@@ -95,53 +206,24 @@ function MemberRegister() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    let formattedValue = value;
-
-    // Format SSS Number (XX-XXXXXXX-X)
-    if (name === 'sss_number') {
-      // Remove all non-digits
-      const digits = value.replace(/\D/g, '');
-
-      // Apply SSS format: XX-XXXXXXX-X
-      if (digits.length <= 2) {
-        formattedValue = digits;
-      } else if (digits.length <= 9) {
-        formattedValue = `${digits.slice(0, 2)}-${digits.slice(2)}`;
-      } else if (digits.length <= 10) {
-        formattedValue = `${digits.slice(0, 2)}-${digits.slice(2, 9)}-${digits.slice(9, 10)}`;
-      } else {
-        // Limit to 10 digits max
-        formattedValue = `${digits.slice(0, 2)}-${digits.slice(2, 9)}-${digits.slice(9, 10)}`;
-      }
-    }
-
-    // Format PhilHealth Number (XX-XXXXXXXXX-X)
-    if (name === 'philhealth_number') {
-      // Remove all non-digits
-      const digits = value.replace(/\D/g, '');
-
-      // Apply PhilHealth format: XX-XXXXXXXXX-X
-      if (digits.length <= 2) {
-        formattedValue = digits;
-      } else if (digits.length <= 11) {
-        formattedValue = `${digits.slice(0, 2)}-${digits.slice(2)}`;
-      } else if (digits.length <= 12) {
-        formattedValue = `${digits.slice(0, 2)}-${digits.slice(2, 11)}-${digits.slice(11, 12)}`;
-      } else {
-        // Limit to 12 digits max
-        formattedValue = `${digits.slice(0, 2)}-${digits.slice(2, 11)}-${digits.slice(11, 12)}`;
-      }
-    }
-
-    setForm({ ...form, [name]: formattedValue });
+    setForm((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleDocChange = (e) => {
     const { name, type, files, value } = e.target;
-    setDocuments({
-      ...documents,
+    setDocuments((prev) => ({
+      ...prev,
       [name]: type === "file" ? files[0] : value,
-    });
+    }));
+  };
+
+  const handleBlur = (e) => {
+    const { name, value } = e.target;
+    if (name === "sss_number") {
+      setForm((prev) => ({ ...prev, [name]: formatSSS(value) }));
+    } else if (name === "philhealth_number") {
+      setForm((prev) => ({ ...prev, [name]: formatPhilHealth(value) }));
+    }
   };
 
   const handleRegister = async (e) => {
@@ -152,14 +234,12 @@ function MemberRegister() {
     try {
       const formData = new FormData();
 
-      // append only filled fields
       Object.entries(form).forEach(([key, value]) => {
         if (value !== null && value !== "") {
           formData.append(key, value);
         }
       });
 
-      // append docs
       Object.entries(documents).forEach(([key, value]) => {
         if (value) formData.append(key, value);
       });
@@ -168,7 +248,6 @@ function MemberRegister() {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      // reset
       setForm({
         username: "",
         first_name: "",
@@ -178,7 +257,7 @@ function MemberRegister() {
         role: "member",
         password: "",
         contact_number: "",
-        birthdate: "1999-01-01", // Default to 25 years old (more realistic)
+        birthdate: "1999-01-01",
         address: "",
         sex: "",
         disability_type: "",
@@ -215,103 +294,6 @@ function MemberRegister() {
     setShowModal(false);
     navigate("/member/register");
   };
-
-  // Floating label input component
-  const FloatingInput = ({ name, label, type = "text", required = false, maxLength, value, onChange, icon: Icon }) => {
-    const error = getFieldError(name, value);
-    const hasError = error !== '';
-
-    return (
-      <div className="relative group">
-        <div className="relative">
-          {Icon && (
-            <div className={`absolute left-3 top-1/2 transform -translate-y-1/2 transition-colors duration-200 z-10
-              ${hasError ? 'text-red-400' : 'text-gray-400 group-focus-within:text-blue-500'}
-            `}>
-              <Icon size={18} />
-            </div>
-          )}
-          <input
-            type={type}
-            name={name}
-            value={value}
-            onChange={onChange}
-            required={required}
-            maxLength={maxLength}
-            className={`w-full border-2 rounded-xl bg-white/80 backdrop-blur-sm text-gray-900 
-              transition-all duration-200 peer placeholder-transparent
-              ${Icon ? 'pl-12 pr-4 py-4' : 'px-4 py-4'}
-              ${hasError
-                ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-100'
-                : 'border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-gray-300'
-              }`}
-            placeholder={label}
-          />
-          <label
-            className={`absolute transition-all duration-200 pointer-events-none
-              ${Icon ? 'left-12' : 'left-4'}
-              ${value || type === 'date'
-                ? 'top-2 text-xs font-medium'
-                : 'top-1/2 transform -translate-y-1/2 text-base'
-              }
-              ${hasError
-                ? 'text-red-500'
-                : 'text-gray-500 peer-focus:text-blue-600 peer-focus:top-2 peer-focus:text-xs peer-focus:font-medium peer-focus:transform-none'
-              }`}
-          >
-            {label} {required && <span className="text-red-500">*</span>}
-          </label>
-        </div>
-        {hasError && (
-          <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-sm text-red-600 flex items-center">
-              <svg className="w-4 h-4 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-              {error}
-            </p>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  // Floating label select component
-  const FloatingSelect = ({ name, label, options, value, onChange, required = false, icon: Icon }) => (
-    <div className="relative group">
-      <div className="relative">
-        {Icon && (
-          <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors duration-200 z-10">
-            <Icon size={18} />
-          </div>
-        )}
-        <select
-          name={name}
-          value={value}
-          onChange={onChange}
-          required={required}
-          className={`w-full border-2 border-gray-200 rounded-xl bg-white/80 backdrop-blur-sm text-gray-900 
-            transition-all duration-200 cursor-pointer hover:border-gray-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 peer
-            ${Icon ? 'pl-12 pr-4 py-4' : 'px-4 py-4'}`}
-        >
-          <option value=""></option>
-          {options.map((option) => (
-            <option key={option.value} value={option.value} className="text-gray-900">
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <label
-          className={`absolute transition-all duration-200 pointer-events-none
-            ${Icon ? 'left-12' : 'left-4'}
-            ${value ? 'top-2 text-xs font-medium text-blue-600' : 'top-1/2 transform -translate-y-1/2 text-base text-gray-500'}
-            peer-focus:top-2 peer-focus:text-xs peer-focus:font-medium peer-focus:text-blue-600 peer-focus:transform-none`}
-        >
-          {label} {required && <span className="text-red-500">*</span>}
-        </label>
-      </div>
-    </div>
-  );
 
   const sexOptions = [
     { value: "male", label: "Male" },
@@ -496,12 +478,14 @@ function MemberRegister() {
                   label="SSS Number"
                   value={form.sss_number}
                   onChange={handleChange}
+                  onBlur={handleBlur}
                 />
                 <FloatingInput
                   name="philhealth_number"
                   label="PhilHealth Number"
                   value={form.philhealth_number}
                   onChange={handleChange}
+                  onBlur={handleBlur}
                 />
               </div>
             </div>
@@ -556,10 +540,10 @@ function MemberRegister() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 {[
-                  { name: 'barangay_indigency', label: 'Barangay Indigency', accept: '.jpg,.jpeg,.png,.pdf' },
-                  { name: 'medical_certificate', label: 'Medical Certificate', accept: '.jpg,.jpeg,.png,.pdf' },
-                  { name: 'picture_2x2', label: '2x2 Picture', accept: '.jpg,.jpeg,.png' },
-                  { name: 'birth_certificate', label: 'Birth Certificate', accept: '.jpg,.jpeg,.png,.pdf' }
+                  { name: "barangay_indigency", label: "Barangay Indigency", accept: ".jpg,.jpeg,.png,.pdf" },
+                  { name: "medical_certificate", label: "Medical Certificate", accept: ".jpg,.jpeg,.png,.pdf" },
+                  { name: "picture_2x2", label: "2x2 Picture", accept: ".jpg,.jpeg,.png" },
+                  { name: "birth_certificate", label: "Birth Certificate", accept: ".jpg,.jpeg,.png,.pdf" }
                 ].map((doc) => (
                   <div key={doc.name} className="relative group">
                     <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 hover:border-blue-400 transition-colors duration-200 group-hover:bg-blue-50/50">

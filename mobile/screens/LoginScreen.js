@@ -1,87 +1,175 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   View,
-  Text,
-  TextInput,
-  Button,
   StyleSheet,
-  Alert,
-  TouchableOpacity  
-} from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import api from '../api/api';
+  Image,
+  KeyboardAvoidingView,
+  ScrollView,
+  Platform,
+} from "react-native";
+import { TextInput, Button, Text, Card } from "react-native-paper";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import api from "../api/api";
 
 export default function LoginScreen({ navigation }) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  // error states
+  const [emailError, setEmailError] = useState(false);
+  const [passwordError, setPasswordError] = useState(false);
 
   const handleLogin = async () => {
+    setEmailError(false);
+    setPasswordError(false);
+
     if (!email || !password) {
-      Alert.alert('Error', 'Please enter both email and password');
+      if (!email) setEmailError(true);
+      if (!password) setPasswordError(true);
       return;
     }
 
     try {
-      // Send POST request to Laravel API
-      const res = await api.post('/login', { email, password });
-
-      // Debug: log full API response
-      console.log('API Response:', res.data);
-
+      setLoading(true);
+      const res = await api.post("/login", { email, password });
       const user = res.data.user;
 
-      // Role check — only allow staff
-      if (!user || user.role !== 'staff') {
-        Alert.alert('Invalid Credentials');
+      // allow staff or member
+      if (!user || (user.role !== "staff" && user.role !== "member")) {
+        setEmailError(true);
+        setPasswordError(true);
         return;
       }
 
-      // Save token and user info
-      await AsyncStorage.setItem('token', res.data.token);
-      await AsyncStorage.setItem('user', JSON.stringify(user));
+      await AsyncStorage.setItem("token", res.data.token);
+      await AsyncStorage.setItem("user", JSON.stringify(user));
 
-      // Navigate to Dashboard
-      navigation.replace('Dashboard');
+      // Navigate depending on role
+      if (user.role === "staff") {
+        navigation.replace("StaffHome");
+      } else if (user.role === "member") {
+        navigation.replace("Home");
+      }
     } catch (err) {
-      // Debug: log errors
-      console.log('Login error:', err.response?.data || err.message);
-      Alert.alert('Login Failed', err.response?.data?.message || 'Invalid credentials');
+      console.log("Login error:", err.response?.data || err.message);
+      setEmailError(true);
+      setPasswordError(true);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Staff Login</Text>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      <ScrollView
+        contentContainerStyle={styles.scrollContainer}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.container}>
+          <Card style={styles.card}>
+            <Card.Content>
+              {/* Logo */}
+              <View style={styles.logoWrapper}>
+                <Image
+                  source={require("../assets/logo.png")}
+                  style={styles.logo}
+                />
+              </View>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Email"
-        autoCapitalize="none"
-        keyboardType="email-address"
-        value={email}
-        onChangeText={setEmail}
-      />
+              <Text style={styles.title}>Login</Text>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Password"
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-      />
+              {/* Email */}
+              <TextInput
+                label="Email"
+                mode="outlined"
+                value={email}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  setEmailError(false);
+                }}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                style={styles.input}
+                outlineColor={emailError ? "red" : "#0284c7"}
+                activeOutlineColor={emailError ? "red" : "#0284c7"}
+                error={emailError}
+              />
 
-      <Button title="Login" onPress={handleLogin} />
+              {/* Password */}
+              <TextInput
+                label="Password"
+                mode="outlined"
+                value={password}
+                onChangeText={(text) => {
+                  setPassword(text);
+                  setPasswordError(false);
+                }}
+                secureTextEntry
+                style={styles.input}
+                outlineColor={passwordError ? "red" : "#0284c7"}
+                activeOutlineColor={passwordError ? "red" : "#0284c7"}
+                error={passwordError}
+              />
 
-      {/* Link to Member Login */}
-      <TouchableOpacity onPress={() => navigation.navigate('MemberLogin')} style={{ marginTop: 20 }}>
-        <Text style={{ color: '#2196F3', textAlign: 'center' }}>Login as Member here</Text>
-      </TouchableOpacity>
-    </View>
+              {/* Button */}
+              <Button
+                mode="contained"
+                onPress={handleLogin}
+                loading={loading}
+                disabled={loading}
+                style={styles.button}
+                buttonColor="#0284c7"
+              >
+                {loading ? "Logging in..." : "Sign In"}
+              </Button>
+            </Card.Content>
+          </Card>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', padding: 20 },
-  title: { fontSize: 24, marginBottom: 20, textAlign: 'center' },
-  input: { borderWidth: 1, padding: 10, marginBottom: 10, borderRadius: 5 },
+  scrollContainer: {
+    flexGrow: 1,
+    justifyContent: "center",
+    padding: 16,
+    backgroundColor: "#f1f5f9",
+  },
+  container: {
+    flex: 1,
+    justifyContent: "center",
+  },
+  card: {
+    borderRadius: 16,
+    padding: 20,
+    elevation: 4,
+  },
+  logoWrapper: {
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  logo: {
+    width: 100,
+    height: 100,
+    resizeMode: "contain",
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginBottom: 12,
+  },
+  input: {
+    marginBottom: 12,
+  },
+  button: {
+    marginBottom: 16,
+    borderRadius: 8,
+  },
 });

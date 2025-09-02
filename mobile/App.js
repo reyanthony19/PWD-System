@@ -1,25 +1,42 @@
-import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-
-import LoginScreen from './screens/LoginScreen';
-import DashboardScreen from './screens/DashboardScreen';
-import MemberLogin from './screens/MemberLogin';
-import MemberRegistration from './screens/MemberRegistration';
-
+import React from "react";
+import { NavigationContainer } from "@react-navigation/native";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import LoginScreen from "./screens/LoginScreen";
+import MemberRegistration from "./screens/MemberRegistration";
+import Home from "./screens/Home";
+import StaffHome from "./screens/StaffHome";
+import Header from "./screens/Header";
+import { SafeAreaProvider } from "react-native";
 
 const Stack = createNativeStackNavigator();
 
 export default function App() {
   return (
-    <NavigationContainer>
-      <Stack.Navigator initialRouteName="MemberLogin">
-        <Stack.Screen name="Login" component={LoginScreen} />
-        <Stack.Screen name="Dashboard" component={DashboardScreen} />
-        <Stack.Screen name="MemberLogin" component={MemberLogin} />
-        <Stack.Screen name="MemberRegistration" component={MemberRegistration} />
+    <SafeAreaProvider>
+      <NavigationContainer>
+        <Header />
+        <Stack.Navigator initialRouteName="LoginScreen">
+          {/* Public Screens */}
+          <Stack.Screen
+            name="LoginScreen"
+            component={LoginScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen name="MemberRegistration" component={MemberRegistration} />
 
-      </Stack.Navigator>
-    </NavigationContainer>
+          {/* Role-based Screens */}
+          <Stack.Screen
+            name="Home"
+            component={Home}
+            options={{ title: "Member Home" }}
+          />
+          <Stack.Screen
+            name="StaffHome"
+            component={StaffHome}
+            options={{ title: "Staff Dashboard" }}
+          />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </SafeAreaProvider>
   );
 }

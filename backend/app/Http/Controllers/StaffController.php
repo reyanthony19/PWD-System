@@ -30,7 +30,7 @@ class StaffController extends Controller
             'email'    => $validated['email'],
             'password' => Hash::make($validated['password']),
             'role'     => 'staff',
-            'status'   => 'pending',
+            'status'   => 'approved',
         ]);
 
         // Create Staff Profile

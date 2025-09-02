@@ -86,10 +86,10 @@ function Login() {
         {/* Right Panel with Form */}
         <div className="w-full md:w-1/2 p-8">
           <h2 className="text-2xl font-bold mb-2 text-gray-800 text-center">
-            Login
+            Admin
           </h2>
           <p className="text-sm text-yellow-600 mb-6 text-center font-medium">
-            ⚠️ Only Admins are allowed to log in.
+            ⚠️ Authorized Access Only.
           </p>
 
           {error && (
