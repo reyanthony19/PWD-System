@@ -51,6 +51,8 @@ class MemberController extends Controller
             'remarks'             => 'nullable|string|max:255',
         ]);
 
+
+
         DB::beginTransaction();
         try {
             // Decide status
@@ -116,6 +118,35 @@ class MemberController extends Controller
             DB::rollBack();
             return response()->json([
                 'message' => 'Registration failed',
+                'error'   => $e->getMessage(),
+            ], 500);
+        }
+    }
+    
+    public function scanMember(Request $request)
+    {
+        $idNumber = $request->query('id_number'); // Use query() for GET
+
+        if (!$idNumber) {
+            return response()->json(['message' => 'id_number is required'], 400);
+        }
+
+        try {
+            $user = User::whereHas('memberProfile', function ($query) use ($idNumber) {
+                $query->where('id_number', $idNumber);
+            })->with(['memberProfile.documents'])->first();
+
+            if (!$user) {
+                return response()->json(['message' => 'Member not found'], 404);
+            }
+
+            return response()->json([
+                'message' => 'Member found',
+                'member'  => $user,
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Error fetching member data',
                 'error'   => $e->getMessage(),
             ], 500);
         }

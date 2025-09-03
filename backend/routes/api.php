@@ -21,6 +21,10 @@ Route::post('/login', [AuthController::class, 'login']);
 // Member registration
 Route::post('/member/register', [MemberController::class, 'register']);
 
+Route::get('/scanMember', [MemberController::class, 'scanMember']);
+
+
+// routes/api.php
 
 Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/staff/register', [StaffController::class, 'register']);
