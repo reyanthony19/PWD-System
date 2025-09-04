@@ -14,7 +14,7 @@ class AttendanceController extends Controller
      */
     public function index(Event $event)
     {
-        $attendances = Attendance::with(['user','event', 'scannedBy'])
+        $attendances = Attendance::with(['user.memberProfile', 'event', 'scannedBy.staffProfile'])
             ->where('event_id', $event->id)
             ->latest()
             ->paginate(20);

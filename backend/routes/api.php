@@ -51,6 +51,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/user/{id}', [AuthController::class, 'deleteUser']);
     Route::post('/logout', [AuthController::class, 'logout']);
 
+    // Scanner from mobile app
+    Route::get('/events/{event}/attendances', [AttendanceController::class, 'index']);
+    Route::post('/events/{event}/attendances', [AttendanceController::class, 'store']);
     // CRUD for events
     Route::get('/events', [EventController::class, 'index']);
     Route::get('/events/{event}', [EventController::class, 'show']);
@@ -70,6 +73,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/benefits/{benefit}', [BenefitController::class, 'destroyBenefit']);
     Route::get('/benefits-lists', [BenefitController::class, 'listBenefits']);
     Route::get('/benefits/{benefit}', [BenefitController::class, 'showBenefit']);
+
     Route::get('/attendances', [AttendanceController::class, 'index']);
     // CRUD for benefit records
     Route::get('/benefit-records', [BenefitController::class, 'indexRecords']);

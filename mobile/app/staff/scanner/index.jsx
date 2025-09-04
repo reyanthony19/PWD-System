@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { CameraView } from "expo-camera";
-import { Stack } from "expo-router";
+import { Stack, useLocalSearchParams } from "expo-router";
 import {
   SafeAreaView,
   StatusBar,
@@ -9,6 +9,7 @@ import {
   Text,
   Dimensions,
   TouchableOpacity,
+  Alert,
 } from "react-native";
 import api from "../../../services/api"; // Axios instance
 
@@ -57,25 +58,36 @@ function Overlay() {
   );
 }
 
-export default function Index() {
+export default function Scanner() {
+  const { eventId } = useLocalSearchParams(); // <-- get eventId from route params
   const [memberData, setMemberData] = useState(null);
   const [error, setError] = useState("");
-  const [scanned, setScanned] = useState(false); // Track if already scanned
+  const [scanned, setScanned] = useState(false);
 
   const handleBarcodeScanned = async ({ data }) => {
-    if (scanned) return; // Prevent multiple scans
-    setScanned(true); // Mark as scanned
+    if (scanned) return;
+    setScanned(true);
+
     try {
       setError("");
       const memberId = data.trim();
 
-      const response = await api.get(`/scanMember`, { params: { id_number: memberId } });
+      // 1. Get member info by QR id_number
+      const response = await api.get(`/scanMember`, {
+        params: { id_number: memberId },
+      });
       const dataResult = response.data;
-
       setMemberData(dataResult.member);
+
+      // 2. Save attendance (proper route)
+      await api.post(`/events/${eventId}/attendances`, {
+        user_id: dataResult.member.id,
+      });
+
+      Alert.alert("✅ Success", "Attendance recorded!");
     } catch (err) {
-      console.error("Error fetching member:", err.response?.data || err.message);
-      setError("Could not retrieve member data.");
+      console.error("Error:", err.response?.data || err.message);
+      setError("Could not record attendance.");
       setMemberData(null);
     }
   };
@@ -88,7 +100,7 @@ export default function Index() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Stack.Screen options={{ title: "Overview", headerShown: false }} />
+      <Stack.Screen options={{ title: "Scanner", headerShown: false }} />
       <CameraView
         style={StyleSheet.absoluteFillObject}
         facing="back"
@@ -102,15 +114,17 @@ export default function Index() {
           <Text style={styles.errorText}>{error}</Text>
         ) : memberData ? (
           <>
-            <Text style={styles.nameText}>{fullName || memberData.username}</Text>
-            <Text style={styles.idText}>ID: {profile.id_number || "-"}</Text>
-            {!scanned && null}
+            <Text style={styles.nameText}>
+              {fullName || memberData.username}
+            </Text>
+            <Text style={styles.idText}>
+              ID: {profile.id_number || "-"}
+            </Text>
           </>
         ) : (
           <Text style={styles.placeholderText}>Scan a member QR code</Text>
         )}
 
-        {/* Button to scan again */}
         {scanned && (
           <TouchableOpacity
             style={styles.scanAgainButton}

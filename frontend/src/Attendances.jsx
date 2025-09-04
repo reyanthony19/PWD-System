@@ -28,7 +28,8 @@ function Attendances() {
         const eventRes = await api.get(`/events/${eventId}`);
         setEvent(eventRes.data);
 
-        const attRes = await api.get(`/attendances?event_id=${eventId}`);
+        // ✅ Correct route
+        const attRes = await api.get(`/events/${eventId}/attendances`);
         const data = attRes.data.data || attRes.data;
         setAttendances(data);
         setFilteredAttendances(data);
@@ -53,20 +54,22 @@ function Attendances() {
 
     if (search) {
       data = data.filter((a) => {
-        const fullName = a.user
-          ? `${a.user.first_name || ""} ${a.user.last_name || ""}`.toLowerCase()
+        const fullName = a.user?.member_profile
+          ? `${a.user.member_profile.first_name || ""} ${a.user.member_profile.middle_name || ""} ${a.user.member_profile.last_name || ""}`.toLowerCase()
           : "";
         return fullName.includes(search.toLowerCase());
       });
     }
 
     if (barangayFilter) {
-      data = data.filter((a) => a.user?.barangay === barangayFilter);
+      data = data.filter(
+        (a) => a.user?.member_profile?.barangay === barangayFilter
+      );
     }
 
     if (scannedByFilter) {
       data = data.filter(
-        (a) => a.scanned_by_user?.id?.toString() === scannedByFilter
+        (a) => a.scanned_by?.id?.toString() === scannedByFilter
       );
     }
 
@@ -99,10 +102,12 @@ function Attendances() {
 
   // collect unique values for dropdowns
   const barangays = [
-    ...new Set(attendances.map((a) => a.user?.barangay).filter(Boolean)),
+    ...new Set(
+      attendances.map((a) => a.user?.member_profile?.barangay).filter(Boolean)
+    ),
   ];
   const scannedByUsers = [
-    ...new Set(attendances.map((a) => a.scanned_by_user?.id).filter(Boolean)),
+    ...new Set(attendances.map((a) => a.scanned_by?.id).filter(Boolean)),
   ];
 
   return (
@@ -127,25 +132,24 @@ function Attendances() {
                       {new Date(event.event_date).toLocaleDateString()} at{" "}
                       {event.event_time
                         ? new Date(
-                            `1970-01-01T${event.event_time}`
-                          ).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                            hour12: true,
-                          })
+                          `1970-01-01T${event.event_time}`
+                        ).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          hour12: true,
+                        })
                         : "—"}
                       {" · "}
                       <MapPin className="inline w-4 h-4 text-gray-400 mr-1" />
                       {event.location}
                       {" · "}
                       <span
-                        className={`font-semibold ${
-                          event.status === "upcoming"
-                            ? "text-green-600"
-                            : event.status === "completed"
+                        className={`font-semibold ${event.status === "upcoming"
+                          ? "text-green-600"
+                          : event.status === "completed"
                             ? "text-gray-600"
                             : "text-red-600"
-                        }`}
+                          }`}
                       >
                         {event.status}
                       </span>
@@ -202,14 +206,13 @@ function Attendances() {
                 <option value="">All</option>
                 {scannedByUsers.map((id) => {
                   const user = attendances.find(
-                    (a) => a.scanned_by_user?.id === id
-                  )?.scanned_by_user;
+                    (a) => a.scanned_by?.id === id
+                  )?.scanned_by;
                   return (
                     <option key={id} value={id}>
-                      {user
-                        ? `${user.first_name || ""} ${user.last_name || ""}`.trim() ||
-                          user.name
-                        : "Unknown"}
+                      {user?.staff_profile
+                        ? `${user.staff_profile.first_name || ""} ${user.staff_profile.middle_name || ""} ${user.staff_profile.last_name || ""}`.trim()
+                        : user?.name || "Unknown"}
                     </option>
                   );
                 })}
@@ -232,17 +235,16 @@ function Attendances() {
                 <tbody>
                   {filteredAttendances.length > 0 ? (
                     filteredAttendances.map((a) => {
-                      const fullName = a.user
-                        ? `${a.user.first_name || ""} ${
-                            a.user.last_name || ""
-                          }`.trim() || a.user.name
-                        : "—";
+                      // ✅ Attendee Full Name
+                      const fullName = a.user?.member_profile
+                        ? `${a.user.member_profile.first_name || ""} ${a.user.member_profile.middle_name || ""} ${a.user.member_profile.last_name || ""}`.trim()
+                        : a.user?.username || "—";
 
-                      const scannedByName = a.scanned_by_user
-                        ? `${a.scanned_by_user.first_name || ""} ${
-                            a.scanned_by_user.last_name || ""
-                          }`.trim() || a.scanned_by_user.name
-                        : "—";
+                      // ✅ Scanned By Full Name
+                      const scannedByName = a.scanned_by?.staff_profile
+                        ? `${a.scanned_by.staff_profile.first_name || ""} ${a.scanned_by.staff_profile.middle_name || ""} ${a.scanned_by.staff_profile.last_name || ""}`.trim()
+                        : a.scanned_by?.name || "—";
+
 
                       return (
                         <tr
@@ -250,17 +252,19 @@ function Attendances() {
                           className="odd:bg-gray-50 even:bg-gray-100 hover:bg-blue-50 transition"
                         >
                           <td className="px-6 py-4">{fullName}</td>
-                          <td className="px-6 py-4">{a.user?.barangay || "—"}</td>
+                          <td className="px-6 py-4">
+                            {a.user?.member_profile?.barangay || "—"}
+                          </td>
                           <td className="px-6 py-4">
                             {a.scanned_at
                               ? new Date(a.scanned_at).toLocaleString([], {
-                                  year: "numeric",
-                                  month: "short",
-                                  day: "numeric",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                  hour12: true,
-                                })
+                                year: "numeric",
+                                month: "short",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                hour12: true,
+                              })
                               : "—"}
                           </td>
                           <td className="px-6 py-4">{scannedByName}</td>
