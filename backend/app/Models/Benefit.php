@@ -9,15 +9,15 @@ class Benefit extends Model
 {
     use HasFactory;
 
-    // Table name (optional if following Laravel naming conventions)
     protected $table = 'benefits';
 
     // Mass assignable fields
     protected $fillable = [
         'name',
         'type',
-        'amount',
-        'unit',
+        'budget_amount',    // total budget (if cash)
+        'budget_quantity',  // total stock (if relief)
+        'unit',             // unit for relief goods
         'status',
     ];
 
@@ -27,5 +27,21 @@ class Benefit extends Model
     public function records()
     {
         return $this->hasMany(BenefitRecord::class, 'benefit_id');
+    }
+
+    /**
+     * Accessor: Remaining budget/quantity
+     */
+    public function getRemainingAttribute()
+    {
+        if ($this->type === 'cash') {
+            return $this->budget_amount - $this->records()->sum('amount_received');
+        }
+
+        if ($this->type === 'relief') {
+            return $this->budget_quantity - $this->records()->sum('quantity_received');
+        }
+
+        return null;
     }
 }

@@ -54,6 +54,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // Scanner from mobile app
     Route::get('/events/{event}/attendances', [AttendanceController::class, 'index']);
     Route::post('/events/{event}/attendances', [AttendanceController::class, 'store']);
+    Route::get('/attendances', [AttendanceController::class, 'index']);
+
     // CRUD for events
     Route::get('/events', [EventController::class, 'index']);
     Route::get('/events/{event}', [EventController::class, 'show']);
@@ -74,11 +76,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/benefits-lists', [BenefitController::class, 'listBenefits']);
     Route::get('/benefits/{benefit}', [BenefitController::class, 'showBenefit']);
 
-    Route::get('/attendances', [AttendanceController::class, 'index']);
     // CRUD for benefit records
     Route::get('/benefit-records', [BenefitController::class, 'indexRecords']);
     Route::post('/benefit-records', [BenefitController::class, 'storeRecord']);
     Route::get('/benefit-records/{record}', [BenefitController::class, 'showRecord']);
     Route::put('/benefit-records/{record}', [BenefitController::class, 'updateRecord']);
     Route::delete('/benefit-records/{record}', [BenefitController::class, 'destroyRecord']);
+
+    // Scanner + claims for benefits
+    Route::get('/benefits/{benefit}/claims', [BenefitController::class, 'indexClaims']);
+    Route::post('/benefits/{benefit}/claims', [BenefitController::class, 'storeClaim']);
 });

@@ -9,38 +9,40 @@ class BenefitRecord extends Model
 {
     use HasFactory;
 
-    protected $table = 'benefit_records';
-
     protected $fillable = [
-        'member_id',
+        'user_id',           // the member user
         'benefit_id',
-        'processed_by',
+        'scanned_by',        // staff user
+        'amount_received',
+        'quantity_received',
         'status',
         'claimed_at',
         'remarks',
     ];
 
-    /**
-     * Get the member who received the benefit
-     */
-    public function member()
+    protected $casts = [
+        'claimed_at' => 'datetime',
+        'amount_received' => 'float',
+        'quantity_received' => 'integer',
+    ];
+
+    /* 🔗 Relationships */
+
+    // The member who received the benefit
+    public function user()
     {
-        return $this->belongsTo(MemberProfile::class, 'member_id');
+        return $this->belongsTo(User::class, 'user_id');
     }
 
-    /**
-     * Get the benefit associated with this record
-     */
+    // The benefit associated with this record
     public function benefit()
     {
         return $this->belongsTo(Benefit::class, 'benefit_id');
     }
 
-    /**
-     * Get the staff/admin who processed this record
-     */
-    public function processedBy()
+    // Staff/admin who scanned this record
+    public function scannedBy()
     {
-        return $this->belongsTo(User::class, 'processed_by');
+        return $this->belongsTo(User::class, 'scanned_by');
     }
 }

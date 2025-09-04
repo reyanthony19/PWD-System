@@ -50,8 +50,6 @@ function BenefitsList() {
     { key: "all", label: "All" },
     { key: "cash", label: "Cash" },
     { key: "relief", label: "Relief Goods" },
-    { key: "medical", label: "Medical Assistance" },
-    { key: "other", label: "Other" },
   ];
 
   if (loading) {
@@ -152,32 +150,56 @@ function BenefitsList() {
                 <tr>
                   <th className="px-6 py-4">Name</th>
                   <th className="px-6 py-4">Type</th>
-                  <th className="px-6 py-4">Amount</th>
-                  <th className="px-6 py-4">Unit</th>
+                  <th className="px-6 py-4">Budget</th>
+                  <th className="px-6 py-4">Remaining</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredBenefits.length > 0 ? (
-                  filteredBenefits.map((benefit) => (
-                    <tr
-                      key={benefit.id}
-                      className="odd:bg-white even:bg-indigo-50 hover:bg-indigo-100 cursor-pointer transition"
-                      onClick={() => navigate(`/benefits/claim/${benefit.id}`)}
-                    >
-                      <td className="px-6 py-4 font-medium text-gray-900">
-                        {benefit.name}
-                      </td>
-                      <td className="px-6 py-4 capitalize text-gray-700">
-                        {benefit.type}
-                      </td>
-                      <td className="px-6 py-4 text-gray-700">
-                        {benefit.amount ? `₱${benefit.amount}` : "-"}
-                      </td>
-                      <td className="px-6 py-4 text-gray-700">
-                        {benefit.unit || "-"}
-                      </td>
-                    </tr>
-                  ))
+                  filteredBenefits.map((benefit) => {
+                    const remainingAmount =
+                      benefit.budget_amount && benefit.records_count
+                        ? benefit.budget_amount - benefit.records_count * (benefit.amount || 0)
+                        : benefit.budget_amount;
+
+                    const remainingQty =
+                      benefit.budget_quantity && benefit.records_count
+                        ? benefit.budget_quantity - benefit.records_count
+                        : benefit.budget_quantity;
+
+                    return (
+                      <tr
+                        key={benefit.id}
+                        className="odd:bg-white even:bg-indigo-50 hover:bg-indigo-100 cursor-pointer transition"
+                        onClick={() => navigate(`/benefits/claim/${benefit.id}`)}
+                      >
+                        <td className="px-6 py-4 font-medium text-gray-900">
+                          {benefit.name}
+                        </td>
+                        <td className="px-6 py-4 capitalize text-gray-700">
+                          {benefit.type}
+                        </td>
+                        <td className="px-6 py-4 text-gray-700">
+                          {benefit.type === "cash"
+                            ? benefit.budget_amount
+                              ? `₱${Number(benefit.budget_amount).toLocaleString()}`
+                              : "-"
+                            : benefit.budget_quantity
+                            ? `${benefit.budget_quantity} ${benefit.unit || ""}`
+                            : "-"}
+                        </td>
+                        <td className="px-6 py-4 text-gray-700">
+                          {benefit.type === "cash"
+                            ? remainingAmount != null
+                              ? `₱${Number(remainingAmount).toLocaleString()}`
+                              : "-"
+                            : remainingQty != null
+                            ? `${remainingQty} ${benefit.unit || ""}`
+                            : "-"}
+                        </td>
+                      </tr>
+                    );
+                  })
                 ) : (
                   <tr>
                     <td

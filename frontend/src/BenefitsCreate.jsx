@@ -8,7 +8,7 @@ function BenefitsCreate() {
     const [form, setForm] = useState({
         name: "",
         type: "",
-        amount: "",
+        budget_amount: "",
         unit: "",
     });
 
@@ -20,8 +20,6 @@ function BenefitsCreate() {
     const typeOptions = [
         { value: "cash", label: "Cash" },
         { value: "relief", label: "Relief Goods" },
-        { value: "medical", label: "Medical Assistance" },
-        { value: "other", label: "Other" }
     ];
 
     const unitOptions = [
@@ -43,13 +41,10 @@ function BenefitsCreate() {
         setLoading(true);
 
         try {
-            // Add status by default
             const payload = { ...form, status: "active" };
-
-            // Updated API route according to new controller
             await api.post("/benefits", payload);
 
-            setForm({ name: "", type: "", amount: "", unit: "" });
+            setForm({ name: "", type: "", budget_amount: "", unit: "" });
             setShowModal(true);
         } catch (err) {
             const errors = err.response?.data?.errors;
@@ -64,7 +59,7 @@ function BenefitsCreate() {
 
     const closeModalAndRedirect = () => {
         setShowModal(false);
-        navigate("/benefits/list"); // Updated route to benefits list
+        navigate("/benefits/list");
     };
 
     return (
@@ -76,7 +71,9 @@ function BenefitsCreate() {
                         <div className="inline-flex items-center justify-center w-16 h-16 bg-yellow-600 rounded-full mb-4">
                             <Gift className="w-8 h-8 text-white" />
                         </div>
-                        <h1 className="text-4xl font-bold text-gray-900 mb-2">Add New Benefit</h1>
+                        <h1 className="text-4xl font-bold text-gray-900 mb-2">
+                            Add New Benefit
+                        </h1>
                     </div>
 
                     {error && (
@@ -87,10 +84,16 @@ function BenefitsCreate() {
                         </div>
                     )}
 
-                    <form onSubmit={handleCreate} className="space-y-8 bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-8">
+                    <form
+                        onSubmit={handleCreate}
+                        className="space-y-8 bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-8"
+                    >
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Benefit Name */}
                             <div className="relative">
-                                <label className="block text-gray-700 font-medium mb-2">Benefit Name <span className="text-red-500">*</span></label>
+                                <label className="block text-gray-700 font-medium mb-2">
+                                    Benefit Name <span className="text-red-500">*</span>
+                                </label>
                                 <input
                                     type="text"
                                     name="name"
@@ -101,8 +104,11 @@ function BenefitsCreate() {
                                 />
                             </div>
 
+                            {/* Type */}
                             <div className="relative">
-                                <label className="block text-gray-700 font-medium mb-2">Type <span className="text-red-500">*</span></label>
+                                <label className="block text-gray-700 font-medium mb-2">
+                                    Type <span className="text-red-500">*</span>
+                                </label>
                                 <select
                                     name="type"
                                     value={form.type}
@@ -119,36 +125,66 @@ function BenefitsCreate() {
                                 </select>
                             </div>
 
+                            {/* Budget Amount */}
                             <div className="relative">
-                                <label className="block text-gray-700 font-medium mb-2">Amount</label>
+                                <label className="block text-gray-700 font-medium mb-2">
+                                    {form.type === "cash" ? "Budget Amount (₱)" : "Total Quantity"}
+                                </label>
                                 <input
-                                    type="number"
-                                    name="amount"
-                                    value={form.amount}
-                                    onChange={handleChange}
+                                    type="text"
+                                    name="budget_amount"
+                                    inputMode="numeric" // shows number keypad on mobile
+                                    value={
+                                        form.budget_amount
+                                            ? form.budget_amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                                            : ""
+                                    }
+                                    onChange={(e) => {
+                                        // keep only digits
+                                        const rawValue = e.target.value.replace(/,/g, "").replace(/\D/g, "");
+                                        handleChange({
+                                            target: {
+                                                name: "budget_amount",
+                                                value: rawValue,
+                                            },
+                                        });
+                                    }}
                                     min="0"
-                                    className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100"
+                                    disabled={!form.type}
+                                    className={`w-full border-2 rounded-xl px-4 py-3 focus:ring-4 focus:ring-yellow-100 ${!form.type
+                                            ? "bg-gray-100 cursor-not-allowed text-gray-400 border-gray-300"
+                                            : "border-gray-200 focus:border-yellow-500 text-gray-900"
+                                        }`}
                                 />
                             </div>
 
-                            <div className="relative">
-                                <label className="block text-gray-700 font-medium mb-2">Unit</label>
-                                <select
-                                    name="unit"
-                                    value={form.unit}
-                                    onChange={handleChange}
-                                    className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 cursor-pointer focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100"
-                                >
-                                    <option value="">Select Unit</option>
-                                    {unitOptions.map((option) => (
-                                        <option key={option.value} value={option.value}>
-                                            {option.label}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
+
+
+
+                            {/* Unit (only for relief) */}
+                            {form.type === "relief" && (
+                                <div className="relative">
+                                    <label className="block text-gray-700 font-medium mb-2">
+                                        Unit
+                                    </label>
+                                    <select
+                                        name="unit"
+                                        value={form.unit}
+                                        onChange={handleChange}
+                                        className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 cursor-pointer focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100"
+                                    >
+                                        <option value="">Select Unit</option>
+                                        {unitOptions.map((option) => (
+                                            <option key={option.value} value={option.value}>
+                                                {option.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
                         </div>
 
+                        {/* Submit Button */}
                         <div className="text-center">
                             <button
                                 type="submit"
@@ -176,6 +212,7 @@ function BenefitsCreate() {
                 </div>
             </div>
 
+            {/* Success Modal */}
             {showModal && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md transform transition-all duration-300 scale-100">
