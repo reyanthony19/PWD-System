@@ -4,7 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\Benefit;
 use App\Models\BenefitRecord;
+use App\Models\BenefitParticipant;
+use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class BenefitController extends Controller
 {
@@ -17,55 +20,76 @@ class BenefitController extends Controller
         return response()->json($benefits);
     }
 
-    /**
-     * Alias route for listing
-     */
     public function listBenefits()
     {
         return $this->index();
     }
 
-    /**
-     * Store a new benefit
-     */
     public function storeBenefit(Request $request)
     {
         $request->validate([
-            'name' => 'required|string|max:255',
-            'type' => 'required|in:cash,relief',
-            'budget_amount' => 'nullable|numeric',
+            'name'   => 'required|string|max:255',
+            'type'   => 'required|in:cash,relief',
+            'budget_amount'   => 'nullable|numeric',
             'budget_quantity' => 'nullable|integer',
-            'unit' => 'nullable|string|max:50',
+            'unit'   => 'nullable|string|max:50',
             'status' => 'nullable|in:active,inactive',
         ]);
 
+        // ✅ Step 1: create the benefit
         $benefit = Benefit::create($request->all());
 
-        return response()->json($benefit, 201);
+        // ✅ Step 2: get all approved *members only*
+        $approvedMembers = User::where('role', 'member')
+            ->where('status', 'approved')
+            ->pluck('id');
+
+        // ✅ Step 3: insert into benefit_participants
+        foreach ($approvedMembers as $userId) {
+            BenefitParticipant::create([
+                'benefit_id' => $benefit->id,
+                'user_id'    => $userId,
+            ]);
+        }
+
+        // ✅ Step 4: update locked_member_count
+        $benefit->locked_member_count = $approvedMembers->count();
+
+        // ✅ Step 5: auto-compute budget
+        if ($benefit->type === 'cash' && $request->has('amount')) {
+            $benefit->budget_amount = $request->amount * $approvedMembers->count();
+        }
+
+        if ($benefit->type === 'relief' && $request->has('quantity')) {
+            $benefit->budget_quantity = $request->quantity * $approvedMembers->count();
+        }
+
+        $benefit->save();
+
+
+        return response()->json([
+            'message' => 'Benefit created successfully with participants locked (approved members only).',
+            'benefit' => $benefit,
+        ], 201);
     }
 
-    /**
-     * Show a single benefit
-     */
+
     public function showBenefit($id)
     {
         $benefit = Benefit::with('records')->findOrFail($id);
         return response()->json($benefit);
     }
 
-    /**
-     * Update a benefit
-     */
     public function updateBenefit(Request $request, $id)
     {
         $benefit = Benefit::findOrFail($id);
 
         $request->validate([
-            'name' => 'sometimes|string|max:255',
-            'type' => 'sometimes|in:cash,relief',
-            'budget_amount' => 'nullable|numeric',
+            'name'   => 'sometimes|string|max:255',
+            'type'   => 'sometimes|in:cash,relief',
+            'budget_amount'   => 'nullable|numeric',
             'budget_quantity' => 'nullable|integer',
-            'unit' => 'nullable|string|max:50',
+            'unit'   => 'nullable|string|max:50',
             'status' => 'nullable|in:active,inactive',
         ]);
 
@@ -86,70 +110,77 @@ class BenefitController extends Controller
     }
 
     /**
-     * List all benefit records (global)
+     * List all benefit records
      */
     public function indexRecords()
     {
-        $records = BenefitRecord::with(['benefit', 'member', 'scannedBy'])->get();
+        $records = BenefitRecord::with(['benefit', 'user.memberProfile', 'scannedBy.staffProfile'])->get();
         return response()->json($records);
     }
 
     /**
-     * Store a new benefit record (manual add)
+     * Store a new benefit record (manual add or scan)
      */
     public function storeRecord(Request $request)
     {
-        $request->validate([
-            'member_id' => 'required|exists:member_profiles,id',
-            'benefit_id' => 'required|exists:benefits,id',
-            'scanned_by' => 'nullable|exists:users,id',
+        $validated = $request->validate([
+            'user_id'     => 'required|exists:users,id',
+            'benefit_id'  => 'required|exists:benefits,id',
+            'scanned_by'  => 'nullable|exists:users,id',
             'amount_received' => 'nullable|numeric',
             'quantity_received' => 'nullable|integer',
-            'status' => 'nullable|in:pending,claimed,absent',
-            'claimed_at' => 'nullable|date',
-            'remarks' => 'nullable|string',
+            'status'      => 'nullable|in:pending,claimed',
+            'claimed_at'  => 'nullable|date',
+            'remarks'     => 'nullable|string',
         ]);
 
-        $record = BenefitRecord::create($request->all());
+        // 🔍 Prevent duplicate record
+        $exists = BenefitRecord::where('user_id', $validated['user_id'])
+            ->where('benefit_id', $validated['benefit_id'])
+            ->exists();
 
-        return response()->json($record, 201);
+        if ($exists) {
+            return response()->json([
+                'message' => 'This member has already claimed this benefit.'
+            ], 409); // Conflict
+        }
+
+        $record = BenefitRecord::create(array_merge($validated, [
+            'scanned_by' => $validated['scanned_by'] ?? Auth::id(),
+        ]));
+
+        return response()->json([
+            'message' => 'Benefit record created successfully.',
+            'record'  => $record,
+        ], 201);
     }
 
-    /**
-     * Show a single benefit record
-     */
     public function showRecord($id)
     {
-        $record = BenefitRecord::with(['benefit', 'member', 'scannedBy'])->findOrFail($id);
+        $record = BenefitRecord::with(['benefit', 'user.memberProfile', 'scannedBy.staffProfile'])->findOrFail($id);
         return response()->json($record);
     }
 
-    /**
-     * Update a benefit record
-     */
     public function updateRecord(Request $request, $id)
     {
         $record = BenefitRecord::findOrFail($id);
 
-        $request->validate([
-            'member_id' => 'sometimes|exists:member_profiles,id',
-            'benefit_id' => 'sometimes|exists:benefits,id',
-            'scanned_by' => 'nullable|exists:users,id',
+        $validated = $request->validate([
+            'user_id'     => 'sometimes|exists:users,id',
+            'benefit_id'  => 'sometimes|exists:benefits,id',
+            'scanned_by'  => 'nullable|exists:users,id',
             'amount_received' => 'nullable|numeric',
             'quantity_received' => 'nullable|integer',
-            'status' => 'nullable|in:pending,claimed,absent',
-            'claimed_at' => 'nullable|date',
-            'remarks' => 'nullable|string',
+            'status'      => 'nullable|in:pending,claimed,absent',
+            'claimed_at'  => 'nullable|date',
+            'remarks'     => 'nullable|string',
         ]);
 
-        $record->update($request->all());
+        $record->update($validated);
 
         return response()->json($record);
     }
 
-    /**
-     * Delete a benefit record
-     */
     public function destroyRecord($id)
     {
         $record = BenefitRecord::findOrFail($id);
@@ -160,7 +191,7 @@ class BenefitController extends Controller
 
     /**
      * ----------------------------
-     * BENEFIT CLAIMS (like attendances)
+     * BENEFIT CLAIMS (like attendance)
      * ----------------------------
      */
 
@@ -178,12 +209,23 @@ class BenefitController extends Controller
     // POST /benefits/{benefit}/claims
     public function storeClaim(Request $request, Benefit $benefit)
     {
-        $request->validate([
+        $validated = $request->validate([
             'user_id' => 'required|exists:users,id',
         ]);
 
+        // ✅ Check if user is in benefit_participants
+        $isParticipant = \App\Models\BenefitParticipant::where('benefit_id', $benefit->id)
+            ->where('user_id', $validated['user_id'])
+            ->exists();
+
+        if (!$isParticipant) {
+            return response()->json([
+                'message' => 'User is not eligible for this benefit.',
+            ], 403);
+        }
+
         // Prevent duplicate claim
-        $existing = $benefit->records()->where('user_id', $request->user_id)->first();
+        $existing = $benefit->records()->where('user_id', $validated['user_id'])->first();
         if ($existing) {
             return response()->json([
                 'message' => 'User already claimed this benefit.',
@@ -191,10 +233,10 @@ class BenefitController extends Controller
         }
 
         $record = $benefit->records()->create([
-            'user_id' => $request->user_id,
-            'scanned_by' => $request->user()->id, // staff scanning
+            'user_id'    => $validated['user_id'],
+            'scanned_by' => Auth::id(),
             'claimed_at' => now(),
-            'status' => 'claimed',
+            'status'     => 'claimed',
         ]);
 
         return response()->json($record, 201);

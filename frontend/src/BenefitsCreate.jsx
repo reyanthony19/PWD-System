@@ -9,6 +9,7 @@ function BenefitsCreate() {
         name: "",
         type: "",
         budget_amount: "",
+        budget_quantity: "",
         unit: "",
     });
 
@@ -41,10 +42,28 @@ function BenefitsCreate() {
         setLoading(true);
 
         try {
-            const payload = { ...form, status: "active" };
+            let payload = {
+                name: form.name,
+                type: form.type,
+                status: "active",
+            };
+
+            if (form.type === "cash") {
+                payload.budget_amount = form.budget_amount;
+            } else if (form.type === "relief") {
+                payload.budget_quantity = form.budget_quantity;
+                payload.unit = form.unit;
+            }
+
             await api.post("/benefits", payload);
 
-            setForm({ name: "", type: "", budget_amount: "", unit: "" });
+            setForm({
+                name: "",
+                type: "",
+                budget_amount: "",
+                budget_quantity: "",
+                unit: "",
+            });
             setShowModal(true);
         } catch (err) {
             const errors = err.response?.data?.errors;
@@ -90,7 +109,7 @@ function BenefitsCreate() {
                     >
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {/* Benefit Name */}
-                            <div className="relative">
+                            <div>
                                 <label className="block text-gray-700 font-medium mb-2">
                                     Benefit Name <span className="text-red-500">*</span>
                                 </label>
@@ -105,7 +124,7 @@ function BenefitsCreate() {
                             </div>
 
                             {/* Type */}
-                            <div className="relative">
+                            <div>
                                 <label className="block text-gray-700 font-medium mb-2">
                                     Type <span className="text-red-500">*</span>
                                 </label>
@@ -125,62 +144,59 @@ function BenefitsCreate() {
                                 </select>
                             </div>
 
-                            {/* Budget Amount */}
-                            <div className="relative">
-                                <label className="block text-gray-700 font-medium mb-2">
-                                    {form.type === "cash" ? "Budget Amount (₱)" : "Total Quantity"}
-                                </label>
-                                <input
-                                    type="text"
-                                    name="budget_amount"
-                                    inputMode="numeric" // shows number keypad on mobile
-                                    value={
-                                        form.budget_amount
-                                            ? form.budget_amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-                                            : ""
-                                    }
-                                    onChange={(e) => {
-                                        // keep only digits
-                                        const rawValue = e.target.value.replace(/,/g, "").replace(/\D/g, "");
-                                        handleChange({
-                                            target: {
-                                                name: "budget_amount",
-                                                value: rawValue,
-                                            },
-                                        });
-                                    }}
-                                    min="0"
-                                    disabled={!form.type}
-                                    className={`w-full border-2 rounded-xl px-4 py-3 focus:ring-4 focus:ring-yellow-100 ${!form.type
-                                            ? "bg-gray-100 cursor-not-allowed text-gray-400 border-gray-300"
-                                            : "border-gray-200 focus:border-yellow-500 text-gray-900"
-                                        }`}
-                                />
-                            </div>
-
-
-
-
-                            {/* Unit (only for relief) */}
-                            {form.type === "relief" && (
-                                <div className="relative">
+                            {/* Budget Amount (for cash) */}
+                            {form.type === "cash" && (
+                                <div>
                                     <label className="block text-gray-700 font-medium mb-2">
-                                        Unit
+                                        Budget Amount (₱)
                                     </label>
-                                    <select
-                                        name="unit"
-                                        value={form.unit}
+                                    <input
+                                        type="number"
+                                        name="budget_amount"
+                                        value={form.budget_amount}
                                         onChange={handleChange}
-                                        className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 cursor-pointer focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100"
-                                    >
-                                        <option value="">Select Unit</option>
-                                        {unitOptions.map((option) => (
-                                            <option key={option.value} value={option.value}>
-                                                {option.label}
-                                            </option>
-                                        ))}
-                                    </select>
+                                        min="0"
+                                        className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100"
+                                    />
                                 </div>
+                            )}
+
+                            {/* Budget Quantity (for relief) */}
+                            {form.type === "relief" && (
+                                <>
+                                    <div>
+                                        <label className="block text-gray-700 font-medium mb-2">
+                                            Total Quantity
+                                        </label>
+                                        <input
+                                            type="number"
+                                            name="budget_quantity"
+                                            value={form.budget_quantity}
+                                            onChange={handleChange}
+                                            min="0"
+                                            className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-gray-700 font-medium mb-2">
+                                            Unit
+                                        </label>
+                                        <select
+                                            name="unit"
+                                            value={form.unit}
+                                            onChange={handleChange}
+                                            className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 cursor-pointer focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100"
+                                        >
+                                            <option value="">Select Unit</option>
+                                            {unitOptions.map((option) => (
+                                                <option key={option.value} value={option.value}>
+                                                    {option.label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </>
                             )}
                         </div>
 
@@ -190,10 +206,10 @@ function BenefitsCreate() {
                                 type="submit"
                                 disabled={loading}
                                 className="inline-flex items-center px-8 py-4 bg-gradient-to-r from-yellow-600 to-orange-600 
-                  hover:from-yellow-700 hover:to-orange-700 disabled:from-gray-400 disabled:to-gray-500 
-                  text-white font-bold text-lg rounded-2xl shadow-xl 
-                  transform transition-all duration-200 hover:scale-105 active:scale-95 
-                  disabled:cursor-not-allowed disabled:transform-none"
+                                    hover:from-yellow-700 hover:to-orange-700 disabled:from-gray-400 disabled:to-gray-500 
+                                    text-white font-bold text-lg rounded-2xl shadow-xl 
+                                    transform transition-all duration-200 hover:scale-105 active:scale-95 
+                                    disabled:cursor-not-allowed disabled:transform-none"
                             >
                                 {loading ? (
                                     <>
@@ -226,7 +242,7 @@ function BenefitsCreate() {
                             <button
                                 onClick={closeModalAndRedirect}
                                 className="w-full bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 
-                  text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 transform hover:scale-105"
+                                    text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 transform hover:scale-105"
                             >
                                 Continue
                             </button>

@@ -44,4 +44,9 @@ class Benefit extends Model
 
         return null;
     }
+    // app/Models/Benefit.php
+    public function participants()
+    {
+        return $this->hasMany(BenefitParticipant::class);
+    }
 }

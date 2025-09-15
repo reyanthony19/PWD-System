@@ -38,10 +38,8 @@ function BenefitsList() {
       .sort((a, b) => {
         if (sortOption === "name-asc") return a.name.localeCompare(b.name);
         if (sortOption === "name-desc") return b.name.localeCompare(a.name);
-        if (sortOption === "amount-asc")
-          return (a.amount || 0) - (b.amount || 0);
-        if (sortOption === "amount-desc")
-          return (b.amount || 0) - (a.amount || 0);
+        if (sortOption === "amount-asc") return (a.budget_amount || 0) - (b.budget_amount || 0);
+        if (sortOption === "amount-desc") return (b.budget_amount || 0) - (a.budget_amount || 0);
         return 0;
       });
   }, [benefits, typeFilter, searchTerm, sortOption]);
@@ -94,11 +92,7 @@ function BenefitsList() {
                     key={key}
                     onClick={() => setTypeFilter(key)}
                     className={`px-4 py-2 rounded-xl font-medium transition shadow-sm
-                      ${
-                        typeFilter === key
-                          ? "bg-indigo-600 text-white"
-                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                      }`}
+                      ${typeFilter === key ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
                   >
                     <Filter className="inline-block w-4 h-4 mr-1" />
                     {label}
@@ -128,8 +122,8 @@ function BenefitsList() {
                 >
                   <option value="name-asc">Name (A–Z)</option>
                   <option value="name-desc">Name (Z–A)</option>
-                  <option value="amount-asc">Amount (Low–High)</option>
-                  <option value="amount-desc">Amount (High–Low)</option>
+                  <option value="amount-asc">Per Member (Low–High)</option>
+                  <option value="amount-desc">Per Member (High–Low)</option>
                 </select>
               </div>
 
@@ -150,22 +144,19 @@ function BenefitsList() {
                 <tr>
                   <th className="px-6 py-4">Name</th>
                   <th className="px-6 py-4">Type</th>
-                  <th className="px-6 py-4">Budget</th>
+                  <th className="px-6 py-4">Per Member</th>
+                  <th className="px-6 py-4">Total Budget</th>
                   <th className="px-6 py-4">Remaining</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredBenefits.length > 0 ? (
                   filteredBenefits.map((benefit) => {
-                    const remainingAmount =
-                      benefit.budget_amount && benefit.records_count
-                        ? benefit.budget_amount - benefit.records_count * (benefit.amount || 0)
-                        : benefit.budget_amount;
+                    const totalBudget =
+                      (benefit.budget_amount || 0) * (benefit.locked_member_count || 0);
 
-                    const remainingQty =
-                      benefit.budget_quantity && benefit.records_count
-                        ? benefit.budget_quantity - benefit.records_count
-                        : benefit.budget_quantity;
+                    const remaining =
+                      totalBudget - (benefit.records_count || 0) * (benefit.budget_amount || 0);
 
                     return (
                       <tr
@@ -173,39 +164,29 @@ function BenefitsList() {
                         className="odd:bg-white even:bg-indigo-50 hover:bg-indigo-100 cursor-pointer transition"
                         onClick={() => navigate(`/benefits/claim/${benefit.id}`)}
                       >
-                        <td className="px-6 py-4 font-medium text-gray-900">
-                          {benefit.name}
-                        </td>
-                        <td className="px-6 py-4 capitalize text-gray-700">
-                          {benefit.type}
+                        <td className="px-6 py-4 font-medium text-gray-900">{benefit.name}</td>
+                        <td className="px-6 py-4 capitalize text-gray-700">{benefit.type}</td>
+                        <td className="px-6 py-4 text-gray-700">
+                          {benefit.type === "cash"
+                            ? `₱${Number(benefit.budget_amount).toLocaleString()}`
+                            : `${benefit.budget_quantity || 0} ${benefit.unit || ""}`}
                         </td>
                         <td className="px-6 py-4 text-gray-700">
                           {benefit.type === "cash"
-                            ? benefit.budget_amount
-                              ? `₱${Number(benefit.budget_amount).toLocaleString()}`
-                              : "-"
-                            : benefit.budget_quantity
-                            ? `${benefit.budget_quantity} ${benefit.unit || ""}`
-                            : "-"}
+                            ? `₱${Number(totalBudget).toLocaleString()}`
+                            : `${(benefit.budget_quantity || 0) * (benefit.locked_member_count || 0)} ${benefit.unit || ""}`}
                         </td>
                         <td className="px-6 py-4 text-gray-700">
                           {benefit.type === "cash"
-                            ? remainingAmount != null
-                              ? `₱${Number(remainingAmount).toLocaleString()}`
-                              : "-"
-                            : remainingQty != null
-                            ? `${remainingQty} ${benefit.unit || ""}`
-                            : "-"}
+                            ? `₱${Number(remaining).toLocaleString()}`
+                            : `${(benefit.budget_quantity || 0) * (benefit.locked_member_count || 0) - (benefit.records_count || 0)} ${benefit.unit || ""}`}
                         </td>
                       </tr>
                     );
                   })
                 ) : (
                   <tr>
-                    <td
-                      colSpan="4"
-                      className="px-6 py-12 text-center text-gray-600 text-lg"
-                    >
+                    <td colSpan="5" className="px-6 py-12 text-center text-gray-600 text-lg">
                       🚫 No benefits found.
                     </td>
                   </tr>

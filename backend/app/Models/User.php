@@ -46,4 +46,9 @@ class User extends Authenticatable
     {
         return $this->hasOne(MemberProfile::class);
     }
+    // app/Models/User.php
+    public function benefitParticipations()
+    {
+        return $this->hasMany(BenefitParticipant::class);
+    }
 }
