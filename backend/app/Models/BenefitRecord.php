@@ -15,7 +15,6 @@ class BenefitRecord extends Model
         'scanned_by',        // staff user
         'amount_received',
         'quantity_received',
-        'status',
         'claimed_at',
         'remarks',
     ];

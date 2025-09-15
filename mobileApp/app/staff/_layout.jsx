@@ -3,37 +3,47 @@ import React from "react";
 import { Drawer } from "expo-router/drawer";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Dimensions } from "react-native";
+import { Dimensions, TouchableOpacity } from "react-native";
+import { useRouter } from "expo-router";
 
 export default function StaffLayout() {
   const insets = useSafeAreaInsets();
   const screenWidth = Dimensions.get("window").width;
+  const router = useRouter();
 
   return (
     <Drawer
       screenOptions={{
         headerStyle: {
-          backgroundColor: "#2563eb", // blue header
+          backgroundColor: "#2563eb",
         },
         headerTintColor: "#fff",
         drawerActiveTintColor: "#2563eb",
         drawerInactiveTintColor: "#64748b",
-        drawerType: "front", // can also try "slide" for smoother feel
+        drawerType: "front",
         drawerStyle: {
-          width: screenWidth * 0.7, // ✅ drawer takes only 70% of screen
+          width: screenWidth * 0.7,
           backgroundColor: "white",
           paddingTop: insets.top,
           borderTopRightRadius: 20,
           borderBottomRightRadius: 20,
         },
+        headerRight: () => (
+          <TouchableOpacity
+            style={{ marginRight: 16 }}
+            onPress={() => router.push("staff/Profile")}
+          >
+            <Ionicons name="person-circle" size={32} color="#fff" />
+          </TouchableOpacity>
+        ),
       }}
     >
       <Drawer.Screen
         name="index"
         options={{
-          title: "Events",
+          title: "Home",
           drawerIcon: ({ color, size }) => (
-            <Ionicons name="calendar" size={size + 2} color={color} />
+            <Ionicons name="home" size={size + 2} color={color} />
           ),
         }}
       />
@@ -49,11 +59,25 @@ export default function StaffLayout() {
       />
 
       <Drawer.Screen
-        name="Profile"
+        name="Events"
         options={{
-          title: "Profile",
+          title: "Events",
           drawerIcon: ({ color, size }) => (
-            <Ionicons name="person" size={size + 2} color={color} />
+            <Ionicons name="calendar" size={size + 2} color={color} />
+          ),
+        }}
+      />
+
+      <Drawer.Screen
+        name="About"
+        options={{
+          title: "About",
+          drawerIcon: ({ color, size }) => (
+            <Ionicons
+              name="information-circle"
+              size={size + 2}
+              color={color}
+            />
           ),
         }}
       />
@@ -77,6 +101,11 @@ export default function StaffLayout() {
       />
       <Drawer.Screen
         name="EditProfile"
+        options={{ drawerItemStyle: { display: "none" } }}
+      />
+
+      <Drawer.Screen
+        name="Profile"
         options={{ drawerItemStyle: { display: "none" } }}
       />
     </Drawer>

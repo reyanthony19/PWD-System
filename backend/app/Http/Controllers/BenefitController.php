@@ -129,7 +129,6 @@ class BenefitController extends Controller
             'scanned_by'  => 'nullable|exists:users,id',
             'amount_received' => 'nullable|numeric',
             'quantity_received' => 'nullable|integer',
-            'status'      => 'nullable|in:pending,claimed',
             'claimed_at'  => 'nullable|date',
             'remarks'     => 'nullable|string',
         ]);
@@ -233,11 +232,16 @@ class BenefitController extends Controller
         }
 
         $record = $benefit->records()->create([
-            'user_id'    => $validated['user_id'],
-            'scanned_by' => Auth::id(),
-            'claimed_at' => now(),
-            'status'     => 'claimed',
+            'user_id'        => $validated['user_id'],
+            'scanned_by'     => Auth::id(),
+            'claimed_at'     => now(),
+            'remarks'        => 'Successfully claimed via scanner',
+            'status'         => 'claimed', // ✅ mark as claimed
+            'amount_received' => $benefit->type === 'cash'
+                ? $benefit->budget_amount   // ✅ always use budget_amount
+                : null,
         ]);
+
 
         return response()->json($record, 201);
     }

@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import {useRouter} from "expo-router";
+import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ImageBackground,
@@ -8,10 +8,10 @@ import {
   ScrollView,
   StyleSheet,
   View,
+  TouchableOpacity,
 } from "react-native";
-import {Text, TextInput} from "react-native-paper";
+import { Text, TextInput } from "react-native-paper";
 import { LinearGradient } from "expo-linear-gradient";
-import { TouchableOpacity } from "react-native";
 import api from "../../services/api";
 
 export default function Login() {
@@ -164,6 +164,22 @@ export default function Login() {
                 </Text>
               </LinearGradient>
             </TouchableOpacity>
+
+            {/* 🔗 Sign Up link */}
+            <View style={{ marginTop: 20, alignItems: "center" }}>
+              <Text style={{ color: "#555" }}>Don’t have an account?</Text>
+              <TouchableOpacity onPress={() => router.push("/auth/Register")}>
+                <Text
+                  style={{
+                    color: "#0284c7",
+                    fontWeight: "bold",
+                    marginTop: 4,
+                  }}
+                >
+                  Sign Up
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </ScrollView>
       </ImageBackground>

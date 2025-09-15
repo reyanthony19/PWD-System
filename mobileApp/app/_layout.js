@@ -23,12 +23,12 @@ export default function Layout() {
   useEffect(() => {
     if (!isReady) return;
 
-    const inAuthGroup = segments[0] === "(auth)";
+    const inAuthGroup = segments[0] === "auth";
 
     if (!isLoggedIn && !inAuthGroup) {
-      router.replace("/auth");
+      router.replace("/auth/");
     } else if (isLoggedIn && inAuthGroup) {
-      router.replace("/staff"); // default for logged-in users
+      router.replace("/staff/"); // default for logged-in users
     }
   }, [isReady, isLoggedIn, segments]);
 

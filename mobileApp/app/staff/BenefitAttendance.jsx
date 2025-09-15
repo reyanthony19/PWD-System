@@ -6,10 +6,8 @@ import {
   FlatList,
   Pressable,
   ActivityIndicator,
-
+  ScrollView,
 } from "react-native";
-
-import { Picker } from "@react-native-picker/picker";
 
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCameraPermissions } from "expo-camera";
@@ -74,16 +72,12 @@ export default function BenefitAttendance() {
       ? Number(benefit?.budget_amount ?? benefit?.amount ?? 0)
       : Number(benefit?.budget_quantity ?? benefit?.amount ?? 0);
 
-  const claimedFromClaims = Array.isArray(claims)
-    ? claims.filter((c) => {
-      if (c?.claimed_at) return true;
-      if (c?.status && String(c.status).toLowerCase() === "claimed")
-        return true;
-      if (typeof c?.received === "boolean" && c.received) return true;
-      if (c?.is_claimed) return true;
-      return false;
-    }).length
+  // Count claimed members
+  const claimedMembers = Array.isArray(claims)
+    ? claims.filter((c) => c.claimed_at || c.status === "claimed").length
     : 0;
+
+  const claimedFromClaims = claimedMembers;
 
   const recordsCountFromBenefit = Number(benefit?.records_count ?? 0);
 
@@ -122,96 +116,140 @@ export default function BenefitAttendance() {
     }
   });
 
+  const sortOptions = [
+    { label: "Name (A → Z)", value: "nameAsc" },
+    { label: "Name (Z → A)", value: "nameDesc" },
+    { label: "Barangay (A → Z)", value: "barangayAsc" },
+    { label: "Barangay (Z → A)", value: "barangayDesc" },
+  ];
+
   return (
     <View style={styles.container}>
-      {/* Header */}
-      {benefit && (
-        <View style={styles.card}>
-          <View style={styles.headerRow}>
-            <Ionicons name="gift" size={32} color="#2563eb" />
-            <View style={{ marginLeft: 10 }}>
-              <Text style={styles.title}>{benefit.name}</Text>
-
-              <Text style={styles.subtitle}>
-                <MaterialCommunityIcons name="tag" size={16} color="#2563eb" />{" "}
-                {benefit.type} ·{" "}
-                {benefit.amount
-                  ? `${Number(benefit.amount).toLocaleString()} ${benefit.type === "cash" ? "₱" : benefit.unit || ""
-                  }`
-                  : ""}
-              </Text>
-
-              <Text style={styles.subtitle}>
-                <Ionicons name="cash" size={14} color="#2563eb" /> Budget:{" "}
-                {benefit.type === "cash"
-                  ? `₱${Number(totalBudget).toLocaleString()}`
-                  : `${totalBudget} ${benefit.unit || ""}`}
-              </Text>
-
-              <Text style={styles.subtitle}>
-                <Ionicons name="layers" size={14} color="#2563eb" /> Remaining:{" "}
-                {benefit.type === "cash"
-                  ? `₱${Number(remaining).toLocaleString()}`
-                  : `${remaining} ${benefit.unit || ""}`}
-              </Text>
-
-              <Text style={styles.subtitle}>
-                <Ionicons name="people" size={14} color="#2563eb" /> Target
-                Members: {benefit.locked_member_count || 0}
-              </Text>
-            </View>
-          </View>
-        </View>
-      )}
-
-      {/* QR Scan Button */}
-      <View style={{ marginVertical: 20 }}>
-        <Pressable
-          style={[
-            styles.scanButton,
-            (!isPermissionGranted || effectiveClaimed >= lockedCount) &&
-            styles.disabled,
-          ]}
-          disabled={!isPermissionGranted || effectiveClaimed >= lockedCount}
-          onPress={() =>
-            router.push(`/staff/scanner/BenefitScanner?benefitId=${benefitId}`)
-          }
-        >
-          <Ionicons
-            name="camera"
-            size={20}
-            color="#fff"
-            style={{ marginRight: 6 }}
-          />
-          <Text style={styles.scanButtonText}>
-            {effectiveClaimed >= lockedCount
-              ? "All Members Claimed"
-              : isPermissionGranted
-                ? "Scan QR Code"
-                : "Grant Camera Permission"}
-          </Text>
-        </Pressable>
-      </View>
-
-      {/* Sort Options */}
-      <View style={styles.sortRow}>
-        <Text style={styles.sortLabel}>Sort By:</Text>
-        <Picker
-          selectedValue={sortBy}
-          style={styles.sortPicker}
-          onValueChange={(val) => setSortBy(val)}
-        >
-          <Picker.Item label="Name (A → Z)" value="nameAsc" />
-          <Picker.Item label="Name (Z → A)" value="nameDesc" />
-          <Picker.Item label="Barangay (A → Z)" value="barangayAsc" />
-          <Picker.Item label="Barangay (Z → A)" value="barangayDesc" />
-        </Picker>
-      </View>
-
-      {/* Claims List */}
       <FlatList
         data={sortedClaims}
         keyExtractor={(item) => item.id.toString()}
+        ListHeaderComponent={
+          <View>
+            {/* Header */}
+            {benefit && (
+              <View style={styles.card}>
+                <View style={styles.headerRow}>
+                  <Ionicons name="gift" size={32} color="#2563eb" />
+                  <View style={{ marginLeft: 10 }}>
+                    <Text style={styles.title}>{benefit.name}</Text>
+
+                    <Text style={styles.subtitle}>
+                      <MaterialCommunityIcons name="tag" size={16} color="#2563eb" />{" "}
+                      {benefit.type} {" "}
+                      {benefit.amount
+                        ? `${Number(benefit.amount).toLocaleString()} ${benefit.type === "cash" ? "₱" : benefit.unit || ""
+                        }`
+                        : ""}
+                    </Text>
+
+                    <Text style={styles.subtitle}>
+                      <Ionicons name="cash" size={14} color="#2563eb" /> Budget:{" "}
+                      {benefit.type === "cash"
+                        ? `₱${Number(totalBudget).toLocaleString()}`
+                        : `${totalBudget} ${benefit.unit || ""}`}
+                    </Text>
+                    {/* Amount per Member */}
+                    {benefit.type === "cash" ? (
+                      <Text style={styles.subtitle}>
+                        <Ionicons name="cash" size={14} color="#2563eb" /> Amount per Member: ₱
+                        {Number(perUnit).toLocaleString()}
+                      </Text>
+                    ) : (
+                      <Text style={styles.subtitle}>
+                        <Ionicons name="cube" size={14} color="#2563eb" /> Pack per Member :{" "}
+                        {Number(perUnit).toLocaleString()} {benefit.unit || ""}
+                      </Text>
+                    )}
+
+                    <Text style={styles.subtitle}>
+                      <Ionicons name="layers" size={14} color="#2563eb" /> Remaining:{" "}
+                      {benefit.type === "cash"
+                        ? `₱${Number(remaining).toLocaleString()}`
+                        : `${remaining} ${benefit.unit || ""}`}
+                    </Text>
+
+                    <Text style={styles.subtitle}>
+                      <Ionicons name="people" size={14} color="#2563eb" /> Target Members:{" "}
+                      {benefit.locked_member_count || 0}
+                    </Text>
+
+                    {/* Claimed Members */}
+                    <Text style={styles.subtitle}>
+                      <Ionicons name="checkmark-done" size={14} color="#2563eb" /> Claimed Members:{" "}
+                      {claimedMembers}
+                    </Text>
+
+
+
+
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* QR Scan Button */}
+            <View style={{ marginVertical: 20 }}>
+              <Pressable
+                style={[
+                  styles.scanButton,
+                  (!isPermissionGranted || effectiveClaimed >= lockedCount) &&
+                  styles.disabled,
+                ]}
+                disabled={!isPermissionGranted || effectiveClaimed >= lockedCount}
+                onPress={() =>
+                  router.push(
+                    `/staff/scanner/BenefitScanner?benefitId=${benefitId}`
+                  )
+                }
+              >
+                <Ionicons
+                  name="camera"
+                  size={20}
+                  color="#fff"
+                  style={{ marginRight: 6 }}
+                />
+                <Text style={styles.scanButtonText}>
+                  {effectiveClaimed >= lockedCount
+                    ? "All Members Claimed"
+                    : isPermissionGranted
+                      ? "Scan QR Code"
+                      : "Grant Camera Permission"}
+                </Text>
+              </Pressable>
+            </View>
+
+            {/* Sort Options (Buttons) */}
+            <View style={styles.sortRow}>
+              <Text style={styles.sortLabel}>Sort By:</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {sortOptions.map((opt) => (
+                  <Pressable
+                    key={opt.value}
+                    style={[
+                      styles.sortButton,
+                      sortBy === opt.value && styles.sortButtonActive,
+                    ]}
+                    onPress={() => setSortBy(opt.value)}
+                  >
+                    <Text
+                      style={[
+                        styles.sortButtonText,
+                        sortBy === opt.value && styles.sortButtonTextActive,
+                      ]}
+                    >
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          </View>
+        }
         ListEmptyComponent={
           <Text
             style={{ textAlign: "center", marginTop: 20, color: "#6b7280" }}
@@ -265,6 +303,7 @@ export default function BenefitAttendance() {
             </View>
           );
         }}
+        contentContainerStyle={{ paddingBottom: 40 }}
       />
     </View>
   );
@@ -302,16 +341,26 @@ const styles = StyleSheet.create({
   },
   disabled: { backgroundColor: "#9ca3af" },
   scanButtonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
+
+  // sorting
   sortRow: {
-    flexDirection: "row",
-    alignItems: "center",
     marginBottom: 10,
-    backgroundColor: "#fff",
     padding: 8,
+    backgroundColor: "#fff",
     borderRadius: 8,
   },
-  sortLabel: { fontSize: 14, fontWeight: "600", marginRight: 10 },
-  sortPicker: { flex: 1, height: 40 },
+  sortLabel: { fontSize: 14, fontWeight: "600", marginBottom: 6 },
+  sortButton: {
+    backgroundColor: "#e5e7eb",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  sortButtonActive: { backgroundColor: "#2563eb" },
+  sortButtonText: { color: "#111827", fontSize: 14 },
+  sortButtonTextActive: { color: "#fff" },
+
   listItem: {
     backgroundColor: "#fff",
     padding: 14,
