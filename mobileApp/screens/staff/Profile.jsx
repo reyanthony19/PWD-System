@@ -1,24 +1,50 @@
+// screens/staff/Profile.jsx
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Alert,
+  ActivityIndicator,
+} from "react-native";
 import { Button, Avatar, Card } from "react-native-paper";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useRouter } from "expo-router";
+import { useNavigation } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
-import api from "../../services/api";
+import api from "@/services/api";
 
 export default function Profile() {
-  const router = useRouter();
+  const navigation = useNavigation();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // ✅ Fetch profile with token
   useEffect(() => {
     const fetchUser = async () => {
       try {
+        const token = await AsyncStorage.getItem("token");
+
+        if (!token) {
+          Alert.alert("Session Expired", "Please log in again.");
+          navigation.reset({
+            index: 0,
+            routes: [{ name: "Login" }],
+          });
+          return;
+        }
+
+        api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
         const res = await api.get("/user");
         setUser(res.data);
       } catch (err) {
-        console.error("Profile fetch error:", err);
-        Alert.alert("Error", "Failed to load profile.");
+        console.error("Profile fetch error:", err.response?.data || err.message);
+        Alert.alert("Error", "Failed to load profile. Please log in again.");
+        await AsyncStorage.clear();
+        navigation.reset({
+          index: 0,
+          routes: [{ name: "Login" }],
+        });
       } finally {
         setLoading(false);
       }
@@ -27,32 +53,51 @@ export default function Profile() {
   }, []);
 
   const handleLogout = async () => {
-    await AsyncStorage.removeItem("token");
-    router.replace("/auth/");
+    try {
+      await AsyncStorage.clear(); // wipe session
+      delete api.defaults.headers.common["Authorization"];
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "Login" }], // ✅ go back to Login screen
+      });
+    } catch (error) {
+      console.error("Logout error:", error);
+      Alert.alert("Error", "Failed to logout. Please try again.");
+    }
   };
 
   if (loading) {
     return (
       <View style={styles.loader}>
         <ActivityIndicator size="large" color="#2563eb" />
-        <Text style={{ marginTop: 10, color: "#2563eb" }}>Loading Profile...</Text>
+        <Text style={{ marginTop: 10, color: "#2563eb" }}>
+          Loading Profile...
+        </Text>
       </View>
     );
   }
 
-  const profile = user?.admin_profile || user?.staff_profile || user?.member_profile || {};
+  const profile =
+    user?.admin_profile || user?.staff_profile || user?.member_profile || {};
   const fullName = `${profile.first_name || ""} ${profile.middle_name || ""} ${profile.last_name || ""}`.trim();
 
   const fields = [
     { label: "Username", value: user?.username, icon: "account" },
     { label: "Email", value: user?.email, icon: "email" },
     { label: "Contact Number", value: profile.contact_number, icon: "phone" },
-    { label: "Birthdate", value: profile.birthdate?.split("T")[0], icon: "calendar" },
+    {
+      label: "Birthdate",
+      value: profile.birthdate ? profile.birthdate.split("T")[0] : null,
+      icon: "calendar",
+    },
     { label: "Address", value: profile.address, icon: "home-map-marker" },
   ];
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ padding: 20, alignItems: "center" }}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={{ padding: 20, alignItems: "center" }}
+    >
       {/* Profile Card */}
       <Card style={styles.profileCard}>
         <Card.Content style={{ alignItems: "center" }}>
@@ -78,7 +123,7 @@ export default function Profile() {
       {/* Buttons */}
       <Button
         mode="contained"
-        onPress={() => router.push("/staff/EditProfile")}
+        onPress={() => navigation.navigate("EditProfile")}
         style={styles.editButton}
         buttonColor="#2563eb"
         icon="account-edit"
@@ -112,7 +157,12 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   avatar: { backgroundColor: "#2563eb", marginBottom: 10 },
-  fullName: { fontSize: 22, fontWeight: "bold", color: "#111827", marginBottom: 4 },
+  fullName: {
+    fontSize: 22,
+    fontWeight: "bold",
+    color: "#111827",
+    marginBottom: 4,
+  },
   email: { fontSize: 14, color: "#6b7280", marginBottom: 10 },
 
   divider: { height: 1, backgroundColor: "#e5e7eb", marginVertical: 10 },

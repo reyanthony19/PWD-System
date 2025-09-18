@@ -22,12 +22,12 @@ class MemberController extends Controller
             'password'     => 'required|string|min:3',
 
             // Profile fields
-            'first_name'   => 'required|string|max:255',
-            'last_name'    => 'required|string|max:255',
-            'birthdate'    => 'required|date',
-            'sex'          => 'required|string|in:male,female,other',
-            'address'      => 'required|string|max:255',
-            'barangay'     => 'required|string|max:255',
+            'first_name'   => 'nullable|string|max:255',
+            'last_name'    => 'nullable|string|max:255',
+            'birthdate'    => 'nullable|date',
+            'sex'          => 'nullable|string|in:male,female,other',
+            'address'      => 'nullable|string|max:255',
+            'barangay'     => 'nullable|string|max:255',
             'contact_number' => 'nullable|string|max:20',
 
             // Optional fields
@@ -51,11 +51,8 @@ class MemberController extends Controller
             'remarks'             => 'nullable|string|max:255',
         ]);
 
-
-
         DB::beginTransaction();
         try {
-            // Decide status
             $status = (auth()->check() && auth()->user()->role === 'admin')
                 ? 'approved'
                 : 'pending';
@@ -66,34 +63,31 @@ class MemberController extends Controller
                 'email'    => $validated['email'],
                 'password' => Hash::make($validated['password']),
                 'role'     => 'member',
-                'status'   => 'approved',
+                'status'   => $status,
             ]);
 
-            // Generate id_number if not provided
-            $idNumber = $request->id_number ?? 'PDAO-' . str_pad($user->id, 4, '0', STR_PAD_LEFT);
-
-            // Create Member Profile
+            // Create initial member profile with mostly null/default values
             $profile = $user->memberProfile()->create([
-                'first_name'        => $validated['first_name'],
-                'middle_name'       => $request->middle_name,
-                'last_name'         => $validated['last_name'],
-                'id_number'         => $idNumber,
-                'contact_number'    => $request->contact_number,
-                'birthdate'         => $validated['birthdate'],
-                'sex'               => $validated['sex'],
-                'disability_type'   => $request->disability_type,
-                'barangay'          => $validated['barangay'],
-                'address'           => $validated['address'],
-                'blood_type'        => $request->blood_type,
-                'sss_number'        => $request->sss_number,
-                'philhealth_number' => $request->philhealth_number,
-                'guardian_full_name'    => $request->guardian_full_name,
-                'guardian_relationship' => $request->guardian_relationship,
-                'guardian_contact_number' => $request->guardian_contact_number,
-                'guardian_address'       => $request->guardian_address,
+                'first_name'        => $validated['first_name'] ?? null,
+                'middle_name'       => $request->middle_name ?? null,
+                'last_name'         => $validated['last_name'] ?? null,
+                'id_number'         => $validated['id_number'] ?? 'PDAO-' . str_pad($user->id, 4, '0', STR_PAD_LEFT),
+                'contact_number'    => $request->contact_number ?? null,
+                'birthdate'         => $validated['birthdate'] ?? null,
+                'sex'               => $validated['sex'] ?? null,
+                'disability_type'   => $request->disability_type ?? null,
+                'barangay'          => $validated['barangay'] ?? null,
+                'address'           => $validated['address'] ?? null,
+                'blood_type'        => $request->blood_type ?? null,
+                'sss_number'        => $request->sss_number ?? null,
+                'philhealth_number' => $request->philhealth_number ?? null,
+                'guardian_full_name'    => $request->guardian_full_name ?? null,
+                'guardian_relationship' => $request->guardian_relationship ?? null,
+                'guardian_contact_number' => $request->guardian_contact_number ?? null,
+                'guardian_address'       => $request->guardian_address ?? null,
             ]);
 
-            // Handle documents
+            // Handle optional documents
             $profile->documents()->create([
                 'barangay_indigency'  => $request->hasFile('barangay_indigency')
                     ? $request->file('barangay_indigency')->store('documents', 'public') : null,
@@ -105,8 +99,6 @@ class MemberController extends Controller
                     ? $request->file('birth_certificate')->store('documents', 'public') : null,
                 'remarks'             => $request->remarks ?? null,
             ]);
-
-
 
             DB::commit();
 
@@ -122,7 +114,10 @@ class MemberController extends Controller
             ], 500);
         }
     }
-    
+
+    /**
+     * Scan member by ID number
+     */
     public function scanMember(Request $request)
     {
         $idNumber = $request->query('id_number'); // Use query() for GET

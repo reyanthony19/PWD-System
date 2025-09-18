@@ -1,18 +1,18 @@
 import React, { useEffect, useState } from "react";
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  Pressable, 
-  ScrollView, 
-  ActivityIndicator 
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  ScrollView,
+  ActivityIndicator,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
-export default function Home() {
-  const router = useRouter();
+export default function MemberHome() {
+  const navigation = useNavigation();
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -32,7 +32,7 @@ export default function Home() {
 
   if (loading) {
     return (
-      <View style={styles.loader}>
+      <View style={[styles.container, styles.loader]}>
         <ActivityIndicator size="large" color="#2563eb" />
         <Text style={{ marginTop: 8, color: "#2563eb", fontWeight: "600" }}>
           Loading...
@@ -41,46 +41,53 @@ export default function Home() {
     );
   }
 
-  const fullName = currentUser 
-    ? `${currentUser.first_name || ""} ${currentUser.middle_name || ""} ${currentUser.last_name || ""}`.trim()
+  const fullName = currentUser?.member_profile
+    ? `${currentUser.member_profile.first_name || ""} ${
+        currentUser.member_profile.last_name || ""
+      }`.trim()
     : "Guest";
+
+  const username = currentUser ? currentUser.username || "" : "";
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: 16 }}>
       {/* Welcome Header */}
       <View style={styles.header}>
-        <Text style={styles.welcome}>Welcome,</Text>
-        <Text style={styles.username}>{fullName}</Text>
+        <Text style={styles.welcome}>Welcome</Text>
+        <Text style={styles.username}>
+          {fullName} {username ? `(${username})` : ""}
+        </Text>
       </View>
 
       {/* Navigation Buttons */}
       <View style={styles.buttonsContainer}>
-        <Pressable 
-          style={styles.card} 
-          onPress={() => router.push("/staff/benefits/BenefitAttendance")}
+        <Pressable
+          style={styles.card}
+          onPress={() => navigation.navigate("MemberProfile")}
         >
-          <Ionicons name="list" size={32} color="#2563eb" />
-          <Text style={styles.cardTitle}>Benefit Attendance</Text>
-          <Text style={styles.cardSubtitle}>View all benefit claimants</Text>
+          <Ionicons name="person-circle" size={32} color="#2563eb" />
+          <Text style={styles.cardTitle}>My Profile</Text>
+          <Text style={styles.cardSubtitle}>
+            View and edit your personal information
+          </Text>
         </Pressable>
 
-        <Pressable 
-          style={styles.card} 
-          onPress={() => router.push("/staff/scanner/BenefitScanner")}
+        <Pressable
+          style={styles.card}
+          onPress={() => navigation.navigate("MemberScanner")}
         >
           <Ionicons name="camera" size={32} color="#2563eb" />
           <Text style={styles.cardTitle}>Scanner</Text>
-          <Text style={styles.cardSubtitle}>Scan QR codes to claim benefits</Text>
+          <Text style={styles.cardSubtitle}>Scan your QR to check in</Text>
         </Pressable>
 
-        {/* Additional modules */}
-        <Pressable 
-          style={styles.card} 
-          onPress={() => router.push("/staff/reports")}
+        <Pressable
+          style={styles.card}
+          onPress={() => navigation.navigate("MemberReports")}
         >
           <MaterialCommunityIcons name="chart-box" size={32} color="#2563eb" />
           <Text style={styles.cardTitle}>Reports</Text>
-          <Text style={styles.cardSubtitle}>View benefit distribution reports</Text>
+          <Text style={styles.cardSubtitle}>View your usage reports</Text>
         </Pressable>
       </View>
     </ScrollView>
@@ -89,10 +96,15 @@ export default function Home() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#f9fafb" },
-  loader: { flex: 1, justifyContent: "center", alignItems: "center" },
+  loader: { justifyContent: "center", alignItems: "center" },
   header: { marginBottom: 30 },
   welcome: { fontSize: 18, color: "#6b7280" },
-  username: { fontSize: 24, fontWeight: "bold", color: "#111827", marginTop: 4 },
+  username: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#111827",
+    marginTop: 4,
+  },
   buttonsContainer: { flexDirection: "column", gap: 16 },
   card: {
     backgroundColor: "#fff",
@@ -104,6 +116,11 @@ const styles = StyleSheet.create({
     elevation: 2,
     marginBottom: 16,
   },
-  cardTitle: { fontSize: 18, fontWeight: "bold", color: "#111827", marginTop: 8 },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#111827",
+    marginTop: 8,
+  },
   cardSubtitle: { fontSize: 14, color: "#6b7280", marginTop: 4 },
 });

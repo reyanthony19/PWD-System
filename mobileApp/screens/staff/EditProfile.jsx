@@ -10,8 +10,7 @@ import {
   Platform,
 } from "react-native";
 import { Button, Avatar, Card, TextInput } from "react-native-paper";
-import { useRouter } from "expo-router";
-import api from "../../services/api";
+import api from "@/services/api";
 
 export default function EditProfile() {
   const router = useRouter();
@@ -83,7 +82,7 @@ export default function EditProfile() {
     try {
       await api.put(`/user/${user?.id}`, payload);
       Alert.alert("Success", "Profile updated successfully!");
-      router.back();
+      router.back(); // ✅ consistent navigation
     } catch (err) {
       console.error("Update error:", err);
       Alert.alert("Error", err.response?.data?.message || "Failed to update profile.");

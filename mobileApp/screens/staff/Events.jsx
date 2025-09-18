@@ -2,11 +2,9 @@ import React, { useEffect, useState, useRef } from "react";
 import { View, StyleSheet, FlatList, ActivityIndicator } from "react-native";
 import { Text, Card, Avatar } from "react-native-paper";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import api from "../../services/api";
-
-export default function StaffEvents() {
+import api from "@/services/api";
+export default function Events() {
   const router = useRouter();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -77,7 +75,7 @@ export default function StaffEvents() {
       style={styles.card}
       onPress={() =>
         router.push({
-          pathname: "/staff/Attendance",
+          pathname: "/staff/Attendance", // ✅ absolute path
           params: { eventId: item.id, eventTitle: item.title },
         })
       }

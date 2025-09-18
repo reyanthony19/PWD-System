@@ -2,8 +2,8 @@ import React, { useEffect, useState } from "react";
 import { View, StyleSheet, FlatList, ActivityIndicator } from "react-native";
 import { Text, Card, Avatar } from "react-native-paper";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useRouter } from "expo-router";
-import api from "../../services/api";
+import api from "@/services/api";
+
 
 export default function Benefits() {
   const router = useRouter();
@@ -57,7 +57,7 @@ export default function Benefits() {
   };
 
   const renderBenefit = ({ item }) => {
-    // Calculate total budget
+    // ✅ Calculate total budget
     let totalBudget = 0;
     if (item.type.toLowerCase() === "cash") {
       totalBudget = (item.budget_amount || 0) * (item.locked_member_count || 0);
@@ -65,7 +65,7 @@ export default function Benefits() {
       totalBudget = (item.budget_quantity || 0) * (item.locked_member_count || 0);
     }
 
-    // Calculate remaining
+    // ✅ Calculate remaining
     let remaining = 0;
     if (item.type.toLowerCase() === "cash") {
       remaining = totalBudget - (item.records_count || 0) * (item.budget_amount || 0);
@@ -78,7 +78,7 @@ export default function Benefits() {
         style={styles.card}
         onPress={() =>
           router.push({
-            pathname: "/staff/BenefitAttendance",
+            pathname: "/staff/BenefitAttendance", // ✅ route stays the same
             params: { benefitId: item.id, title: item.name },
           })
         }
@@ -87,7 +87,13 @@ export default function Benefits() {
           title={item.name}
           titleStyle={styles.cardTitle}
           subtitle={`📌 Type: ${item.type}`}
-          left={(props) => <Avatar.Icon {...props} icon={typeIcon(item.type)} style={{ backgroundColor: "#2563eb" }} />}
+          left={(props) => (
+            <Avatar.Icon
+              {...props}
+              icon={typeIcon(item.type)}
+              style={{ backgroundColor: "#2563eb" }}
+            />
+          )}
         />
         <Card.Content>
           <Text style={styles.detail}>

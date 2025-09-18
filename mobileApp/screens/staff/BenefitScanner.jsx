@@ -1,27 +1,27 @@
 import React, { useState, useEffect } from "react";
-import { CameraView } from "expo-camera";
-import { Stack, useLocalSearchParams } from "expo-router";
 import {
   SafeAreaView,
   StatusBar,
   StyleSheet,
   View,
   Text,
-  Dimensions,
   TouchableOpacity,
-  Alert,
   Animated,
+  Dimensions,
+  Alert,
 } from "react-native";
+import { CameraView } from "expo-camera";
+import { useIsFocused } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useIsFocused } from "@react-navigation/native"; // 👈 important
-import api from "../../../services/api"; // Axios instance
+import api from "@/services/api";
+
 
 const { width, height } = Dimensions.get("window");
 const cutoutSize = 250;
 const borderWidth = 4;
 const cornerLength = 30;
 
-// Overlay with cutout for scanning
+// Overlay with scanning cutout
 function Overlay() {
   return (
     <View style={StyleSheet.absoluteFill}>
@@ -29,31 +29,10 @@ function Overlay() {
       <View style={{ flexDirection: "row" }}>
         <View style={[styles.overlay, { width: (width - cutoutSize) / 2 }]} />
         <View style={{ width: cutoutSize, height: cutoutSize }}>
-          {/* Four corners */}
-          <View
-            style={[
-              styles.corner,
-              { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0 },
-            ]}
-          />
-          <View
-            style={[
-              styles.corner,
-              { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0 },
-            ]}
-          />
-          <View
-            style={[
-              styles.corner,
-              { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0 },
-            ]}
-          />
-          <View
-            style={[
-              styles.corner,
-              { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0 },
-            ]}
-          />
+          <View style={[styles.corner, { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0 }]} />
+          <View style={[styles.corner, { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0 }]} />
+          <View style={[styles.corner, { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0 }]} />
+          <View style={[styles.corner, { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0 }]} />
         </View>
         <View style={[styles.overlay, { width: (width - cutoutSize) / 2 }]} />
       </View>
@@ -62,15 +41,14 @@ function Overlay() {
   );
 }
 
-export default function BenefitScanner() {
-  const { benefitId } = useLocalSearchParams();
+export default function BenefitScanner({ navigation, route }) {
+  const { benefitId } = route.params; // ✅ receive benefitId from navigation
   const [memberData, setMemberData] = useState(null);
   const [error, setError] = useState("");
   const [scanned, setScanned] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
-  const isFocused = useIsFocused(); // 👈 check if screen is active
+  const isFocused = useIsFocused();
 
-  // Animated error banner
   const [errorAnim] = useState(new Animated.Value(0));
 
   useEffect(() => {
@@ -89,7 +67,7 @@ export default function BenefitScanner() {
     }
   }, [error]);
 
-  // Load logged-in user from storage
+  // Load logged-in user
   useEffect(() => {
     const fetchUser = async () => {
       try {
@@ -110,31 +88,18 @@ export default function BenefitScanner() {
     const memberId = data.trim();
 
     try {
-      // 1. Fetch member info
-      const response = await api.get(`/scanMember`, {
-        params: { id_number: memberId },
-      });
+      const response = await api.get(`/scanMember`, { params: { id_number: memberId } });
       const member = response.data.member;
       setMemberData(member);
 
-      // 2. Attempt to claim benefit
-      await api.post(`/benefits/${benefitId}/claims`, {
-        user_id: member.id,
-      });
-
+      await api.post(`/benefits/${benefitId}/claims`, { user_id: member.id });
       Alert.alert("✅ Success", "Benefit claimed successfully!");
     } catch (err) {
       if (err.response) {
         if (err.response.status === 409) {
-          setError(
-            err.response.data.message ||
-              "This member already claimed the benefit."
-          );
+          setError(err.response.data.message || "This member already claimed the benefit.");
         } else if (err.response.status === 403) {
-          setError(
-            err.response.data.message ||
-              "Member is not eligible for this benefit."
-          );
+          setError(err.response.data.message || "Member is not eligible for this benefit.");
         } else {
           setError("Could not claim benefit. Please try again.");
         }
@@ -142,7 +107,6 @@ export default function BenefitScanner() {
         setError("Network error. Please try again.");
       }
 
-      // Reset scanned state after error
       setTimeout(() => setScanned(false), 1500);
     }
   };
@@ -155,10 +119,8 @@ export default function BenefitScanner() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Stack.Screen options={{ title: "Benefit Scanner", headerShown: false }} />
       <StatusBar barStyle="light-content" />
 
-      {/* 👇 Only render Camera when screen is focused */}
       {isFocused && (
         <CameraView
           style={StyleSheet.absoluteFillObject}
@@ -172,9 +134,7 @@ export default function BenefitScanner() {
       <View style={styles.infoContainer}>
         {memberData ? (
           <>
-            <Text style={styles.nameText}>
-              {fullName || memberData.username}
-            </Text>
+            <Text style={styles.nameText}>{fullName || memberData.username}</Text>
             <Text style={styles.idText}>ID: {profile.id_number || "-"}</Text>
 
             {error ? (
@@ -199,9 +159,7 @@ export default function BenefitScanner() {
             ) : null}
           </>
         ) : (
-          <Text style={styles.placeholderText}>
-            Scan a member QR code to claim benefit
-          </Text>
+          <Text style={styles.placeholderText}>Scan a member QR code to claim benefit</Text>
         )}
 
         {scanned && (

@@ -7,14 +7,16 @@ import {
   Pressable,
   ActivityIndicator,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import { useCameraPermissions } from "expo-camera";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import api from "../../services/api";
+import api from "@/services/api";
+
 
 export default function Attendance() {
-  const { eventId } = useLocalSearchParams();
-  const router = useRouter();
+  const navigation = useNavigation();
+  const route = useRoute();
+  const { eventId } = route.params || {}; // ✅ coming from navigation params
 
   const [permission, requestPermission] = useCameraPermissions();
   const [event, setEvent] = useState(null);
@@ -88,7 +90,7 @@ export default function Attendance() {
           style={[styles.scanButton, !isPermissionGranted && styles.disabled]}
           onPress={
             isPermissionGranted
-              ? () => router.push(`/staff/scanner?eventId=${eventId}`)
+              ? () => navigation.navigate("Scanner", { eventId }) // ✅ pass params
               : requestPermission
           }
         >
@@ -116,12 +118,10 @@ export default function Attendance() {
           </Text>
         }
         renderItem={({ item }) => {
-          // ✅ Use member_profile for attendee
           const fullName = item.user?.member_profile
             ? `${item.user.member_profile.first_name || ""} ${item.user.member_profile.middle_name || ""} ${item.user.member_profile.last_name || ""}`.trim()
             : item.user?.name || "—";
 
-          // ✅ Use staff_profile for scanned_by
           const scannedBy = item.scanned_by?.staff_profile
             ? `${item.scanned_by.staff_profile.first_name || ""} ${item.scanned_by.staff_profile.middle_name || ""} ${item.scanned_by.staff_profile.last_name || ""}`.trim()
             : item.scanned_by?.name || "—";
@@ -142,13 +142,13 @@ export default function Attendance() {
                 Scanned:{" "}
                 {item.scanned_at
                   ? new Date(item.scanned_at).toLocaleString([], {
-                    year: "numeric",
-                    month: "short",
-                    day: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    hour12: true,
-                  })
+                      year: "numeric",
+                      month: "short",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      hour12: true,
+                    })
                   : "—"}
               </Text>
               <Text style={styles.details}>
@@ -176,16 +176,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     marginBottom: 10,
-    elevation: 3, // Android
-
-    // iOS shadow
+    elevation: 3,
     shadowColor: "#000",
     shadowOpacity: 0.1,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
-
-    // Web shadow
-    boxShadow: "0 2px 6px rgba(0,0,0,0.1)",
   },
   headerRow: { flexDirection: "row", alignItems: "center" },
   title: { fontSize: 20, fontWeight: "bold", color: "#111827" },
@@ -206,16 +201,11 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 12,
     marginBottom: 10,
-    elevation: 1, // Android
-
-    // iOS shadow
+    elevation: 1,
     shadowColor: "#000",
     shadowOpacity: 0.05,
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
-
-    // Web shadow
-    boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
   },
   name: { fontSize: 16, fontWeight: "bold", color: "#111827" },
   details: { fontSize: 14, color: "#6b7280", marginTop: 2 },

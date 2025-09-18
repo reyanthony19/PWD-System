@@ -1,8 +1,5 @@
-import { useState } from "react";
-import { CameraView } from "expo-camera";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import React, { useState } from "react";
 import {
-  SafeAreaView,
   StatusBar,
   StyleSheet,
   View,
@@ -10,12 +7,13 @@ import {
   Dimensions,
   TouchableOpacity,
   Alert,
-  Platform,
 } from "react-native";
+import { CameraView } from "expo-camera";
 import { useIsFocused } from "@react-navigation/native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import api from "../../../services/api";
+import api from "@/services/api";
+
 
 const { width, height } = Dimensions.get("window");
 const cutoutSize = 250;
@@ -25,24 +23,14 @@ const cornerLength = 28;
 function Overlay() {
   return (
     <View style={StyleSheet.absoluteFill}>
-      {/* Dimmed outside area */}
       <View style={[styles.overlay, { height: (height - cutoutSize) / 2 }]} />
       <View style={{ flexDirection: "row" }}>
         <View style={[styles.overlay, { width: (width - cutoutSize) / 2 }]} />
         <View style={{ width: cutoutSize, height: cutoutSize }}>
-          {/* four scanning corners */}
-          <View
-            style={[styles.corner, { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0 }]}
-          />
-          <View
-            style={[styles.corner, { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0 }]}
-          />
-          <View
-            style={[styles.corner, { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0 }]}
-          />
-          <View
-            style={[styles.corner, { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0 }]}
-          />
+          <View style={[styles.corner, { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0 }]} />
+          <View style={[styles.corner, { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0 }]} />
+          <View style={[styles.corner, { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0 }]} />
+          <View style={[styles.corner, { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0 }]} />
         </View>
         <View style={[styles.overlay, { width: (width - cutoutSize) / 2 }]} />
       </View>
@@ -51,9 +39,8 @@ function Overlay() {
   );
 }
 
-export default function Scanner() {
-  const { eventId } = useLocalSearchParams();
-  const router = useRouter();
+export default function Scanner({ navigation, route }) {
+  const eventId = route?.params?.eventId ?? null; // ✅ safe
   const insets = useSafeAreaInsets();
   const [memberData, setMemberData] = useState(null);
   const [error, setError] = useState("");
@@ -72,9 +59,9 @@ export default function Scanner() {
       const dataResult = response.data;
       setMemberData(dataResult.member);
 
-      await api.post(`/events/${eventId}/attendances`, {
-        user_id: dataResult.member.id,
-      });
+      if (eventId) {
+        await api.post(`/events/${eventId}/attendances`, { user_id: dataResult.member.id });
+      }
 
       Alert.alert("✅ Success", "Attendance recorded!");
     } catch (err) {
@@ -91,8 +78,7 @@ export default function Scanner() {
     .trim();
 
   return (
-    <SafeAreaView style={styles.container} edges={["bottom"]}>
-      <Stack.Screen options={{ headerShown: false }} />
+    <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
       <StatusBar barStyle="light-content" />
 
       {isFocused && (
@@ -100,31 +86,30 @@ export default function Scanner() {
           style={StyleSheet.absoluteFillObject}
           facing="back"
           onBarcodeScanned={handleBarcodeScanned}
+          barcodeScannerSettings={{
+            barcodeTypes: ["qr", "code128"],
+          }}
         />
       )}
 
       <Overlay />
 
-      {/* Modern back button */}
-      <TouchableOpacity onPress={() => router.back()} style={[styles.backButton, { top: insets.top + 10 }]}>
+      <TouchableOpacity
+        onPress={() => navigation.goBack()}
+        style={[styles.backButton, { top: insets.top + 10 }]}
+      >
         <Ionicons name="arrow-back" size={22} color="#fff" />
       </TouchableOpacity>
 
-      {/* Floating info container */}
-      <View
-        style={[
-          styles.infoContainer,
-          { paddingBottom: insets.bottom + 80 }, // leave room above modern tab bar
-        ]}
-      >
+      <View style={[styles.infoContainer, { paddingBottom: insets.bottom + 80 }]}>
         <View style={styles.infoCard}>
           {error ? (
             <Text style={styles.errorText}>{error}</Text>
           ) : memberData ? (
-            <>
+            <View>
               <Text style={styles.nameText}>{fullName || memberData.username}</Text>
               <Text style={styles.idText}>ID: {profile.id_number || "-"}</Text>
-            </>
+            </View>
           ) : (
             <Text style={styles.placeholderText}>Scan a member QR code</Text>
           )}
@@ -149,29 +134,19 @@ export default function Scanner() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "black" },
-
   overlay: { backgroundColor: "rgba(0,0,0,0.55)" },
-
   corner: {
     position: "absolute",
     width: cornerLength,
     height: cornerLength,
-    borderColor: "#4ade80", // lime-400 modern accent
+    borderColor: "#4ade80",
     borderTopWidth: borderWidth,
     borderLeftWidth: borderWidth,
     borderRightWidth: borderWidth,
     borderBottomWidth: borderWidth,
     borderRadius: 4,
   },
-
-  infoContainer: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    alignItems: "center",
-  },
-
+  infoContainer: { position: "absolute", bottom: 0, left: 0, right: 0, alignItems: "center" },
   infoCard: {
     backgroundColor: "rgba(255,255,255,0.9)",
     borderRadius: 16,
@@ -185,12 +160,10 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     elevation: 6,
   },
-
   placeholderText: { color: "#64748b", fontSize: 16 },
   nameText: { color: "#0f172a", fontSize: 20, fontWeight: "700" },
   idText: { color: "#334155", fontSize: 15, marginTop: 4 },
   errorText: { color: "#dc2626", fontSize: 16, fontWeight: "600" },
-
   scanAgainButton: {
     marginTop: 18,
     backgroundColor: "#2563eb",
@@ -199,7 +172,6 @@ const styles = StyleSheet.create({
     borderRadius: 25,
   },
   scanAgainText: { color: "#fff", fontSize: 15, fontWeight: "600" },
-
   backButton: {
     position: "absolute",
     left: 16,

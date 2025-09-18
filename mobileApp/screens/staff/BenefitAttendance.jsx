@@ -9,13 +9,14 @@ import {
   ScrollView,
 } from "react-native";
 
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useRouter } from "@react-navigation/native"; // ✅ instead of expo-router
 import { useCameraPermissions } from "expo-camera";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import api from "../../services/api";
+import api from "@/services/api";
 
-export default function BenefitAttendance() {
-  const { benefitId } = useLocalSearchParams();
+
+export default function BenefitAttendance({ route }) {
+  const { benefitId } = route.params; // ✅ react-navigation gives params like this
   const router = useRouter();
 
   const [permission, requestPermission] = useCameraPermissions();
@@ -78,7 +79,6 @@ export default function BenefitAttendance() {
     : 0;
 
   const claimedFromClaims = claimedMembers;
-
   const recordsCountFromBenefit = Number(benefit?.records_count ?? 0);
 
   const effectiveClaimed = Math.min(
@@ -94,10 +94,8 @@ export default function BenefitAttendance() {
   // Sorting Logic
   // -------------------------
   const sortedClaims = [...claims].sort((a, b) => {
-    const nameA = `${a.user?.member_profile?.last_name || ""} ${a.user?.member_profile?.first_name || ""
-      }`.toLowerCase();
-    const nameB = `${b.user?.member_profile?.last_name || ""} ${b.user?.member_profile?.first_name || ""
-      }`.toLowerCase();
+    const nameA = `${a.user?.member_profile?.last_name || ""} ${a.user?.member_profile?.first_name || ""}`.toLowerCase();
+    const nameB = `${b.user?.member_profile?.last_name || ""} ${b.user?.member_profile?.first_name || ""}`.toLowerCase();
 
     const brgyA = a.user?.member_profile?.barangay || "";
     const brgyB = b.user?.member_profile?.barangay || "";
@@ -140,10 +138,11 @@ export default function BenefitAttendance() {
 
                     <Text style={styles.subtitle}>
                       <MaterialCommunityIcons name="tag" size={16} color="#2563eb" />{" "}
-                      {benefit.type} {" "}
+                      {benefit.type}{" "}
                       {benefit.amount
-                        ? `${Number(benefit.amount).toLocaleString()} ${benefit.type === "cash" ? "₱" : benefit.unit || ""
-                        }`
+                        ? `${Number(benefit.amount).toLocaleString()} ${
+                            benefit.type === "cash" ? "₱" : benefit.unit || ""
+                          }`
                         : ""}
                     </Text>
 
@@ -153,16 +152,18 @@ export default function BenefitAttendance() {
                         ? `₱${Number(totalBudget).toLocaleString()}`
                         : `${totalBudget} ${benefit.unit || ""}`}
                     </Text>
+
                     {/* Amount per Member */}
                     {benefit.type === "cash" ? (
                       <Text style={styles.subtitle}>
-                        <Ionicons name="cash" size={14} color="#2563eb" /> Amount per Member: ₱
-                        {Number(perUnit).toLocaleString()}
+                        <Ionicons name="cash" size={14} color="#2563eb" /> Amount
+                        per Member: ₱{Number(perUnit).toLocaleString()}
                       </Text>
                     ) : (
                       <Text style={styles.subtitle}>
-                        <Ionicons name="cube" size={14} color="#2563eb" /> Pack per Member :{" "}
-                        {Number(perUnit).toLocaleString()} {benefit.unit || ""}
+                        <Ionicons name="cube" size={14} color="#2563eb" /> Pack per
+                        Member : {Number(perUnit).toLocaleString()}{" "}
+                        {benefit.unit || ""}
                       </Text>
                     )}
 
@@ -174,19 +175,15 @@ export default function BenefitAttendance() {
                     </Text>
 
                     <Text style={styles.subtitle}>
-                      <Ionicons name="people" size={14} color="#2563eb" /> Target Members:{" "}
-                      {benefit.locked_member_count || 0}
+                      <Ionicons name="people" size={14} color="#2563eb" /> Target
+                      Members: {benefit.locked_member_count || 0}
                     </Text>
 
                     {/* Claimed Members */}
                     <Text style={styles.subtitle}>
-                      <Ionicons name="checkmark-done" size={14} color="#2563eb" /> Claimed Members:{" "}
-                      {claimedMembers}
+                      <Ionicons name="checkmark-done" size={14} color="#2563eb" />{" "}
+                      Claimed Members: {claimedMembers}
                     </Text>
-
-
-
-
                   </View>
                 </View>
               </View>
@@ -198,13 +195,11 @@ export default function BenefitAttendance() {
                 style={[
                   styles.scanButton,
                   (!isPermissionGranted || effectiveClaimed >= lockedCount) &&
-                  styles.disabled,
+                    styles.disabled,
                 ]}
                 disabled={!isPermissionGranted || effectiveClaimed >= lockedCount}
                 onPress={() =>
-                  router.push(
-                    `/staff/scanner/BenefitScanner?benefitId=${benefitId}`
-                  )
+                  router.push("BenefitScanner", { benefitId }) // ✅ react-navigation push
                 }
               >
                 <Ionicons
@@ -217,13 +212,13 @@ export default function BenefitAttendance() {
                   {effectiveClaimed >= lockedCount
                     ? "All Members Claimed"
                     : isPermissionGranted
-                      ? "Scan QR Code"
-                      : "Grant Camera Permission"}
+                    ? "Scan QR Code"
+                    : "Grant Camera Permission"}
                 </Text>
               </Pressable>
             </View>
 
-            {/* Sort Options (Buttons) */}
+            {/* Sort Options */}
             <View style={styles.sortRow}>
               <Text style={styles.sortLabel}>Sort By:</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -259,24 +254,24 @@ export default function BenefitAttendance() {
         }
         renderItem={({ item }) => {
           const fullName = item.user?.member_profile
-            ? `${item.user.member_profile.first_name || ""} ${item.user.member_profile.middle_name || ""
+            ? `${item.user.member_profile.first_name || ""} ${
+                item.user.member_profile.middle_name || ""
               } ${item.user.member_profile.last_name || ""}`.trim()
             : item.user?.name || "—";
 
           const scannedBy = item.scanned_by?.staff_profile
-            ? `${item.scanned_by.staff_profile.first_name || ""} ${item.scanned_by.staff_profile.middle_name || ""
+            ? `${item.scanned_by.staff_profile.first_name || ""} ${
+                item.scanned_by.staff_profile.middle_name || ""
               } ${item.scanned_by.staff_profile.last_name || ""}`.trim()
             : item.scanned_by?.name || "—";
 
           return (
             <View style={styles.listItem}>
               <Text style={styles.name}>{fullName}</Text>
-
               <Text style={styles.details}>
                 <Ionicons name="location" size={14} color="#6b7280" /> Barangay:{" "}
                 {item.user?.member_profile?.barangay || "—"}
               </Text>
-
               <Text style={styles.details}>
                 <MaterialCommunityIcons
                   name="clock-outline"
@@ -286,16 +281,15 @@ export default function BenefitAttendance() {
                 Claimed:{" "}
                 {item.claimed_at
                   ? new Date(item.claimed_at).toLocaleString([], {
-                    year: "numeric",
-                    month: "short",
-                    day: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    hour12: true,
-                  })
+                      year: "numeric",
+                      month: "short",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      hour12: true,
+                    })
                   : "—"}
               </Text>
-
               <Text style={styles.details}>
                 <Ionicons name="person" size={14} color="#6b7280" /> Scanned By:{" "}
                 {scannedBy}
