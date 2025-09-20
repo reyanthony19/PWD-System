@@ -3,7 +3,7 @@ import { View, StyleSheet, FlatList, ActivityIndicator } from "react-native";
 import { Text, Card, Avatar } from "react-native-paper";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native"; 
+import { useNavigation } from "@react-navigation/native";
 import api from "@/services/api";
 
 export default function Events() {
@@ -19,6 +19,7 @@ export default function Events() {
     if (fetchedRef.current) return;
     fetchedRef.current = true;
 
+    // Function to fetch events
     const fetchEvents = async () => {
       try {
         const token = await AsyncStorage.getItem("token");
@@ -48,7 +49,17 @@ export default function Events() {
       }
     };
 
+    // Initial fetch
     fetchEvents();
+
+    // Set up an interval to refresh events every 10 seconds (or 20 seconds)
+    const intervalId = setInterval(() => {
+      fetchEvents();
+    }, 10000); // 10000ms = 10 seconds (use 20000 for 20 seconds)
+
+    // Clear the interval on component unmount
+    return () => clearInterval(intervalId);
+
   }, [navigation]);
 
   if (loading) {

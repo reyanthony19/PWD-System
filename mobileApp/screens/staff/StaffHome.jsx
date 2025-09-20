@@ -2,16 +2,15 @@ import React, { useEffect, useState, useRef } from "react";
 import { View, Text, StyleSheet, ActivityIndicator, FlatList, Alert, Dimensions } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import api from "@/services/api"; // Ensure the correct API service is imported
-import { BarChart } from "react-native-chart-kit"; // Importing BarChart for chart rendering
 
 export default function StaffHome({ navigation }) {
   const [user, setUser] = useState({});
   const [members, setMembers] = useState([]);
   const [events, setEvents] = useState([]); // Store events here
+  const [pastEvents, setPastEvents] = useState([]); // Store past events here
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [monthlyMemberCount, setMonthlyMemberCount] = useState([]);
-
+  
   const fetchedRef = useRef(false);
 
   useEffect(() => {
@@ -20,12 +19,12 @@ export default function StaffHome({ navigation }) {
 
     loadUser();
     fetchMembersData();
-    fetchUpcomingEvents();
+    fetchEvents();
 
     // Set up an interval to fetch data every 10 seconds (or change to 5 for 5 seconds)
     const intervalId = setInterval(() => {
       fetchMembersData();
-      fetchUpcomingEvents();
+      fetchEvents();
     }, 10000); // 10000ms = 10 seconds
 
     // Clear the interval when the component is unmounted
@@ -58,15 +57,15 @@ export default function StaffHome({ navigation }) {
       const token = await AsyncStorage.getItem("token");
       if (!token) return;
 
-      // Fetch all members data
+      // Fetch all users data
       const usersRes = await api.get("/users", {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      setMembers(usersRes.data); // Store the fetched members
+      // Filter members with status "approved" and role "member"
+      const approvedMembers = usersRes.data.filter(user => user.status === "approved" && user.role === "member");
 
-      // Process the data to count members by month
-      processMemberData(usersRes.data);
+      setMembers(approvedMembers); // Store the filtered members
     } catch (err) {
       Alert.alert("Error", "Failed to load members data");
       setError("Failed to load data.");
@@ -75,7 +74,7 @@ export default function StaffHome({ navigation }) {
     }
   };
 
-  const fetchUpcomingEvents = async () => {
+  const fetchEvents = async () => {
     try {
       const token = await AsyncStorage.getItem("token");
       if (!token) return;
@@ -84,8 +83,6 @@ export default function StaffHome({ navigation }) {
       const eventsRes = await api.get("/events", {
         headers: { Authorization: `Bearer ${token}` },
       });
-
-      console.log("Events Response:", eventsRes.data); // Add a log to inspect the response
 
       // Check if events are returned in the correct structure
       const eventsData = Array.isArray(eventsRes.data.data) ? eventsRes.data.data : [];
@@ -111,55 +108,15 @@ export default function StaffHome({ navigation }) {
       // Filter events to show only upcoming events
       const currentDate = new Date();
       const upcomingEvents = updatedEvents.filter((event) => new Date(event.event_date) > currentDate);
+      const pastEvents = updatedEvents.filter((event) => new Date(event.event_date) <= currentDate);
 
       setEvents(upcomingEvents);
+      setPastEvents(pastEvents);
     } catch (err) {
       console.error("Error fetching events:", err);
       Alert.alert("Error", "Failed to load events");
     }
   };
-
-  const processMemberData = (membersData) => {
-    // List of month names
-    const monthNames = [
-      "January", "February", "March", "April", "May", "June",
-      "July", "August", "September", "October", "November", "December"
-    ];
-
-    // Create a map to store member count by month (Month name format)
-    const memberCounts = {};
-
-    membersData.forEach((member) => {
-      const registrationDate = new Date(member.created_at);
-      const monthName = monthNames[registrationDate.getMonth()]; // Get the month name
-
-      if (!memberCounts[monthName]) {
-        memberCounts[monthName] = 0;
-      }
-      memberCounts[monthName]++;
-    });
-
-    // Convert the map to an array of objects for the chart
-    const memberCountsArray = Object.keys(memberCounts).map((key) => ({
-      month: key,
-      count: memberCounts[key],
-    }));
-
-    // Set the monthly member counts state
-    setMonthlyMemberCount(memberCountsArray);
-  };
-
-  // Chart Data Preparation
-  const chartData = monthlyMemberCount.length
-    ? {
-        labels: monthlyMemberCount.map((item) => item.month), // X-axis: month names (January, February, etc.)
-        datasets: [
-          {
-            data: monthlyMemberCount.map((item) => item.count), // Y-axis: member count for that month
-          },
-        ],
-      }
-    : null;
 
   if (loading) {
     return (
@@ -193,32 +150,6 @@ export default function StaffHome({ navigation }) {
         </View>
       </View>
 
-      {/* Bar Chart for Monthly Member Count */}
-      <View style={styles.chartContainer}>
-        <Text style={styles.chartTitle}>Monthly Member Registrations</Text>
-        {monthlyMemberCount.length ? (
-          <BarChart
-            data={chartData}
-            width={Dimensions.get("window").width - 32} // Adjust width for responsiveness
-            height={220}
-            yAxisLabel="" // Removed the Y-axis label
-            chartConfig={{
-              backgroundColor: "#fff",
-              backgroundGradientFrom: "#f7f7f7",
-              backgroundGradientTo: "#f7f7f7",
-              decimalPlaces: 0,
-              color: (opacity = 1) => `rgba(38, 194, 129, ${opacity})`,
-              labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-              style: { borderRadius: 16 },
-            }}
-          />
-        ) : (
-          <Text style={{ textAlign: "center", color: "#999" }}>
-            No data available for monthly member registrations.
-          </Text>
-        )}
-      </View>
-
       {/* Upcoming Events Section */}
       <Text style={styles.sectionTitle}>Upcoming Events</Text>
       {events.length > 0 ? (
@@ -236,6 +167,26 @@ export default function StaffHome({ navigation }) {
       ) : (
         <Text style={{ textAlign: "center", color: "#999", marginTop: 20 }}>
           No upcoming events.
+        </Text>
+      )}
+
+      {/* Past Events Section */}
+      <Text style={styles.sectionTitle}>Past Events</Text>
+      {pastEvents.length > 0 ? (
+        <FlatList
+          data={pastEvents}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={({ item }) => (
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>{item.title}</Text>
+              <Text style={styles.cardSubtitle}>{new Date(item.event_date).toLocaleDateString()}</Text>
+              <Text style={styles.cardSubtitle}>Hosted by: {item.username}</Text>
+            </View>
+          )}
+        />
+      ) : (
+        <Text style={{ textAlign: "center", color: "#999", marginTop: 20 }}>
+          No past events.
         </Text>
       )}
     </View>
@@ -262,8 +213,6 @@ const styles = StyleSheet.create({
   },
   cardNumber: { fontSize: 22, fontWeight: "bold", color: "#333" },
   cardLabel: { fontSize: 14, color: "#555" },
-  chartContainer: { marginTop: 20 },
-  chartTitle: { fontSize: 18, fontWeight: "bold", marginBottom: 10 },
   sectionTitle: { fontSize: 18, fontWeight: "bold", marginBottom: 10 },
   cardTitle: { fontSize: 18, fontWeight: "bold", color: "#111827" },
   cardSubtitle: { fontSize: 14, color: "#6b7280", marginTop: 4 },

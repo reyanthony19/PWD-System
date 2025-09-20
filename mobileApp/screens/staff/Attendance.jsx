@@ -12,7 +12,6 @@ import { useCameraPermissions } from "expo-camera";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import api from "@/services/api";
 
-
 export default function Attendance() {
   const navigation = useNavigation();
   const route = useRoute();
@@ -20,8 +19,11 @@ export default function Attendance() {
 
   const [permission, requestPermission] = useCameraPermissions();
   const [event, setEvent] = useState(null);
-  const [attendances, setAttendances] = useState([]);
+  const [attendances, setAttendances] = useState([]); // Store attendances here
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [monthlyMemberCount, setMonthlyMemberCount] = useState([]);
+  const [canScan, setCanScan] = useState(true); // Flag to control scan button
 
   const isPermissionGranted = Boolean(permission?.granted);
 
@@ -36,6 +38,9 @@ export default function Attendance() {
         const attRes = await api.get(`/events/${eventId}/attendances`);
         const data = attRes.data.data || attRes.data;
         setAttendances(data);
+
+        // Check if the event date is valid for scanning
+        checkScanValidity(eventRes.data.event_date);
       } catch (err) {
         console.error("Fetch error:", err);
       } finally {
@@ -45,10 +50,28 @@ export default function Attendance() {
 
     if (eventId) {
       fetchData();
-      const interval = setInterval(fetchData, 5000); // auto-refresh
-      return () => clearInterval(interval);
     }
   }, [eventId]);
+
+  // Check if the event date is valid for scanning (within the day before or the event day)
+  const checkScanValidity = (eventDate) => {
+    const currentDate = new Date();
+    const eventDateObj = new Date(eventDate);
+
+    // Check if current date is within the day before and day of the event
+    const dayBeforeEvent = new Date(eventDateObj);
+    dayBeforeEvent.setDate(eventDateObj.getDate() - 1);
+
+    const dayAfterEvent = new Date(eventDateObj);
+    dayAfterEvent.setDate(eventDateObj.getDate() + 1);
+
+    // Enable scan if the current date is within the valid range
+    if (currentDate >= dayBeforeEvent && currentDate <= dayAfterEvent) {
+      setCanScan(true);
+    } else {
+      setCanScan(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -87,12 +110,13 @@ export default function Attendance() {
       {/* QR Scan Button */}
       <View style={{ marginVertical: 20 }}>
         <Pressable
-          style={[styles.scanButton, !isPermissionGranted && styles.disabled]}
+          style={[styles.scanButton, !isPermissionGranted && styles.disabled, !canScan && styles.disabled]}
           onPress={
             isPermissionGranted
               ? () => navigation.navigate("Scanner", { eventId }) // ✅ pass params
               : requestPermission
           }
+          disabled={!canScan} // Disable the button if the scan is not allowed
         >
           <Ionicons
             name="camera"

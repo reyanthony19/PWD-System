@@ -63,7 +63,7 @@ export default function App() {
   const StaffFlow = () => {
     return (
       <Tab.Navigator
-        initialRouteName="StaffHome"
+        initialRouteName="Home"
         screenOptions={({ route }) => ({
           tabBarIcon: ({ focused, color, size }) => {
             let iconName;
@@ -84,7 +84,7 @@ export default function App() {
           tabBarInactiveTintColor: 'gray',
         })}
       >
-        <Tab.Screen name="StaffHome" component={StaffHome} />
+        <Tab.Screen name="Home" component={StaffHome} />
         <Tab.Screen name="Events" component={Events} />
         <Tab.Screen name="Benefits" component={Benefits} />
         <Tab.Screen name="Profile" component={Profile} />
