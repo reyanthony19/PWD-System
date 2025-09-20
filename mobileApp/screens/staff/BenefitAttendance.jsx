@@ -9,15 +9,14 @@ import {
   ScrollView,
 } from "react-native";
 
-import { useRouter } from "@react-navigation/native"; // ✅ instead of expo-router
+import { useNavigation } from "@react-navigation/native"; 
 import { useCameraPermissions } from "expo-camera";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import api from "@/services/api";
 
-
 export default function BenefitAttendance({ route }) {
-  const { benefitId } = route.params; // ✅ react-navigation gives params like this
-  const router = useRouter();
+  const { benefitId } = route.params; // Get benefitId from the passed params
+  const navigation = useNavigation(); // Use useNavigation here
 
   const [permission, requestPermission] = useCameraPermissions();
   const [benefit, setBenefit] = useState(null);
@@ -199,7 +198,7 @@ export default function BenefitAttendance({ route }) {
                 ]}
                 disabled={!isPermissionGranted || effectiveClaimed >= lockedCount}
                 onPress={() =>
-                  router.push("BenefitScanner", { benefitId }) // ✅ react-navigation push
+                  navigation.navigate("BenefitScanner", { benefitId }) // Use navigation.navigate here
                 }
               >
                 <Ionicons

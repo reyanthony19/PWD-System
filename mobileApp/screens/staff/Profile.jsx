@@ -52,19 +52,25 @@ export default function Profile() {
     fetchUser();
   }, []);
 
-  const handleLogout = async () => {
-    try {
-      await AsyncStorage.clear(); // wipe session
-      delete api.defaults.headers.common["Authorization"];
-      navigation.reset({
-        index: 0,
-        routes: [{ name: "Login" }], // ✅ go back to Login screen
-      });
-    } catch (error) {
-      console.error("Logout error:", error);
-      Alert.alert("Error", "Failed to logout. Please try again.");
-    }
-  };
+ const handleLogout = async () => {
+  try {
+    // Clear AsyncStorage to remove the user session
+    await AsyncStorage.clear();
+
+    // Clear the Authorization header from the API defaults
+    delete api.defaults.headers.common["Authorization"];
+
+    // Trigger a reload by replacing the current navigation stack
+    navigation.replace('Login'); // This will take the user to the Login screen
+
+    // Optionally, show a confirmation alert (can be skipped for smoother UX)
+    Alert.alert("Success", "You have been logged out successfully.");
+  } catch (error) {
+    console.error("Logout error:", error);
+    Alert.alert("Error", "Failed to logout. Please try again.");
+  }
+};
+
 
   if (loading) {
     return (

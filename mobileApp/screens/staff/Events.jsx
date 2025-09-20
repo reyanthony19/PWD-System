@@ -3,9 +3,11 @@ import { View, StyleSheet, FlatList, ActivityIndicator } from "react-native";
 import { Text, Card, Avatar } from "react-native-paper";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useNavigation } from "@react-navigation/native"; 
 import api from "@/services/api";
+
 export default function Events() {
-  const router = useRouter();
+  const navigation = useNavigation(); // Use useNavigation here
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -23,7 +25,7 @@ export default function Events() {
 
         if (!token) {
           setLoading(false);
-          router.replace("/login");
+          navigation.replace("Login"); // Navigate to login if token is not found
           return;
         }
 
@@ -37,9 +39,7 @@ export default function Events() {
 
         if (err.response?.status === 401) {
           await AsyncStorage.removeItem("token");
-          if (router.pathname !== "/login") {
-            router.replace("/login");
-          }
+          navigation.replace("Login"); // Navigate to login if session is expired
         } else {
           setError("Failed to load events.");
         }
@@ -49,7 +49,7 @@ export default function Events() {
     };
 
     fetchEvents();
-  }, [router]);
+  }, [navigation]);
 
   if (loading) {
     return (
@@ -74,10 +74,7 @@ export default function Events() {
     <Card
       style={styles.card}
       onPress={() =>
-        router.push({
-          pathname: "/staff/Attendance", // ✅ absolute path
-          params: { eventId: item.id, eventTitle: item.title },
-        })
+        navigation.navigate("Attendance", { eventId: item.id, eventTitle: item.title }) // Navigate to event details using navigate()
       }
     >
       <Card.Title

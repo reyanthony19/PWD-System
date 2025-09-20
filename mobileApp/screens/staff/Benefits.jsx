@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { View, StyleSheet, FlatList, ActivityIndicator } from "react-native";
-import { Text, Card, Avatar } from "react-native-paper";
+import { View, StyleSheet, FlatList, ActivityIndicator, Text } from "react-native";
+import { Card, Avatar } from "react-native-paper";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import api from "@/services/api";
-
+import { useNavigation } from "@react-navigation/native"; // Use useNavigation here
+import api from "@/services/api"; // Make sure the API service is imported correctly
 
 export default function Benefits() {
-  const router = useRouter();
+  const navigation = useNavigation(); // Use the navigation hook from React Navigation
   const [benefits, setBenefits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -77,10 +77,7 @@ export default function Benefits() {
       <Card
         style={styles.card}
         onPress={() =>
-          router.push({
-            pathname: "/staff/BenefitAttendance", // ✅ route stays the same
-            params: { benefitId: item.id, title: item.name },
-          })
+          navigation.navigate("BenefitAttendance", { benefitId: item.id, title: item.name }) // Use navigation.navigate for React Navigation
         }
       >
         <Card.Title

@@ -1,4 +1,3 @@
-// screens/member/MemberProfile.jsx
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -7,6 +6,7 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Dimensions,
 } from "react-native";
 import { Button, Avatar, Card } from "react-native-paper";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -14,12 +14,13 @@ import { useNavigation } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import api from "@/services/api";
 
+const { width } = Dimensions.get("window");
+
 export default function MemberProfile() {
   const navigation = useNavigation();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Fetch member profile using token
   useEffect(() => {
     const fetchUser = async () => {
       try {
@@ -72,11 +73,7 @@ export default function MemberProfile() {
     { label: "Username", value: user?.username, icon: "account" },
     { label: "Email", value: user?.email, icon: "email" },
     { label: "Contact Number", value: profile.contact_number, icon: "phone" },
-    {
-      label: "Birthdate",
-      value: profile.birthdate ? profile.birthdate.split("T")[0] : null,
-      icon: "calendar",
-    },
+    { label: "Birthdate", value: profile.birthdate ? profile.birthdate.split("T")[0] : null, icon: "calendar" },
     { label: "Address", value: profile.address, icon: "home-map-marker" },
     { label: "Barangay", value: profile.barangay, icon: "map-marker" },
     { label: "Blood Type", value: profile.blood_type, icon: "blood-bag" },
@@ -87,7 +84,7 @@ export default function MemberProfile() {
   ];
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ padding: 20, alignItems: "center" }}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
       <Card style={styles.profileCard}>
         <Card.Content style={{ alignItems: "center" }}>
           <Avatar.Icon size={90} icon="account" style={styles.avatar} />
@@ -111,18 +108,17 @@ export default function MemberProfile() {
       <Button
         mode="contained"
         onPress={() => navigation.navigate("MemberEditProfile")}
-        style={styles.editButton}
+        style={styles.button}
         buttonColor="#2563eb"
         icon="account-edit"
       >
-        Edit Profile
+        Update Profile
       </Button>
 
       <Button
         mode="contained"
         onPress={handleLogout}
-        style={styles.logoutButton}
-        buttonColor="#dc2626"
+        style={[styles.button, { backgroundColor: "#dc2626" }]}
         icon="logout"
       >
         Logout
@@ -133,9 +129,17 @@ export default function MemberProfile() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#f3f4f6" },
+  scrollContent: { paddingVertical: 24, alignItems: "center" },
   loader: { flex: 1, justifyContent: "center", alignItems: "center" },
 
-  profileCard: { width: "100%", borderRadius: 16, backgroundColor: "#fff", elevation: 4, paddingVertical: 20, marginBottom: 20 },
+  profileCard: {
+    width: width * 0.9, // 90% of screen width
+    borderRadius: 16,
+    backgroundColor: "#fff",
+    elevation: 4,
+    paddingVertical: 20,
+    marginBottom: 20,
+  },
   avatar: { backgroundColor: "#2563eb", marginBottom: 10 },
   fullName: { fontSize: 22, fontWeight: "bold", color: "#111827", marginBottom: 4 },
   email: { fontSize: 14, color: "#6b7280", marginBottom: 10 },
@@ -146,6 +150,9 @@ const styles = StyleSheet.create({
   label: { fontSize: 12, color: "#6b7280" },
   value: { fontSize: 16, fontWeight: "600", color: "#111827" },
 
-  editButton: { borderRadius: 10, marginTop: 10, width: "100%" },
-  logoutButton: { borderRadius: 10, marginTop: 10, width: "100%" },
+  button: {
+    borderRadius: 10,
+    marginTop: 10,
+    width: width * 0.9, // same as card
+  },
 });

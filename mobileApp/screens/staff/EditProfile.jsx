@@ -10,10 +10,11 @@ import {
   Platform,
 } from "react-native";
 import { Button, Avatar, Card, TextInput } from "react-native-paper";
+import { useNavigation } from "@react-navigation/native"; 
 import api from "@/services/api";
 
 export default function EditProfile() {
-  const router = useRouter();
+  const navigation = useNavigation(); // Use useNavigation here
   const [user, setUser] = useState(null);
   const [formData, setFormData] = useState({
     username: "",
@@ -82,7 +83,7 @@ export default function EditProfile() {
     try {
       await api.put(`/user/${user?.id}`, payload);
       Alert.alert("Success", "Profile updated successfully!");
-      router.back(); // ✅ consistent navigation
+      navigation.goBack(); // ✅ Use navigation.goBack() instead of router.back()
     } catch (err) {
       console.error("Update error:", err);
       Alert.alert("Error", err.response?.data?.message || "Failed to update profile.");
@@ -124,7 +125,7 @@ export default function EditProfile() {
 
           {/* Form Fields inside Card */}
           <View style={styles.form}>
-            {[
+            {[ 
               ["Username", "username"],
               ["Email", "email"],
               ["First Name", "first_name"],
@@ -187,7 +188,7 @@ export default function EditProfile() {
 
         <Button
           mode="outlined"
-          onPress={() => router.back()}
+          onPress={() => navigation.goBack()} // Use navigation.goBack() here
           style={styles.cancelButton}
           textColor="#374151"
           icon="close-circle"
