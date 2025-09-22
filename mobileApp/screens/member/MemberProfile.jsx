@@ -1,3 +1,4 @@
+// (unchanged imports)
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -16,10 +17,30 @@ import api from "@/services/api";
 
 const { width } = Dimensions.get("window");
 
+const defaultValues = {
+  contact_number: "No contact yet",
+  address: "Address not provided",
+  barangay: "Barangay not provided",
+  blood_type: "Unknown",
+  sss_number: "N/A",
+  philhealth_number: "N/A",
+  disability_type: "Not declared",
+  guardian_full_name: "Guardian name missing",
+  guardian_relationship: "Relationship not specified",
+  guardian_contact_number: "No contact yet",
+  guardian_address: "Guardian address missing",
+  sex: "unspecified",
+  first_name: "First name not set",
+  middle_name: "Middle name not set",
+  last_name: "Last name not set",
+  birthdate: new Date().toISOString().split("T")[0], // today
+};
+
 export default function MemberProfile() {
   const navigation = useNavigation();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [incompleteFields, setIncompleteFields] = useState([]);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -34,6 +55,21 @@ export default function MemberProfile() {
         api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
         const res = await api.get("/user");
         setUser(res.data);
+
+        const profile = res.data?.member_profile || {};
+        const missing = [];
+
+        Object.entries(defaultValues).forEach(([key, defValue]) => {
+          if (
+            profile[key] === defValue ||
+            profile[key]?.toString().trim() === "" ||
+            profile[key] == null
+          ) {
+            missing.push(key);
+          }
+        });
+
+        setIncompleteFields(missing);
       } catch (err) {
         console.error("Profile fetch error:", err.response?.data || err.message);
         Alert.alert("Error", "Failed to load profile. Please log in again.");
@@ -43,14 +79,24 @@ export default function MemberProfile() {
         setLoading(false);
       }
     };
-    fetchUser();
-  }, []);
 
+    fetchUser();
+    const intervalId = setInterval(fetchUser, 30000);
+    return () => clearInterval(intervalId);
+  }, []);
   const handleLogout = async () => {
     try {
-      await AsyncStorage.clear();
-      delete api.defaults.headers.common["Authorization"];
-      navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+      // Remove only the sensitive session data (token, user)
+      await AsyncStorage.removeItem("token");
+      await AsyncStorage.removeItem("user");
+
+      // Optionally, remove other session-related data, but retain the 'remember me' values
+      // await AsyncStorage.removeItem("email");
+      // await AsyncStorage.removeItem("password");
+      // await AsyncStorage.removeItem("rememberMe");
+
+      delete api.defaults.headers.common["Authorization"]; // Remove authorization header
+      navigation.reset({ index: 0, routes: [{ name: "Login" }] }); // Reset navigation to login
     } catch (err) {
       console.error("Logout error:", err);
       Alert.alert("Error", "Failed to logout. Please try again.");
@@ -70,21 +116,35 @@ export default function MemberProfile() {
   const fullName = `${profile.first_name || ""} ${profile.middle_name || ""} ${profile.last_name || ""}`.trim();
 
   const fields = [
-    { label: "Username", value: user?.username, icon: "account" },
-    { label: "Email", value: user?.email, icon: "email" },
-    { label: "Contact Number", value: profile.contact_number, icon: "phone" },
-    { label: "Birthdate", value: profile.birthdate ? profile.birthdate.split("T")[0] : null, icon: "calendar" },
-    { label: "Address", value: profile.address, icon: "home-map-marker" },
-    { label: "Barangay", value: profile.barangay, icon: "map-marker" },
-    { label: "Blood Type", value: profile.blood_type, icon: "blood-bag" },
-    { label: "SSS Number", value: profile.sss_number, icon: "card-account-details" },
-    { label: "PhilHealth Number", value: profile.philhealth_number, icon: "hospital-box" },
-    { label: "Disability Type", value: profile.disability_type, icon: "wheelchair-accessibility" },
-    { label: "Guardian", value: profile.guardian_full_name, icon: "account-group" },
+    { label: "Username", value: user?.username, icon: "account", key: "username" },
+    { label: "Email", value: user?.email, icon: "email", key: "email" },
+    { label: "Contact Number", value: profile.contact_number, icon: "phone", key: "contact_number" },
+    {
+      label: "Birthdate",
+      value: profile.birthdate ? profile.birthdate.split("T")[0] : null,
+      icon: "calendar",
+      key: "birthdate",
+    },
+    { label: "Address", value: profile.address, icon: "home-map-marker", key: "address" },
+    { label: "Barangay", value: profile.barangay, icon: "map-marker", key: "barangay" },
+    { label: "Blood Type", value: profile.blood_type, icon: "blood-bag", key: "blood_type" },
+    { label: "SSS Number", value: profile.sss_number, icon: "card-account-details", key: "sss_number" },
+    { label: "PhilHealth Number", value: profile.philhealth_number, icon: "hospital-box", key: "philhealth_number" },
+    { label: "Disability Type", value: profile.disability_type, icon: "wheelchair-accessibility", key: "disability_type" },
+    { label: "Guardian", value: profile.guardian_full_name, icon: "account-group", key: "guardian_full_name" },
   ];
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+      {incompleteFields.length > 0 && (
+        <View style={styles.warningBox}>
+          <Icon name="alert-circle" size={20} color="#b45309" style={{ marginRight: 6 }} />
+          <Text style={styles.warningText}>
+            Some profile information is incomplete. Please review and update.
+          </Text>
+        </View>
+      )}
+
       <Card style={styles.profileCard}>
         <Card.Content style={{ alignItems: "center" }}>
           <Avatar.Icon size={90} icon="account" style={styles.avatar} />
@@ -100,6 +160,9 @@ export default function MemberProfile() {
             <View style={{ flex: 1 }}>
               <Text style={styles.label}>{f.label}</Text>
               <Text style={styles.value}>{f.value || "—"}</Text>
+              {incompleteFields.includes(f.key) && (
+                <Text style={styles.fieldWarning}>⚠️ Incomplete – needs update</Text>
+              )}
             </View>
           </View>
         ))}
@@ -133,7 +196,7 @@ const styles = StyleSheet.create({
   loader: { flex: 1, justifyContent: "center", alignItems: "center" },
 
   profileCard: {
-    width: width * 0.9, // 90% of screen width
+    width: width * 0.9,
     borderRadius: 16,
     backgroundColor: "#fff",
     elevation: 4,
@@ -149,10 +212,30 @@ const styles = StyleSheet.create({
   icon: { marginRight: 12 },
   label: { fontSize: 12, color: "#6b7280" },
   value: { fontSize: 16, fontWeight: "600", color: "#111827" },
+  fieldWarning: { fontSize: 12, color: "#b91c1c", marginTop: 2, fontStyle: "italic" },
 
   button: {
     borderRadius: 10,
     marginTop: 10,
-    width: width * 0.9, // same as card
+    width: width * 0.9,
+  },
+
+  warningBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fef3c7",
+    borderColor: "#fcd34d",
+    borderWidth: 1,
+    padding: 12,
+    borderRadius: 8,
+    width: width * 0.9,
+    marginBottom: 12,
+  },
+  warningText: {
+    color: "#92400e",
+    fontSize: 14,
+    fontWeight: "500",
+    flex: 1,
+    flexWrap: "wrap",
   },
 });

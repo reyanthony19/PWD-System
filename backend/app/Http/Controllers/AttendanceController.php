@@ -86,4 +86,22 @@ class AttendanceController extends Controller
             'message' => 'Attendance removed successfully.'
         ]);
     }
+
+    /**
+     * Check if a specific user has attended the event.
+     */
+    // In AttendanceController.php
+    public function checkUserAttendance($eventId, $userId)
+    {
+        // Query the attendance table to check if the user attended the event
+        $attendance = Attendance::where('event_id', $eventId)
+            ->where('user_id', $userId)
+            ->first();
+
+        if ($attendance) {
+            return response()->json(['attended' => true]);
+        }
+
+        return response()->json(['attended' => false]);
+    }
 }

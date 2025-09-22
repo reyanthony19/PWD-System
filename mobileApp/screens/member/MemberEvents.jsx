@@ -7,11 +7,13 @@ import { useNavigation } from "@react-navigation/native";
 import api from "@/services/api";
 import { LinearGradient } from "expo-linear-gradient"; // Import Expo's LinearGradient
 
-export default function Events() {
+export default function MemberEvents() {
   const navigation = useNavigation(); // Use useNavigation here
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [currentUserId, setCurrentUserId] = useState(null); // Store current user's ID
+  const [attendanceStatus, setAttendanceStatus] = useState({}); // Store attendance status for each event
 
   // ✅ ensures fetch runs only once
   const fetchedRef = useRef(false);
@@ -36,6 +38,21 @@ export default function Events() {
         });
 
         setEvents(res.data.data || res.data || []);
+
+        // Get the current user's ID
+        const userRes = await api.get("/user", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setCurrentUserId(userRes.data.id);
+
+        // Check attendance status for each event after getting the current user's ID
+        const attendanceStatuses = {};
+        for (const event of res.data.data) {
+          const attendanceRes = await api.get(`/events/${event.id}/${userRes.data.id}`);
+          attendanceStatuses[event.id] = attendanceRes.data.attended ? "Present" : "Absent";
+        }
+        setAttendanceStatus(attendanceStatuses);
+
       } catch (err) {
         console.error("Events fetch error:", err.response?.data || err.message);
 
@@ -80,32 +97,38 @@ export default function Events() {
     );
   }
 
-  const renderEvent = ({ item }) => (
-    <Card
-      style={styles.card}
-      onPress={() =>
-        navigation.navigate("Attendance", { eventId: item.id, eventTitle: item.title }) // Navigate to event details using navigate()
-      }
-    >
-      <Card.Title
-        title={item.title}
-        titleStyle={styles.cardTitle}
-        subtitle={`📍 ${item.location}`}
-        left={(props) => (
-          <Avatar.Icon
-            {...props}
-            icon="calendar"
-            style={{ backgroundColor: "#2563eb" }}
-          />
-        )}
-      />
-      <Card.Content>
-        <Text style={styles.detail}>
-          📅 {new Date(item.event_date).toLocaleDateString()}
-        </Text>
-      </Card.Content>
-    </Card>
-  );
+  const renderEvent = ({ item }) => {
+    const isPresent = attendanceStatus[item.id] === "Present";
+    return (
+      <Card
+        style={styles.card}
+        onPress={() =>
+          navigation.navigate("MemberAttendance", { eventId: item.id, eventTitle: item.title }) // Navigate to event details using navigate()
+        }
+      >
+        <Card.Title
+          title={item.title}
+          titleStyle={styles.cardTitle}
+          subtitle={`📍 ${item.location}`}
+          left={(props) => (
+            <Avatar.Icon
+              {...props}
+              icon="calendar"
+              style={{ backgroundColor: "#2563eb" }}
+            />
+          )}
+        />
+        <Card.Content>
+          <Text style={styles.detail}>
+            📅 {new Date(item.event_date).toLocaleDateString()}
+          </Text>
+          <Text style={styles.detail}>
+            {isPresent ? "✅ Present" : "❌ Absent"}
+          </Text>
+        </Card.Content>
+      </Card>
+    );
+  };
 
   return (
     <LinearGradient

@@ -21,11 +21,16 @@ import BenefitScanner from "./screens/staff/BenefitScanner";
 import Events from "./screens/staff/Events";
 import Scanner from "./screens/staff/Scanner";
 import MemberList from "./screens/staff/MemberList";
-
+import Terms from "./screens/member/Terms";
 // Member Screens
 import MemberHome from "./screens/member/MemberHome";
 import MemberProfile from "./screens/member/MemberProfile";
 import MemberEditProfile from "./screens/member/MemberEditProfile";
+import ContactUs from "./screens/member/ContactUs";
+import MemberAttendance from "./screens/member/MemberAttendance";
+import MemberEvents from "./screens/member/MemberEvents";
+import MemberBenefits from "./screens/member/MemberBenefits";
+import MemberBenefitRecord from "./screens/member/MemberBenefitsRecord";  
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -33,6 +38,7 @@ const Tab = createBottomTabNavigator();
 export default function App() {
   const [initialRoute, setInitialRoute] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [userRole, setUserRole] = useState(''); // Add state to store the user's role
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -42,6 +48,7 @@ export default function App() {
         const user = userStr ? JSON.parse(userStr) : null;
 
         if (token && user?.role) {
+          setUserRole(user.role); // Store the role
           setInitialRoute(user.role === "staff" ? "StaffFlow" : "MemberFlow");
         } else {
           setInitialRoute("Login");
@@ -67,16 +74,16 @@ export default function App() {
         screenOptions={({ route }) => ({
           tabBarIcon: ({ focused, color, size }) => {
             let iconName;
-            if (route.name === 'StaffHome') {
+            if (route.name === 'Home') {
               iconName = focused ? 'home' : 'home-outline';
             } else if (route.name === 'Profile') {
               iconName = focused ? 'person' : 'person-outline';
             } else if (route.name === 'Benefits') {
               iconName = focused ? 'folder' : 'folder-outline';
-            } else if (route.name === 'Reports') {
+            } else if (route.name === 'About') {
               iconName = focused ? 'document-text' : 'document-text-outline';
-            } else if (route.name === 'Events') {  
-              iconName = focused ? 'calendar' : 'calendar-outline';  
+            } else if (route.name === 'Events') {
+              iconName = focused ? 'calendar' : 'calendar-outline';
             }
             return <Ionicons name={iconName} size={size} color={color} />;
           },
@@ -88,7 +95,7 @@ export default function App() {
         <Tab.Screen name="Events" component={Events} />
         <Tab.Screen name="Benefits" component={Benefits} />
         <Tab.Screen name="Profile" component={Profile} />
-        <Tab.Screen name="Reports" component={About} />
+        <Tab.Screen name="About" component={About} />
       </Tab.Navigator>
     );
   };
@@ -97,14 +104,20 @@ export default function App() {
   const MemberFlow = () => {
     return (
       <Tab.Navigator
-        initialRouteName="MemberHome"
+        initialRouteName="Home"
         screenOptions={({ route }) => ({
           tabBarIcon: ({ focused, color, size }) => {
             let iconName;
-            if (route.name === 'MemberHome') {
+            if (route.name === 'Home') {
               iconName = focused ? 'home' : 'home-outline';
-            } else if (route.name === 'MemberProfile') {
+            } else if (route.name === 'Profile') {
               iconName = focused ? 'person' : 'person-outline';
+            } else if (route.name === 'Events') {
+              iconName = focused ? 'calendar' : 'calendar-outline';
+            } else if (route.name === 'About') {
+              iconName = focused ? 'document-text' : 'document-text-outline';
+            } else if (route.name === 'Benefits') {
+              iconName = focused ? 'folder' : 'folder-outline';
             }
             return <Ionicons name={iconName} size={size} color={color} />;
           },
@@ -112,8 +125,11 @@ export default function App() {
           tabBarInactiveTintColor: 'gray',
         })}
       >
-        <Tab.Screen name="MemberHome" component={MemberHome} />
-        <Tab.Screen name="MemberProfile" component={MemberProfile} />
+        <Tab.Screen name="Home" component={MemberHome} />
+        <Tab.Screen name="Events" component={MemberEvents} />
+        <Tab.Screen name="Benefits" component={MemberBenefits} />
+        <Tab.Screen name="Profile" component={MemberProfile} />
+        <Tab.Screen name="About" component={About} />
       </Tab.Navigator>
     );
   };
@@ -156,11 +172,14 @@ export default function App() {
         <Stack.Screen name="Attendance" component={Attendance} />
         <Stack.Screen name="BenefitScanner" component={BenefitScanner} />
         <Stack.Screen name="MemberList" component={MemberList} />
+        <Stack.Screen name="Register" component={Register} />
 
         {/* MEMBER SCREENS */}
-
         <Stack.Screen name="MemberEditProfile" component={MemberEditProfile} />
-
+        <Stack.Screen name="MemberAttendance" component={MemberAttendance} />
+        <Stack.Screen name="MemberBenefitRecord" component={MemberBenefitRecord} />
+        <Stack.Screen name="Terms & Conditions" component={Terms} />
+        <Stack.Screen name="Location" component={ContactUs} />
       </Stack.Navigator>
     </NavigationContainer>
   );

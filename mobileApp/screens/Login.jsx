@@ -1,5 +1,14 @@
 import React, { useState, useEffect } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View, TouchableOpacity, ActivityIndicator, Animated } from "react-native";
+import {
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  View,
+  TouchableOpacity,
+  ActivityIndicator,
+  Animated,
+} from "react-native";
 import { Text, TextInput } from "react-native-paper";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -25,18 +34,27 @@ export default function Login() {
   useEffect(() => {
     const init = async () => {
       try {
+        // Log the state of AsyncStorage values for debugging
         const storedRemember = await AsyncStorage.getItem("rememberMe");
+        const storedEmail = await AsyncStorage.getItem("email");
+        const storedPassword = await AsyncStorage.getItem("password");
+
+        console.log("Stored Remember:", storedRemember);
+        console.log("Stored Email:", storedEmail);
+        console.log("Stored Password:", storedPassword);
+
         if (storedRemember === "true") {
-          const storedEmail = await AsyncStorage.getItem("email");
-          const storedPassword = await AsyncStorage.getItem("password");
           setEmail(storedEmail || "");
           setPassword(storedPassword || "");
           setRememberMe(true);
+        } else {
+          setRememberMe(false);
         }
       } catch (e) {
-        console.log("Login init failed:", e);
+        console.log("Error reading AsyncStorage:", e);
       }
     };
+
     init();
   }, []);
 
@@ -66,15 +84,17 @@ export default function Login() {
       await AsyncStorage.setItem("user", JSON.stringify(user));
 
       if (rememberMe) {
+        console.log("Saving credentials to AsyncStorage...");
         await AsyncStorage.setItem("email", email);
         await AsyncStorage.setItem("password", password);
         await AsyncStorage.setItem("rememberMe", "true");
       } else {
+        console.log("Removing credentials from AsyncStorage...");
         await AsyncStorage.multiRemove(["email", "password", "rememberMe"]);
       }
 
       if (user.role === "staff") {
-        navigation.replace("StaffFlow"); // Fixed to navigate to the correct flow
+        navigation.replace("StaffFlow");
       } else if (user.role === "member") {
         navigation.replace("MemberFlow");
       } else {
@@ -90,7 +110,6 @@ export default function Login() {
     }
   };
 
-  // Animation for inputs on focus
   const handleFocus = (fieldAnim) => {
     Animated.timing(fieldAnim, {
       toValue: 1.1,
@@ -107,7 +126,6 @@ export default function Login() {
     }).start();
   };
 
-  // Animated scale for the button when pressed
   const handleButtonPressIn = () => {
     Animated.spring(buttonAnim, {
       toValue: 0.95,
@@ -128,7 +146,7 @@ export default function Login() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-      <LinearGradient colors={["#ff512f", "#dd2476"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.bg}>
+      <LinearGradient colors={["#6ee7b7", "#2563eb"]} style={styles.bg}>
         <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
           <View style={styles.card}>
             <Text style={styles.title}>Welcome Back 👋</Text>
@@ -136,7 +154,6 @@ export default function Login() {
 
             {loginError ? <Text style={styles.errorText}>{loginError}</Text> : null}
 
-            {/* Animated Email */}
             <Animated.View style={{ transform: [{ scale: emailAnim }] }}>
               <TextInput
                 label="Email"
@@ -153,13 +170,12 @@ export default function Login() {
                 autoCapitalize="none"
                 style={styles.input}
                 outlineColor={emailError ? "red" : "#aaa"}
-                activeOutlineColor={emailError ? "red" : "#dd2476"}
+                activeOutlineColor={emailError ? "red" : "#2563eb"}
                 error={emailError}
                 left={<TextInput.Icon icon={() => <Ionicons name="mail" size={22} color="#666" />} />}
               />
             </Animated.View>
 
-            {/* Animated Password */}
             <Animated.View style={{ transform: [{ scale: passwordAnim }] }}>
               <TextInput
                 label="Password"
@@ -175,24 +191,22 @@ export default function Login() {
                 onBlur={() => handleBlur(passwordAnim)}
                 style={styles.input}
                 outlineColor={passwordError ? "red" : "#aaa"}
-                activeOutlineColor={passwordError ? "red" : "#dd2476"}
+                activeOutlineColor={passwordError ? "red" : "#2563eb"}
                 error={passwordError}
                 left={<TextInput.Icon icon={() => <Ionicons name="lock-closed" size={22} color="#666" />} />}
               />
             </Animated.View>
 
-            {/* Remember Me */}
             <TouchableOpacity
               style={styles.rememberRow}
               onPress={() => setRememberMe(!rememberMe)}
               accessibilityRole="checkbox"
               accessibilityState={{ checked: rememberMe }}
             >
-              <View style={[styles.checkbox, rememberMe && { backgroundColor: "#dd2476" }]} />
+              <View style={[styles.checkbox, rememberMe && { backgroundColor: "#2563eb" }]} />
               <Text style={styles.rememberText}>Remember Me</Text>
             </TouchableOpacity>
 
-            {/* Sign In Button with Animation */}
             <TouchableOpacity
               style={{ marginTop: 10 }}
               onPress={handleLogin}
@@ -201,16 +215,15 @@ export default function Login() {
               disabled={loading}
             >
               <Animated.View style={{ transform: [{ scale: buttonAnim }] }}>
-                <LinearGradient colors={["#ff512f", "#dd2476"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.gradientButton}>
+                <LinearGradient colors={["#6ee7b7", "#2563eb"]} style={styles.gradientButton}>
                   {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>SIGN IN</Text>}
                 </LinearGradient>
               </Animated.View>
             </TouchableOpacity>
 
-            {/* Signup Link */}
             <TouchableOpacity style={{ marginTop: 18 }} onPress={() => navigation.navigate("Register")}>
               <Text style={styles.signupText}>
-                Don’t have an account? <Text style={{ color: "#dd2476", fontWeight: "bold" }}>Sign Up</Text>
+                Don’t have an account? <Text style={{ color: "#2563eb", fontWeight: "bold" }}>Sign Up</Text>
               </Text>
             </TouchableOpacity>
           </View>

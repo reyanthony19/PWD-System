@@ -15,7 +15,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import api from "@/services/api";
 import { LinearGradient } from "expo-linear-gradient"; // Import Expo's LinearGradient
 
-export default function BenefitAttendance({ route }) {
+export default function MemberBenefitRecord({ route }) {
   const { benefitId } = route.params; // Get benefitId from the passed params
   const navigation = useNavigation(); // Use useNavigation here
 

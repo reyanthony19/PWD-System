@@ -1,4 +1,3 @@
-// screens/staff/Profile.jsx
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -13,6 +12,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import api from "@/services/api";
+import { LinearGradient } from "expo-linear-gradient"; // Import Expo's LinearGradient
 
 export default function Profile() {
   const navigation = useNavigation();
@@ -52,24 +52,24 @@ export default function Profile() {
     fetchUser();
   }, []);
 
- const handleLogout = async () => {
-  try {
-    // Clear AsyncStorage to remove the user session
-    await AsyncStorage.clear();
+  const handleLogout = async () => {
+    try {
+      // Remove only the sensitive session data (token, user)
+      await AsyncStorage.removeItem("token");
+      await AsyncStorage.removeItem("user");
 
-    // Clear the Authorization header from the API defaults
-    delete api.defaults.headers.common["Authorization"];
+      // Optionally, remove other session-related data, but retain the 'remember me' values
+      // await AsyncStorage.removeItem("email");
+      // await AsyncStorage.removeItem("password");
+      // await AsyncStorage.removeItem("rememberMe");
 
-    // Trigger a reload by replacing the current navigation stack
-    navigation.replace('Login'); // This will take the user to the Login screen
-
-    // Optionally, show a confirmation alert (can be skipped for smoother UX)
-    Alert.alert("Success", "You have been logged out successfully.");
-  } catch (error) {
-    console.error("Logout error:", error);
-    Alert.alert("Error", "Failed to logout. Please try again.");
-  }
-};
+      delete api.defaults.headers.common["Authorization"]; // Remove authorization header
+      navigation.reset({ index: 0, routes: [{ name: "Login" }] }); // Reset navigation to login
+    } catch (err) {
+      console.error("Logout error:", err);
+      Alert.alert("Error", "Failed to logout. Please try again.");
+    }
+  };
 
 
   if (loading) {
@@ -100,58 +100,60 @@ export default function Profile() {
   ];
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={{ padding: 20, alignItems: "center" }}
+    <LinearGradient
+      colors={["#6ee7b7", "#2563eb"]} // Gradient colors
+      style={styles.container} // Apply gradient to the container
     >
-      {/* Profile Card */}
-      <Card style={styles.profileCard}>
-        <Card.Content style={{ alignItems: "center" }}>
-          <Avatar.Icon size={90} icon="account" style={styles.avatar} />
-          <Text style={styles.fullName}>{fullName || "Full Name"}</Text>
-          <Text style={styles.email}>{user?.email}</Text>
-        </Card.Content>
+      <ScrollView contentContainerStyle={{ padding: 20, alignItems: "center" }}>
+        {/* Profile Card */}
+        <Card style={styles.profileCard}>
+          <Card.Content style={{ alignItems: "center" }}>
+            <Avatar.Icon size={90} icon="account" style={styles.avatar} />
+            <Text style={styles.fullName}>{fullName || "Full Name"}</Text>
+            <Text style={styles.email}>{user?.email}</Text>
+          </Card.Content>
 
-        <View style={styles.divider} />
+          <View style={styles.divider} />
 
-        {/* Info Section */}
-        {fields.map((f, idx) => (
-          <View key={idx} style={styles.fieldRow}>
-            <Icon name={f.icon} size={22} color="#2563eb" style={styles.icon} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.label}>{f.label}</Text>
-              <Text style={styles.value}>{f.value || "—"}</Text>
+          {/* Info Section */}
+          {fields.map((f, idx) => (
+            <View key={idx} style={styles.fieldRow}>
+              <Icon name={f.icon} size={22} color="#2563eb" style={styles.icon} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>{f.label}</Text>
+                <Text style={styles.value}>{f.value || "—"}</Text>
+              </View>
             </View>
-          </View>
-        ))}
-      </Card>
+          ))}
+        </Card>
 
-      {/* Buttons */}
-      <Button
-        mode="contained"
-        onPress={() => navigation.navigate("EditProfile")}
-        style={styles.editButton}
-        buttonColor="#2563eb"
-        icon="account-edit"
-      >
-        Edit Profile
-      </Button>
+        {/* Buttons */}
+        <Button
+          mode="contained"
+          onPress={() => navigation.navigate("EditProfile")}
+          style={styles.editButton}
+          buttonColor="#2563eb"
+          icon="account-edit"
+        >
+          Edit Profile
+        </Button>
 
-      <Button
-        mode="contained"
-        onPress={handleLogout}
-        style={styles.logoutButton}
-        buttonColor="#dc2626"
-        icon="logout"
-      >
-        Logout
-      </Button>
-    </ScrollView>
+        <Button
+          mode="contained"
+          onPress={handleLogout}
+          style={styles.logoutButton}
+          buttonColor="#dc2626"
+          icon="logout"
+        >
+          Logout
+        </Button>
+      </ScrollView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f3f4f6" },
+  container: { flex: 1, backgroundColor: "#f9fafb" },
   loader: { flex: 1, justifyContent: "center", alignItems: "center" },
 
   profileCard: {

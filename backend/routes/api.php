@@ -54,6 +54,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/events/{event}/attendances', [AttendanceController::class, 'index']);
     Route::post('/events/{event}/attendances', [AttendanceController::class, 'store']);
     Route::get('/attendances', [AttendanceController::class, 'index']);
+    Route::get('/events/{eventId}/{userId}', [AttendanceController::class, 'checkUserAttendance']);
+
 
     // CRUD for events
     Route::get('/events', [EventController::class, 'index']);
@@ -74,6 +76,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/benefits/{benefit}', [BenefitController::class, 'destroyBenefit']);
     Route::get('/benefits-lists', [BenefitController::class, 'listBenefits']);
     Route::get('/benefits/{benefit}', [BenefitController::class, 'showBenefit']);
+    Route::get('/benefits/{benefitId}/{userId}/claims', [BenefitController::class, 'checkUserClaim']);
 
     // CRUD for benefit records
     Route::get('/benefit-records', [BenefitController::class, 'indexRecords']);

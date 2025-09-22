@@ -72,7 +72,20 @@ class BenefitController extends Controller
             'benefit' => $benefit,
         ], 201);
     }
+    
+    public function checkUserClaim($benefitId, $userId)
+    {
+        // Check if the user has claimed the benefit
+        $claim = BenefitRecord::where('benefit_id', $benefitId)
+            ->where('user_id', $userId)
+            ->first();
 
+        if ($claim) {
+            return response()->json(['claimed' => true]);
+        }
+
+        return response()->json(['claimed' => false]);
+    }
 
     public function showBenefit($id)
     {

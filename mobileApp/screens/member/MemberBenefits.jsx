@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   View,
   StyleSheet,
@@ -9,33 +9,88 @@ import {
 import { Card, Avatar } from "react-native-paper";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
-import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import api from "@/services/api";
-import { LinearGradient } from "expo-linear-gradient"; // Import Expo's LinearGradient
+import { LinearGradient } from "expo-linear-gradient";
 
-export default function Benefits() {
-  const navigation = useNavigation(); // Use the navigation hook from React Navigation
+export default function MemberBenefits() {
+  const navigation = useNavigation();
   const [benefits, setBenefits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [claimStatus, setClaimStatus] = useState({}); // Store claim status for each benefit
+
+  const fetchedRef = useRef(false);
 
   useEffect(() => {
+    if (fetchedRef.current) return;
+    fetchedRef.current = true;
+
+    // Fetch benefits and check claim status
     const fetchBenefits = async () => {
       try {
         const token = await AsyncStorage.getItem("token");
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        const res = await api.get("/benefits-lists", { headers });
-        setBenefits(res.data.data || res.data || []);
+
+        // Check if token exists
+        if (!token) {
+          setLoading(false);
+          navigation.replace("Login"); // Navigate to login if token is not found
+          return;
+        }
+
+        // Fetch the benefits list
+        const res = await api.get("/benefits-lists", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        // Debugging log to check the response
+        console.log("Benefits Response Data:", res.data);
+
+        // Set the benefits data
+        setBenefits(res.data || []); // Assuming res.data contains the array
+
+        // Get current user info
+        const userRes = await api.get("/user", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        // Fetch claim status for each benefit
+        const claimStatuses = {};
+        for (const benefit of res.data || []) {
+          const claimRes = await api.get(`/benefits/${benefit.id}/${userRes.data.id}/claims`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+
+          claimStatuses[benefit.id] = claimRes.data.claimed ? "Claimed" : "Not Claimed";
+        }
+        setClaimStatus(claimStatuses);
+
       } catch (err) {
         console.error("Benefits fetch error:", err.response?.data || err.message);
         setError("Failed to load benefits.");
+
+        // Handle token expiration or invalid token
+        if (err.response?.status === 401) {
+          await AsyncStorage.removeItem("token");
+          navigation.replace("Login"); // Navigate to login if session is expired
+        }
       } finally {
         setLoading(false);
       }
     };
-    fetchBenefits();
-  }, []);
 
+    fetchBenefits();
+
+    // Set up an interval to refresh benefits every 10 seconds (or 20 seconds)
+    const intervalId = setInterval(() => {
+      fetchBenefits();
+    }, 10000); // 10000ms = 10 seconds (use 20000 for 20 seconds)
+
+    // Clear the interval on component unmount
+    return () => clearInterval(intervalId);
+
+  }, [navigation]);
+
+  // Loading state
   if (loading) {
     return (
       <View style={styles.center}>
@@ -45,6 +100,7 @@ export default function Benefits() {
     );
   }
 
+  // Error state
   if (error) {
     return (
       <View style={styles.center}>
@@ -53,6 +109,7 @@ export default function Benefits() {
     );
   }
 
+  // Icon based on benefit type
   const typeIcon = (type) => {
     switch (type.toLowerCase()) {
       case "cash":
@@ -64,28 +121,15 @@ export default function Benefits() {
     }
   };
 
+  // Render each benefit item
   const renderBenefit = ({ item }) => {
-    // ✅ Calculate total budget
-    let totalBudget = 0;
-    if (item.type.toLowerCase() === "cash") {
-      totalBudget = (item.budget_amount || 0) * (item.locked_member_count || 0);
-    } else {
-      totalBudget = (item.budget_quantity || 0) * (item.locked_member_count || 0);
-    }
-
-    // ✅ Calculate remaining
-    let remaining = 0;
-    if (item.type.toLowerCase() === "cash") {
-      remaining = totalBudget - (item.records_count || 0) * (item.budget_amount || 0);
-    } else {
-      remaining = totalBudget - (item.records_count || 0) * (item.budget_quantity || 0);
-    }
+    const claimStatusText = claimStatus[item.id] || "Checking..."; // Get the claim status or set to "Checking..."
 
     return (
       <Card
         style={styles.card}
         onPress={() =>
-          navigation.navigate("BenefitAttendance", { benefitId: item.id, title: item.name }) // Use navigation.navigate for React Navigation
+          navigation.navigate("MemberBenefitRecord", { benefitId: item.id, title: item.name })
         }
       >
         <Card.Title
@@ -101,29 +145,14 @@ export default function Benefits() {
           )}
         />
         <Card.Content>
-          <Text style={styles.detail}>
-            💰 Budget:{" "}
-            {item.type.toLowerCase() === "cash"
-              ? `₱${Number(totalBudget).toLocaleString()}`
-              : `${totalBudget} ${item.unit || ""}`}
-          </Text>
-          <Text style={styles.detail}>
-            🔄 Remaining:{" "}
-            {item.type.toLowerCase() === "cash"
-              ? `₱${Number(remaining).toLocaleString()}`
-              : `${remaining} ${item.unit || ""}`}
-          </Text>
-          <Text style={styles.detail}>👥 Target Members: {item.locked_member_count || 0}</Text>
+          <Text style={styles.detail}>📋 Status: <Text style={claimStatusText === "Claimed" ? styles.received : styles.notReceived}>{claimStatusText}</Text></Text>
         </Card.Content>
       </Card>
     );
   };
 
   return (
-    <LinearGradient
-      colors={["#6ee7b7", "#2563eb"]} // Gradient colors
-      style={styles.container} // Apply gradient to the container
-    >
+    <LinearGradient colors={["#6ee7b7", "#2563eb"]} style={styles.container}>
       <View style={styles.contentContainer}>
         {benefits.length === 0 ? (
           <Text style={styles.empty}>No benefits available</Text>
@@ -148,4 +177,6 @@ const styles = StyleSheet.create({
   card: { borderRadius: 16, marginBottom: 16, backgroundColor: "#fff", elevation: 3 },
   cardTitle: { fontSize: 18, fontWeight: "bold", color: "#111827" },
   detail: { fontSize: 14, marginTop: 4, color: "#374151" },
+  received: { color: "green" },
+  notReceived: { color: "red" },
 });

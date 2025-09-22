@@ -1,4 +1,3 @@
-// screens/member/MemberEditProfile.jsx
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -13,6 +12,20 @@ import {
 import { Button, Avatar, Card, TextInput } from "react-native-paper";
 import api from "@/services/api";
 import { useNavigation } from "@react-navigation/native";
+
+const defaultValues = {
+  contact_number: "0000000000",
+  address: "Please update your address",
+  barangay: "Update this field",
+  blood_type: "Unknown",
+  sss_number: "Not set",
+  philhealth_number: "Not set",
+  disability_type: "Unspecified",
+  guardian_full_name: "No guardian name",
+  birthdate: new Date(new Date().setFullYear(new Date().getFullYear() - 18))
+    .toISOString()
+    .split("T")[0], // 18 years ago
+};
 
 export default function MemberEditProfile() {
   const navigation = useNavigation();
@@ -39,18 +52,20 @@ export default function MemberEditProfile() {
       try {
         const res = await api.get("/user");
         const u = res.data;
+        const p = u.member_profile || {};
+
         setUser(u);
 
-        const p = u.member_profile || {};
         setFormData({
           username: u.username || "",
           email: u.email || "",
           first_name: p.first_name || "",
           middle_name: p.middle_name || "",
           last_name: p.last_name || "",
-          contact_number: p.contact_number || "",
-          birthdate: p.birthdate ? p.birthdate.split("T")[0] : "",
-          address: p.address || "",
+          contact_number: p.contact_number?.trim() || defaultValues.contact_number,
+          birthdate:
+            p.birthdate?.split("T")[0] || defaultValues.birthdate,
+          address: p.address?.trim() || defaultValues.address,
           old_password: "",
           password: "",
           password_confirmation: "",
@@ -84,7 +99,7 @@ export default function MemberEditProfile() {
     try {
       await api.put(`/user/${user?.id}`, payload);
       Alert.alert("Success", "Profile updated successfully!");
-      navigation.goBack(); // consistent navigation
+      navigation.goBack();
     } catch (err) {
       console.error("Update error:", err);
       Alert.alert("Error", err.response?.data?.message || "Failed to update profile.");
@@ -124,15 +139,14 @@ export default function MemberEditProfile() {
           <View style={styles.divider} />
 
           <View style={styles.form}>
-            {[
-              ["Username", "username"],
+            {[["Username", "username"],
               ["Email", "email"],
               ["First Name", "first_name"],
               ["Middle Name", "middle_name"],
               ["Last Name", "last_name"],
               ["Contact Number", "contact_number"],
               ["Birthdate", "birthdate"],
-              ["Address", "address"],
+              ["Address", "address"]
             ].map(([label, key]) => (
               <TextInput
                 key={key}

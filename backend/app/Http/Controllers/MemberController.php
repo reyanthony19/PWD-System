@@ -6,8 +6,8 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
-use SimpleSoftwareIO\QrCode\Facades\QrCode;
+use Illuminate\Support\Facades\Log; // Import Log facade for logging
+use Carbon\Carbon;
 
 class MemberController extends Controller
 {
@@ -68,24 +68,25 @@ class MemberController extends Controller
 
             // Create initial member profile with mostly null/default values
             $profile = $user->memberProfile()->create([
-                'first_name'        => $validated['first_name'] ?? null,
-                'middle_name'       => $request->middle_name ?? null,
-                'last_name'         => $validated['last_name'] ?? null,
+                'first_name'        => $validated['first_name'] ?? 'First name not set',
+                'middle_name'       => $request->middle_name ?? 'Middle name not set',
+                'last_name'         => $validated['last_name'] ?? 'Last name not set',
                 'id_number'         => $validated['id_number'] ?? 'PDAO-' . str_pad($user->id, 4, '0', STR_PAD_LEFT),
-                'contact_number'    => $request->contact_number ?? null,
-                'birthdate'         => $validated['birthdate'] ?? null,
-                'sex'               => $validated['sex'] ?? null,
-                'disability_type'   => $request->disability_type ?? null,
-                'barangay'          => $validated['barangay'] ?? null,
-                'address'           => $validated['address'] ?? null,
-                'blood_type'        => $request->blood_type ?? null,
-                'sss_number'        => $request->sss_number ?? null,
-                'philhealth_number' => $request->philhealth_number ?? null,
-                'guardian_full_name'    => $request->guardian_full_name ?? null,
-                'guardian_relationship' => $request->guardian_relationship ?? null,
-                'guardian_contact_number' => $request->guardian_contact_number ?? null,
-                'guardian_address'       => $request->guardian_address ?? null,
+                'contact_number'    => $request->contact_number ?? 'No contact yet',
+                'birthdate'         => $validated['birthdate'] ?? Carbon::now()->toDateString(),
+                'sex'               => $validated['sex'] ?? 'unspecified',
+                'disability_type'   => $request->disability_type ?? 'Not declared',
+                'barangay'          => $validated['barangay'] ?? 'Barangay not provided',
+                'address'           => $validated['address'] ?? 'Address not provided',
+                'blood_type'        => $request->blood_type ?? 'Unknown',
+                'sss_number'        => $request->sss_number ?? 'N/A',
+                'philhealth_number' => $request->philhealth_number ?? 'N/A',
+                'guardian_full_name'    => $request->guardian_full_name ?? 'Guardian name missing',
+                'guardian_relationship' => $request->guardian_relationship ?? 'Relationship not specified',
+                'guardian_contact_number' => $request->guardian_contact_number ?? 'No contact yet',
+                'guardian_address'       => $request->guardian_address ?? 'Guardian address missing',
             ]);
+
 
             // Handle optional documents
             $profile->documents()->create([
@@ -108,6 +109,14 @@ class MemberController extends Controller
             ], 201);
         } catch (\Exception $e) {
             DB::rollBack();
+
+            // Log the error with detailed information
+            Log::error('Registration failed:', [
+                'error_message' => $e->getMessage(),
+                'stack_trace' => $e->getTraceAsString(),
+                'request_data' => $request->all()  // Optionally, log the request data for better debugging
+            ]);
+
             return response()->json([
                 'message' => 'Registration failed',
                 'error'   => $e->getMessage(),
@@ -140,6 +149,10 @@ class MemberController extends Controller
                 'member'  => $user,
             ], 200);
         } catch (\Exception $e) {
+            Log::error('Error fetching member data:', [
+                'error_message' => $e->getMessage(),
+                'stack_trace' => $e->getTraceAsString()
+            ]);
             return response()->json([
                 'message' => 'Error fetching member data',
                 'error'   => $e->getMessage(),

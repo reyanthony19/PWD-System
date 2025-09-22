@@ -13,7 +13,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import api from "@/services/api";
 import { LinearGradient } from "expo-linear-gradient"; // Import Expo's LinearGradient
 
-export default function Attendance() {
+export default function MemberAttendance() {
   const navigation = useNavigation();
   const route = useRoute();
   const { eventId } = route.params || {}; // ✅ coming from navigation params
@@ -113,27 +113,7 @@ export default function Attendance() {
         )}
 
         {/* QR Scan Button */}
-        <View style={{ marginVertical: 20 }}>
-          <Pressable
-            style={[styles.scanButton, !isPermissionGranted && styles.disabled, !canScan && styles.disabled]}
-            onPress={
-              isPermissionGranted
-                ? () => navigation.navigate("Scanner", { eventId }) // ✅ pass params
-                : requestPermission
-            }
-            disabled={!canScan} // Disable the button if the scan is not allowed
-          >
-            <Ionicons
-              name="camera"
-              size={20}
-              color="#fff"
-              style={{ marginRight: 6 }}
-            />
-            <Text style={styles.scanButtonText}>
-              {isPermissionGranted ? "Scan QR Code" : "Grant Camera Permission"}
-            </Text>
-          </Pressable>
-        </View>
+      
 
         {/* Attendance List */}
         <FlatList
@@ -171,13 +151,13 @@ export default function Attendance() {
                   Scanned:{" "}
                   {item.scanned_at
                     ? new Date(item.scanned_at).toLocaleString([], {
-                        year: "numeric",
-                        month: "short",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        hour12: true,
-                      })
+                      year: "numeric",
+                      month: "short",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      hour12: true,
+                    })
                     : "—"}
                 </Text>
                 <Text style={styles.details}>
