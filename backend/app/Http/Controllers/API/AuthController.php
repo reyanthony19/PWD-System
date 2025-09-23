@@ -94,14 +94,32 @@ class AuthController extends Controller
             'old_password' => 'nullable|string',
             'password'     => 'nullable|string|min:3',
 
-            // profile fields
+            // Profile fields validation
             'first_name'     => 'nullable|string|max:255',
             'middle_name'    => 'nullable|string|max:255',
             'last_name'      => 'nullable|string|max:255',
             'contact_number' => 'nullable|string|max:50',
             'birthdate'      => 'nullable|date',
             'address'        => 'nullable|string|max:500',
+            'gender'         => 'nullable|string|in:male,female,other',
+            'barangay'       => 'nullable|string|max:255',
+            'blood_type'     => 'nullable|string|max:5',
+            'disability_type' => 'nullable|string|max:255',
         ];
+
+        // File validation (for document uploads)
+        if ($request->hasFile('barangay_indigency')) {
+            $rules['barangay_indigency'] = 'file|mimes:jpg,jpeg,png,pdf|max:2048';
+        }
+        if ($request->hasFile('medical_certificate')) {
+            $rules['medical_certificate'] = 'file|mimes:jpg,jpeg,png,pdf|max:2048';
+        }
+        if ($request->hasFile('picture_2x2')) {
+            $rules['picture_2x2'] = 'file|mimes:jpg,jpeg,png|max:2048';
+        }
+        if ($request->hasFile('birth_certificate')) {
+            $rules['birth_certificate'] = 'file|mimes:jpg,jpeg,png,pdf|max:2048';
+        }
 
         $validated = $request->validate($rules);
 
@@ -116,21 +134,26 @@ class AuthController extends Controller
             $user->password = Hash::make($validated['password']);
         }
 
-        // Update users table
+        // Update the user table
         $user->username = $validated['username'];
         $user->email    = $validated['email'];
         $user->save();
 
-        // Update profile table depending on role
+        // Prepare profile data
         $profileData = collect($validated)->only([
             'first_name',
             'middle_name',
             'last_name',
             'contact_number',
             'birthdate',
-            'address'
+            'address',
+            'gender',
+            'barangay',
+            'blood_type',
+            'disability_type'
         ])->toArray();
 
+        // Handle profile update based on the user role
         if ($role === 'admin' && $user->adminProfile) {
             $user->adminProfile->update($profileData);
         } elseif ($role === 'staff' && $user->staffProfile) {
@@ -139,11 +162,34 @@ class AuthController extends Controller
             $user->memberProfile->update($profileData);
         }
 
+        // Handle document uploads if files are provided
+        if ($request->hasFile('barangay_indigency')) {
+            $user->memberProfile->documents()->update([
+                'barangay_indigency' => $request->file('barangay_indigency')->store('documents', 'public'),
+            ]);
+        }
+        if ($request->hasFile('medical_certificate')) {
+            $user->memberProfile->documents()->update([
+                'medical_certificate' => $request->file('medical_certificate')->store('documents', 'public'),
+            ]);
+        }
+        if ($request->hasFile('picture_2x2')) {
+            $user->memberProfile->documents()->update([
+                'picture_2x2' => $request->file('picture_2x2')->store('documents', 'public'),
+            ]);
+        }
+        if ($request->hasFile('birth_certificate')) {
+            $user->memberProfile->documents()->update([
+                'birth_certificate' => $request->file('birth_certificate')->store('documents', 'public'),
+            ]);
+        }
+
         return response()->json([
             'message' => 'User and profile updated successfully!',
             'user'    => $user->load($role . 'Profile')
         ]);
     }
+
 
     /**
      * Update status

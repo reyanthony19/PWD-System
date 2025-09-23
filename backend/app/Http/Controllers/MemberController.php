@@ -25,7 +25,7 @@ class MemberController extends Controller
             'first_name'   => 'nullable|string|max:255',
             'last_name'    => 'nullable|string|max:255',
             'birthdate'    => 'nullable|date',
-            'sex'          => 'nullable|string|in:male,female,other',
+            'sex'          => 'nullable|string|in:male,female,other', // Validating the sex field
             'address'      => 'nullable|string|max:255',
             'barangay'     => 'nullable|string|max:255',
             'contact_number' => 'nullable|string|max:20',
@@ -74,11 +74,11 @@ class MemberController extends Controller
                 'id_number'         => $validated['id_number'] ?? 'PDAO-' . str_pad($user->id, 4, '0', STR_PAD_LEFT),
                 'contact_number'    => $request->contact_number ?? 'No contact yet',
                 'birthdate'         => $validated['birthdate'] ?? Carbon::now()->toDateString(),
-                'sex'               => $validated['sex'] ?? 'unspecified',
+                'sex'               => $validated['sex'] ?? 'other', // Default value for sex
                 'disability_type'   => $request->disability_type ?? 'Not declared',
                 'barangay'          => $validated['barangay'] ?? 'Barangay not provided',
                 'address'           => $validated['address'] ?? 'Address not provided',
-                'blood_type'        => $request->blood_type ?? 'Unknown',
+                'blood_type'        => $request->blood_type ?? 'OA',
                 'sss_number'        => $request->sss_number ?? 'N/A',
                 'philhealth_number' => $request->philhealth_number ?? 'N/A',
                 'guardian_full_name'    => $request->guardian_full_name ?? 'Guardian name missing',
@@ -87,42 +87,14 @@ class MemberController extends Controller
                 'guardian_address'       => $request->guardian_address ?? 'Guardian address missing',
             ]);
 
-
-            // Handle optional documents
-            $profile->documents()->create([
-                'barangay_indigency'  => $request->hasFile('barangay_indigency')
-                    ? $request->file('barangay_indigency')->store('documents', 'public') : null,
-                'medical_certificate' => $request->hasFile('medical_certificate')
-                    ? $request->file('medical_certificate')->store('documents', 'public') : null,
-                'picture_2x2'         => $request->hasFile('picture_2x2')
-                    ? $request->file('picture_2x2')->store('documents', 'public') : null,
-                'birth_certificate'   => $request->hasFile('birth_certificate')
-                    ? $request->file('birth_certificate')->store('documents', 'public') : null,
-                'remarks'             => $request->remarks ?? null,
-            ]);
-
             DB::commit();
-
-            return response()->json([
-                'message' => 'Member registered successfully',
-                'user'    => $user->load('memberProfile.documents'),
-            ], 201);
+            return response()->json(['message' => 'Registration successful!']);
         } catch (\Exception $e) {
             DB::rollBack();
-
-            // Log the error with detailed information
-            Log::error('Registration failed:', [
-                'error_message' => $e->getMessage(),
-                'stack_trace' => $e->getTraceAsString(),
-                'request_data' => $request->all()  // Optionally, log the request data for better debugging
-            ]);
-
-            return response()->json([
-                'message' => 'Registration failed',
-                'error'   => $e->getMessage(),
-            ], 500);
+            return response()->json(['message' => 'Registration failed', 'error' => $e->getMessage()], 500);
         }
     }
+
 
     /**
      * Scan member by ID number

@@ -1,22 +1,26 @@
 import React, { useState } from "react";
 import {
-  Alert,
-  TextInput,
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  StyleSheet,
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
+  StyleSheet,
+  View,
+  TouchableOpacity,
+  ActivityIndicator,
   Animated,
+  Text,
 } from "react-native";
+import { TextInput } from "react-native-paper";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import api from "@/services/api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useNavigation } from "@react-navigation/native";
+import { Alert } from "react-native";
 
 export default function Register() {
+  const navigation = useNavigation();
+
   const [form, setForm] = useState({
     username: "",
     email: "",
@@ -81,20 +85,40 @@ export default function Register() {
     setLoading(true);
     setError("");
 
+    // Ensure valid 'sex' value
+    const sexValue = form.sex === "male" || form.sex === "female" || form.sex === "other" ? form.sex : "other";
+
     try {
       const formData = new FormData();
       formData.append("username", form.username);
       formData.append("email", form.email);
       formData.append("password", form.password);
 
+      // Send dummy or default profile values
+      formData.append("first_name", "First name not set");
+      formData.append("last_name", "Last name not set");
+      formData.append("birthdate", "2000-01-01"); // Default birthdate
+      formData.append("sex", sexValue); // Ensure 'sex' is a valid value
+      formData.append("address", "Address not provided");
+      formData.append("barangay", "Barangay not provided");
+      formData.append("contact_number", "No contact yet");
+
+      // Optionally, add other profile fields with default values
+      formData.append("id_number", "PDAO-" + Math.random().toString(36).substr(2, 9)); // Dummy ID
+      formData.append("disability_type", "Not declared");
+      formData.append("blood_type", "OA");
+      formData.append("sss_number", "N/A");
+      formData.append("philhealth_number", "N/A");
+
+      // Send formData to the backend
       const res = await api.post("/member/register", formData, {
         headers: { "Content-Type": "multipart/form-data" },
         timeout: 30000,
       });
 
       Alert.alert("Success", res.data.message || "Registration successful!");
-
       setForm({ username: "", email: "", password: "", confirmPassword: "" });
+      navigation.navigate("Login"); // Redirect to login after successful registration
     } catch (err) {
       console.error("Registration error:", err);
       if (err.message === "Network Error") {
@@ -110,6 +134,7 @@ export default function Register() {
     }
     setLoading(false);
   };
+
 
   return (
     <KeyboardAvoidingView
@@ -152,8 +177,8 @@ export default function Register() {
                             field.includes("password")
                               ? "lock-closed"
                               : field === "email"
-                              ? "mail"
-                              : "person"
+                                ? "mail"
+                                : "person"
                           }
                           size={22}
                           color="#666"
