@@ -8,7 +8,9 @@
     "scheme": "mobileapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "ios": { "supportsTablet": true },
+    "ios": {
+      "supportsTablet": true
+    },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -31,9 +33,12 @@
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
-          "dark": { "backgroundColor": "#000000" }
+          "dark": {
+            "backgroundColor": "#000000"
+          }
         }
-      ]
+      ],
+      "expo-sqlite"
     ]
   }
 }

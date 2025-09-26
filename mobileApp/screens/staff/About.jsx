@@ -10,7 +10,7 @@ export default function About({ navigation }) {
   };
 
   const navigateToContactUs = () => {
-    navigation.navigate("Location");
+    navigation.navigate("Visit Us");
   };
 
 

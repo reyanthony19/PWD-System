@@ -84,8 +84,7 @@ function MemberList() {
     });
 
   const statusOptions = [
-    { key: "all", label: "All", icon: <></>, color: "bg-gray-100 text-gray-700" },
-    { key: "approved", label: "Approved", icon: <CheckCircle size={18} />, color: "bg-green-100 text-green-700" },
+    { key: "approved", label: "Active", icon: <CheckCircle size={18} />, color: "bg-green-100 text-green-700" },
     { key: "pending", label: "Pending", icon: <Clock size={18} />, color: "bg-yellow-100 text-yellow-700" },
     { key: "rejected", label: "Rejected", icon: <XCircle size={18} />, color: "bg-red-100 text-red-700" },
     { key: "inactive", label: "Inactive", icon: <Ban size={18} />, color: "bg-orange-100 text-orange-700" },
@@ -198,7 +197,7 @@ function MemberList() {
                           onChange={(e) => handleStatusChange(member.id, e.target.value)}
                           className="border rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500"
                         >
-                          <option value="approved">✅ Approved</option>
+                          <option value="approved">✅ Active</option>
                           <option value="inactive">⏸ Inactive</option>
                           <option value="deceased">⚰️ Deceased</option>
                           <option value="rejected">❌ Rejected</option>

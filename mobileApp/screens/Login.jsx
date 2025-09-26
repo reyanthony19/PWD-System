@@ -34,14 +34,9 @@ export default function Login() {
   useEffect(() => {
     const init = async () => {
       try {
-        // Log the state of AsyncStorage values for debugging
         const storedRemember = await AsyncStorage.getItem("rememberMe");
         const storedEmail = await AsyncStorage.getItem("email");
         const storedPassword = await AsyncStorage.getItem("password");
-
-        console.log("Stored Remember:", storedRemember);
-        console.log("Stored Email:", storedEmail);
-        console.log("Stored Password:", storedPassword);
 
         if (storedRemember === "true") {
           setEmail(storedEmail || "");
@@ -54,9 +49,14 @@ export default function Login() {
         console.log("Error reading AsyncStorage:", e);
       }
     };
-
     init();
   }, []);
+
+  // Email validation function
+  const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
 
   const handleLogin = async () => {
     setEmailError(false);
@@ -67,6 +67,13 @@ export default function Login() {
       if (!email) setEmailError(true);
       if (!password) setPasswordError(true);
       setLoginError("Please fill in all required fields.");
+      return;
+    }
+
+    // Email validation
+    if (!validateEmail(email)) {
+      setEmailError(true);
+      setLoginError("Please enter a valid email.");
       return;
     }
 
@@ -84,12 +91,10 @@ export default function Login() {
       await AsyncStorage.setItem("user", JSON.stringify(user));
 
       if (rememberMe) {
-        console.log("Saving credentials to AsyncStorage...");
         await AsyncStorage.setItem("email", email);
         await AsyncStorage.setItem("password", password);
         await AsyncStorage.setItem("rememberMe", "true");
       } else {
-        console.log("Removing credentials from AsyncStorage...");
         await AsyncStorage.multiRemove(["email", "password", "rememberMe"]);
       }
 

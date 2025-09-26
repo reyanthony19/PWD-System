@@ -3,10 +3,9 @@ import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator, KeyboardA
 import { Button, Avatar, Card, TextInput } from "react-native-paper";
 import api from "@/services/api";
 import { useNavigation } from "@react-navigation/native";
-import * as ImagePicker from 'expo-image-picker'; // Import ImagePicker from Expo
-import { Picker } from '@react-native-picker/picker'; // Import Picker for dropdowns
+import * as ImagePicker from 'expo-image-picker';
+import { Picker } from '@react-native-picker/picker';
 
-// Default field values
 const defaultValues = {
   contact_number: "0000000000",
   address: "Please update your address",
@@ -18,7 +17,7 @@ const defaultValues = {
   guardian_full_name: "No guardian name",
   birthdate: new Date(new Date().setFullYear(new Date().getFullYear() - 18))
     .toISOString()
-    .split("T")[0], // 18 years ago
+    .split("T")[0],
 };
 
 export default function MemberEditProfile() {
@@ -53,7 +52,6 @@ export default function MemberEditProfile() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // Gender and Barangay options
   const genderOptions = ["Male", "Female", "Other"];
   const barangayOptions = [
     "Awang", "Bagocboc", "Barra", "Bonbon", "Cauyonan", "Igpit",
@@ -109,7 +107,6 @@ export default function MemberEditProfile() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Use Expo ImagePicker for document/file picking
   const handleFileChange = async (fieldName) => {
     let permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (permissionResult.granted === false) {
@@ -119,9 +116,9 @@ export default function MemberEditProfile() {
 
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images, // Allow picking images only
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
-        quality: 1, // Set image quality to max
+        quality: 1,
       });
 
       if (!result.cancelled) {
@@ -133,25 +130,59 @@ export default function MemberEditProfile() {
   };
 
   const handleSave = async () => {
+    // Check if required fields (like username) are empty
+    if (!formData.username || !formData.email || !formData.contact_number) {
+      Alert.alert("Error", "Please fill in all the required fields.");
+      return;
+    }
+
+    // Password validation
     if (formData.password && formData.password !== formData.password_confirmation) {
       Alert.alert("Error", "New password and confirmation do not match.");
       return;
     }
 
+    // Additional field validation (e.g., email, contact number)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      Alert.alert("Error", "Invalid email format");
+      return;
+    }
+
+    if (!formData.contact_number || formData.contact_number.length < 10) {
+      Alert.alert("Error", "Please provide a valid contact number.");
+      return;
+    }
+
     setSaving(true);
     const payload = { ...formData };
+
+    // Remove empty password fields to avoid unnecessary updates
     if (!payload.password) delete payload.password;
     if (!payload.old_password) delete payload.old_password;
     if (!payload.password_confirmation) delete payload.password_confirmation;
 
     const formDataToSend = new FormData();
+
+    // Append non-file fields
     Object.entries(payload).forEach(([key, value]) => {
       if (value) {
-        formDataToSend.append(key, value);
+        if (key.includes('file') && value.uri) {
+          // Append files correctly
+          formDataToSend.append(key, {
+            uri: value.uri,
+            type: "image/jpeg",
+            name: key + ".jpg",
+          });
+        } else {
+          // Append regular form fields
+          formDataToSend.append(key, value);
+        }
       }
     });
 
     try {
+      // Send the FormData to the backend
       await api.put(`/user/${user?.id}`, formDataToSend, {
         headers: {
           "Content-Type": "multipart/form-data",
@@ -161,7 +192,8 @@ export default function MemberEditProfile() {
       navigation.goBack();
     } catch (err) {
       console.error("Update error:", err);
-      Alert.alert("Error", err.response?.data?.message || "Failed to update profile.");
+      const errorMessage = err?.response?.data?.message || "Failed to update profile.";
+      Alert.alert("Error", errorMessage);
     } finally {
       setSaving(false);
     }

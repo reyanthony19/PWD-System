@@ -77,22 +77,45 @@ class AuthController extends Controller
     }
 
     /**
+     * Fetch member documents
+     */
+
+    public function fetchMemberDocuments($user_id)
+    {
+        // Find the member profile by user_id
+        $user = User::find($user_id);
+
+        // Check if user exists
+        if (!$user) {
+            return response()->json(['message' => 'User not found'], 404);
+        }
+
+        // Load the member profile and its associated documents
+        $memberProfile = $user->memberProfile;
+
+        if (!$memberProfile) {
+            return response()->json(['message' => 'Member profile not found'], 404);
+        }
+
+        // Fetch the member documents for the member profile
+        $documents = $memberProfile->documents;
+
+        // Return the documents as a response
+        return response()->json($documents);
+    }
+
+    /**
      * Update user (role-specific validation)
      */
     public function updateUser(Request $request, $id)
     {
-        if ($request->user()->id !== (int)$id && $request->user()->role !== 'admin') {
-            return response()->json(['message' => 'Unauthorized'], 403);
-        }
-
+        // Find the user to update
         $user = User::findOrFail($id);
         $role = $user->role;
 
         $rules = [
             'username'     => 'required|string|max:255',
             'email'        => 'required|email|unique:users,email,' . $id,
-            'old_password' => 'nullable|string',
-            'password'     => 'nullable|string|min:3',
 
             // Profile fields validation
             'first_name'     => 'nullable|string|max:255',
@@ -121,25 +144,15 @@ class AuthController extends Controller
             $rules['birth_certificate'] = 'file|mimes:jpg,jpeg,png,pdf|max:2048';
         }
 
+        // Validate the incoming request
         $validated = $request->validate($rules);
 
-        // Handle password update
-        if (!empty($validated['password'])) {
-            if (empty($validated['old_password'])) {
-                return response()->json(['message' => 'Old password is required.'], 422);
-            }
-            if (!Hash::check($validated['old_password'], $user->password)) {
-                return response()->json(['message' => 'Old password is incorrect.'], 422);
-            }
-            $user->password = Hash::make($validated['password']);
-        }
-
-        // Update the user table
+        // Update the user table (without password validation)
         $user->username = $validated['username'];
         $user->email    = $validated['email'];
         $user->save();
 
-        // Prepare profile data
+        // Prepare profile data (from validated fields)
         $profileData = collect($validated)->only([
             'first_name',
             'middle_name',
@@ -189,6 +202,7 @@ class AuthController extends Controller
             'user'    => $user->load($role . 'Profile')
         ]);
     }
+
 
 
     /**

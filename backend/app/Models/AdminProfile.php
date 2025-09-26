@@ -15,7 +15,7 @@ class AdminProfile extends Model
         'middle_name',
         'last_name',
         'birthdate',
-        'contact_number', // matches migration column name
+        'contact_number', 
         'address',
     ];
 

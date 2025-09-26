@@ -22,12 +22,12 @@ class MemberController extends Controller
             'password'     => 'required|string|min:3',
 
             // Profile fields
-            'first_name'   => 'nullable|string|max:255',
-            'last_name'    => 'nullable|string|max:255',
-            'birthdate'    => 'nullable|date',
-            'sex'          => 'nullable|string|in:male,female,other', // Validating the sex field
-            'address'      => 'nullable|string|max:255',
-            'barangay'     => 'nullable|string|max:255',
+            'first_name'   => 'required|string|max:255',
+            'last_name'    => 'required|string|max:255',
+            'birthdate'    => 'required|date',
+            'sex'          => 'required|string|in:male,female,other',
+            'address'      => 'required|string|max:255',
+            'barangay'     => 'required|string|max:255',
             'contact_number' => 'nullable|string|max:20',
 
             // Optional fields
@@ -53,6 +53,7 @@ class MemberController extends Controller
 
         DB::beginTransaction();
         try {
+            // Decide status
             $status = (auth()->check() && auth()->user()->role === 'admin')
                 ? 'approved'
                 : 'pending';
@@ -63,37 +64,63 @@ class MemberController extends Controller
                 'email'    => $validated['email'],
                 'password' => Hash::make($validated['password']),
                 'role'     => 'member',
-                'status'   => $status,
+                'status'   => 'approved',
             ]);
 
-            // Create initial member profile with mostly null/default values
+            // Generate id_number if not provided
+            $idNumber = $request->id_number ?? 'PDAO-' . str_pad($user->id, 4, '0', STR_PAD_LEFT);
+
+            // Create Member Profile
             $profile = $user->memberProfile()->create([
-                'first_name'        => $validated['first_name'] ?? 'First name not set',
-                'middle_name'       => $request->middle_name ?? 'Middle name not set',
-                'last_name'         => $validated['last_name'] ?? 'Last name not set',
-                'id_number'         => $validated['id_number'] ?? 'PDAO-' . str_pad($user->id, 4, '0', STR_PAD_LEFT),
-                'contact_number'    => $request->contact_number ?? 'No contact yet',
-                'birthdate'         => $validated['birthdate'] ?? Carbon::now()->toDateString(),
-                'sex'               => $validated['sex'] ?? 'other', // Default value for sex
-                'disability_type'   => $request->disability_type ?? 'Not declared',
-                'barangay'          => $validated['barangay'] ?? 'Barangay not provided',
-                'address'           => $validated['address'] ?? 'Address not provided',
-                'blood_type'        => $request->blood_type ?? 'OA',
-                'sss_number'        => $request->sss_number ?? 'N/A',
-                'philhealth_number' => $request->philhealth_number ?? 'N/A',
-                'guardian_full_name'    => $request->guardian_full_name ?? 'Guardian name missing',
-                'guardian_relationship' => $request->guardian_relationship ?? 'Relationship not specified',
-                'guardian_contact_number' => $request->guardian_contact_number ?? 'No contact yet',
-                'guardian_address'       => $request->guardian_address ?? 'Guardian address missing',
+                'first_name'        => $validated['first_name'],
+                'middle_name'       => $request->middle_name,
+                'last_name'         => $validated['last_name'],
+                'id_number'         => $idNumber,
+                'contact_number'    => $request->contact_number,
+                'birthdate'         => $validated['birthdate'],
+                'sex'               => $validated['sex'],
+                'disability_type'   => $request->disability_type,
+                'barangay'          => $validated['barangay'],
+                'address'           => $validated['address'],
+                'blood_type'        => $request->blood_type,
+                'sss_number'        => $request->sss_number,
+                'philhealth_number' => $request->philhealth_number,
+                'guardian_full_name'    => $request->guardian_full_name,
+                'guardian_relationship' => $request->guardian_relationship,
+                'guardian_contact_number' => $request->guardian_contact_number,
+                'guardian_address'       => $request->guardian_address,
             ]);
+
+            // Handle documents
+            $profile->documents()->create([
+                'barangay_indigency'  => $request->hasFile('barangay_indigency')
+                    ? $request->file('barangay_indigency')->store('documents', 'public') : null,
+                'medical_certificate' => $request->hasFile('medical_certificate')
+                    ? $request->file('medical_certificate')->store('documents', 'public') : null,
+                'picture_2x2'         => $request->hasFile('picture_2x2')
+                    ? $request->file('picture_2x2')->store('documents', 'public') : null,
+                'birth_certificate'   => $request->hasFile('birth_certificate')
+                    ? $request->file('birth_certificate')->store('documents', 'public') : null,
+                'remarks'             => $request->remarks ?? null,
+            ]);
+
+
 
             DB::commit();
-            return response()->json(['message' => 'Registration successful!']);
+
+            return response()->json([
+                'message' => 'Member registered successfully',
+                'user'    => $user->load('memberProfile.documents'),
+            ], 201);
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['message' => 'Registration failed', 'error' => $e->getMessage()], 500);
+            return response()->json([
+                'message' => 'Registration failed',
+                'error'   => $e->getMessage(),
+            ], 500);
         }
     }
+
 
 
     /**

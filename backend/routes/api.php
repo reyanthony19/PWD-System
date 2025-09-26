@@ -36,6 +36,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
 | Protected Routes (requires authentication)
 |--------------------------------------------------------------------------
 */
+Route::middleware('auth:sanctum')->put('/member/profile', [MemberController::class, 'updateMemberProfile']);
+
 Route::middleware('auth:sanctum')->group(function () {
     /*
     |--------------------------------------------------------------------------
@@ -43,6 +45,7 @@ Route::middleware('auth:sanctum')->group(function () {
     |--------------------------------------------------------------------------
     */
     Route::get('/user', [AuthController::class, 'profile']);
+    Route::get('/user/documents/{user_id}', [AuthController::class, 'fetchMemberDocuments']);
     Route::get('/users', [AuthController::class, 'listUsers']);
     Route::get('/user/{id}', [AuthController::class, 'showUser']);
     Route::put('/user/{id}', [AuthController::class, 'updateUser']);
@@ -67,7 +70,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
     /*
     |--------------------------------------------------------------------------
-    | Benefits Management (Admin/Staff)
+    | Benefits Management (Admin)
     |--------------------------------------------------------------------------
     */
     // CRUD for benefits

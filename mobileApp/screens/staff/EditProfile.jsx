@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { Button, Avatar, Card, TextInput } from "react-native-paper";
 import { useNavigation } from "@react-navigation/native"; 
-import api from "@/services/api";
+import api from "../../services/api";
 
 export default function EditProfile() {
   const navigation = useNavigation(); // Use useNavigation here
@@ -83,7 +83,7 @@ export default function EditProfile() {
     try {
       await api.put(`/user/${user?.id}`, payload);
       Alert.alert("Success", "Profile updated successfully!");
-      navigation.goBack(); // ✅ Use navigation.goBack() instead of router.back()
+      navigation.goBack(); 
     } catch (err) {
       console.error("Update error:", err);
       Alert.alert("Error", err.response?.data?.message || "Failed to update profile.");
