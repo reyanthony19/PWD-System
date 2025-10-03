@@ -22,9 +22,9 @@ return [
     // Correct the allowed_origins by keeping the second array
     'allowed_origins' => [
         'http://localhost:3000', 
-        'http://192.168.1.7:3000', 
+        'http://192.168.0.100:3000', 
         'http://localhost:8081', 
-        'http://192.168.1.7:8081',
+        'http://192.168.0.100:8081',
     ],
 
     'allowed_origins_patterns' => [],

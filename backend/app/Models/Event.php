@@ -17,6 +17,7 @@ class Event extends Model
         'user_id',
         'location',
         'status',
+        'target_barangay',
     ];
 
     /* 🔗 Relationships */

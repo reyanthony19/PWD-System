@@ -43,8 +43,7 @@ export default function MemberProfile() {
   const [loading, setLoading] = useState(true);
   const [incompleteFields, setIncompleteFields] = useState([]);
 
-  // Use the proper base URL to fetch the images
-  const BASE_URL = "http://127.0.0.1/storage/";  // Change this to your Laravel app's public URL
+  const BASE_URL = "http://192.168.1.103/storage/";  
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -58,9 +57,8 @@ export default function MemberProfile() {
 
         api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
         const res = await api.get("/user");
-        setUser(res.data);  // Save user data to state
+        setUser(res.data);  
 
-        // Log user details
         console.log("Fetched user details:", res.data);
 
         const profile = res.data?.member_profile || {};

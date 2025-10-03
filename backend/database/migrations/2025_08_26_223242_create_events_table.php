@@ -14,11 +14,13 @@ return new class extends Migration
             $table->text('description')->nullable();
             $table->date('event_date');
             $table->time('event_time')->nullable();
-            $table->foreignId('user_id') 
-                  ->constrained('users')
-                  ->cascadeOnUpdate()
-                  ->cascadeOnDelete();
+            $table->foreignId('user_id')
+                ->constrained('users')
+                ->cascadeOnUpdate()
+                ->cascadeOnDelete();
             $table->string('location');
+            $table->string('target_barangay')->nullable();
+
             $table->enum('status', ['upcoming', 'completed', 'cancelled'])->default('upcoming');
             $table->timestamps();
         });

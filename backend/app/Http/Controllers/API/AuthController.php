@@ -56,7 +56,7 @@ class AuthController extends Controller
      */
     public function showUser($id)
     {
-        $user = User::with('memberProfile.documents', 'adminProfile', 'staffProfile')
+        $user = User::with('memberProfile','memberProfile.documents', 'adminProfile', 'staffProfile')
             ->findOrFail($id);
 
         return response()->json($user);

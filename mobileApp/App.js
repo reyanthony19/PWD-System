@@ -176,7 +176,7 @@ export default function App() {
         <Stack.Screen name="Scanner" component={Scanner} />
         <Stack.Screen name="BenefitScanner" component={BenefitScanner} />
         <Stack.Screen name="MemberList" component={MemberList} />
-
+        <Stack.Screen name="Register" component={Register} />
         {/* Member Screens */}
         <Stack.Screen name="MemberProfile" component={MemberProfile} />
         <Stack.Screen name="MemberEditProfile" component={MemberEditProfile} />

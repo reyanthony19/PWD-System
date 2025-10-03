@@ -1,7 +1,6 @@
-// MemberRegister.jsx
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { User, Mail, Lock, Phone, Calendar, MapPin, Users, FileText, Upload, CheckCircle } from "lucide-react";
+import { User, Mail, Lock, Phone, Calendar, MapPin, Users, FileText, Upload, CheckCircle, Heart, Stethoscope } from "lucide-react";
 import api from "./api";
 import Layout from "./Layout";
 
@@ -121,11 +120,14 @@ function FloatingInput({ name, label, type = "text", required = false, maxLength
 }
 
 function FloatingSelect({ name, label, options, value, onChange, required = false, icon: Icon }) {
+  const hasValue = value && value !== "";
+
   return (
     <div className="relative group">
       <div className="relative">
         {Icon && (
-          <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors duration-200 z-10">
+          <div className={`absolute left-3 top-1/2 transform -translate-y-1/2 transition-colors duration-200 z-10
+            ${hasValue ? "text-blue-500" : "text-gray-400 group-focus-within:text-blue-500"}`}>
             <Icon size={18} />
           </div>
         )}
@@ -134,11 +136,11 @@ function FloatingSelect({ name, label, options, value, onChange, required = fals
           value={value}
           onChange={onChange}
           required={required}
-          className={`w-full border-2 border-gray-200 rounded-xl bg-white/80 backdrop-blur-sm text-gray-900 
+          className={`w-full border-2 border-gray-200 rounded-xl bg-white/80 backdrop-blur-sm 
             transition-all duration-200 cursor-pointer hover:border-gray-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 peer
-            ${Icon ? "pl-12 pr-4 py-4" : "px-4 py-4"}`}
+            ${Icon ? "pl-12 pr-10 py-4" : "px-4 py-4"}
+            ${hasValue ? "text-gray-900" : "text-gray-500"}`}
         >
-          <option value=""></option>
           {options.map((option) => (
             <option key={option.value} value={option.value} className="text-gray-900">
               {option.label}
@@ -148,11 +150,19 @@ function FloatingSelect({ name, label, options, value, onChange, required = fals
         <label
           className={`absolute transition-all duration-200 pointer-events-none
             ${Icon ? "left-12" : "left-4"}
-            ${value ? "top-2 text-xs font-medium text-blue-600" : "top-1/2 transform -translate-y-1/2 text-base text-gray-500"}
-            peer-focus:top-2 peer-focus:text-xs peer-focus:font-medium peer-focus:text-blue-600 peer-focus:transform-none`}
+            ${hasValue || value === ""
+              ? "top-2 text-xs font-medium text-blue-600"
+              : "top-1/2 transform -translate-y-1/2 text-base text-gray-500"
+            }
+            peer-focus:top-2 peer-focus:text-xs peer-focus:font-medium peer-focus:text-blue-600`}
         >
           {label} {required && <span className="text-red-500">*</span>}
         </label>
+        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
       </div>
     </div>
   );
@@ -171,7 +181,7 @@ function MemberRegister() {
     role: "member",
     password: "",
     contact_number: "",
-    birthdate: "1999-01-01",
+    birthdate: "",
     address: "",
     sex: "",
     disability_type: "",
@@ -198,10 +208,89 @@ function MemberRegister() {
   const [showModal, setShowModal] = useState(false);
   const navigate = useNavigate();
 
+  // Barangay options
   const barangayOptions = [
-    "Awang", "Bagocboc", "Barra", "Bonbon", "Cauyonan", "Igpit",
-    "Limonda", "Luyong Bonbon", "Malanang", "Nangcaon", "Patag",
-    "Poblacion", "Taboc", "Tingalan"
+    { value: "", label: "Select Barangay" },
+    ...["Awang", "Bagocboc", "Barra", "Bonbon", "Cauyonan", "Igpit",
+        "Limonda", "Luyong Bonbon", "Malanang", "Nangcaon", "Patag",
+        "Poblacion", "Taboc", "Tingalan"
+    ].map(b => ({ value: b, label: b }))
+  ];
+
+  // Disability types based on medical certificate standards
+  const disabilityTypeOptions = [
+    { value: "", label: "Select Disability Type" },
+    { 
+      value: "physical", 
+      label: "Physical Disability", 
+      description: "Mobility impairments, chronic pain conditions, respiratory disabilities"
+    },
+    { 
+      value: "mental_health", 
+      label: "Mental Health Disability", 
+      description: "Depression, anxiety disorders, bipolar disorder, PTSD"
+    },
+    { 
+      value: "sensory", 
+      label: "Sensory Disability", 
+      description: "Blindness, low vision, deafness, hearing loss, sensory processing disorder"
+    },
+    { 
+      value: "neurological", 
+      label: "Neurological Disability", 
+      description: "Epilepsy, multiple sclerosis, Parkinson's disease, stroke effects"
+    },
+    { 
+      value: "developmental", 
+      label: "Developmental Disability", 
+      description: "Autism Spectrum Disorder (ASD), intellectual disabilities, cerebral palsy"
+    },
+    { 
+      value: "chronic_health", 
+      label: "Chronic Health Condition", 
+      description: "Diabetes, heart disease, kidney disease, chronic illnesses"
+    },
+    { 
+      value: "other", 
+      label: "Other Disability", 
+      description: "Other types not listed above"
+    }
+  ];
+
+  // Blood type options
+  const bloodTypeOptions = [
+    { value: "", label: "Select Blood Type" },
+    { value: "A+", label: "A Positive (A+)" },
+    { value: "A-", label: "A Negative (A-)" },
+    { value: "B+", label: "B Positive (B+)" },
+    { value: "B-", label: "B Negative (B-)" },
+    { value: "AB+", label: "AB Positive (AB+)" },
+    { value: "AB-", label: "AB Negative (AB-)" },
+    { value: "O+", label: "O Positive (O+)" },
+    { value: "O-", label: "O Negative (O-)" },
+    { value: "unknown", label: "Unknown" }
+  ];
+
+  // Sex options
+  const sexOptions = [
+    { value: "", label: "Select Sex" },
+    { value: "male", label: "Male" },
+    { value: "female", label: "Female" },
+    { value: "other", label: "Other" }
+  ];
+
+  // Guardian relationship options
+  const guardianRelationshipOptions = [
+    { value: "", label: "Select Relationship" },
+    { value: "parent", label: "Parent" },
+    { value: "spouse", label: "Spouse" },
+    { value: "child", label: "Child" },
+    { value: "sibling", label: "Sibling" },
+    { value: "grandparent", label: "Grandparent" },
+    { value: "aunt_uncle", label: "Aunt/Uncle" },
+    { value: "cousin", label: "Cousin" },
+    { value: "guardian", label: "Legal Guardian" },
+    { value: "other", label: "Other" }
   ];
 
   const handleChange = (e) => {
@@ -257,7 +346,7 @@ function MemberRegister() {
         role: "member",
         password: "",
         contact_number: "",
-        birthdate: "1999-01-01",
+        birthdate: "",
         address: "",
         sex: "",
         disability_type: "",
@@ -295,16 +384,13 @@ function MemberRegister() {
     navigate("/member/register");
   };
 
-  const sexOptions = [
-    { value: "male", label: "Male" },
-    { value: "female", label: "Female" },
-    { value: "other", label: "Other" }
-  ];
-
-  const barangaySelectOptions = barangayOptions.map(barangay => ({
-    value: barangay,
-    label: barangay
-  }));
+  // Get disability description for selected type
+  const getDisabilityDescription = () => {
+    const selectedDisability = disabilityTypeOptions.find(
+      option => option.value === form.disability_type
+    );
+    return selectedDisability?.description || "";
+  };
 
   return (
     <>
@@ -317,6 +403,9 @@ function MemberRegister() {
               <User className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-4xl font-bold text-gray-900 mb-2">Member Registration</h1>
+            <p className="text-gray-600 max-w-2xl mx-auto">
+              Register a new member with complete personal, medical, and guardian information
+            </p>
           </div>
 
           {error && (
@@ -434,15 +523,14 @@ function MemberRegister() {
                 </div>
                 <FloatingSelect
                   name="barangay"
-                  label="Barangay"
-                  options={barangaySelectOptions}
+                  options={barangayOptions}
                   value={form.barangay}
                   onChange={handleChange}
+                  required
                   icon={MapPin}
                 />
                 <FloatingSelect
                   name="sex"
-                  label="Sex"
                   options={sexOptions}
                   value={form.sex}
                   onChange={handleChange}
@@ -451,34 +539,50 @@ function MemberRegister() {
               </div>
             </div>
 
-            {/* Medical & Government IDs Section */}
+            {/* Medical & Health Information Section */}
             <div className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-8">
               <div className="flex items-center mb-6">
-                <div className="flex items-center justify-center w-10 h-10 bg-purple-600 rounded-lg mr-4">
-                  <FileText className="w-5 h-5 text-white" />
+                <div className="flex items-center justify-center w-10 h-10 bg-red-600 rounded-lg mr-4">
+                  <Stethoscope className="w-5 h-5 text-white" />
                 </div>
-                <h2 className="text-2xl font-bold text-gray-900">Medical & Government Information</h2>
+                <h2 className="text-2xl font-bold text-gray-900">Medical & Health Information</h2>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <FloatingInput
-                  name="disability_type"
-                  label="Disability Type"
-                  value={form.disability_type}
-                  onChange={handleChange}
-                />
-                <FloatingInput
+                <div className="md:col-span-2">
+                  <FloatingSelect
+                    name="disability_type"
+                    options={disabilityTypeOptions}
+                    value={form.disability_type}
+                    onChange={handleChange}
+                    icon={Stethoscope}
+                  />
+                  {form.disability_type && getDisabilityDescription() && (
+                    <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-sm text-blue-700">
+                        <strong>Description:</strong> {getDisabilityDescription()}
+                      </p>
+                    </div>
+                  )}
+                </div>
+                
+                <FloatingSelect
                   name="blood_type"
-                  label="Blood Type"
+                  options={bloodTypeOptions}
                   value={form.blood_type}
                   onChange={handleChange}
+                  icon={Heart}
                 />
+                
+                <div></div> {/* Spacer */}
+                
                 <FloatingInput
                   name="sss_number"
                   label="SSS Number"
                   value={form.sss_number}
                   onChange={handleChange}
                   onBlur={handleBlur}
+                  placeholder="XX-XXXXXXX-X"
                 />
                 <FloatingInput
                   name="philhealth_number"
@@ -486,6 +590,7 @@ function MemberRegister() {
                   value={form.philhealth_number}
                   onChange={handleChange}
                   onBlur={handleBlur}
+                  placeholder="XX-XXXXXXXXX-X"
                 />
               </div>
             </div>
@@ -505,26 +610,30 @@ function MemberRegister() {
                   label="Guardian Full Name"
                   value={form.guardian_full_name}
                   onChange={handleChange}
+                  required
                 />
-                <FloatingInput
+                <FloatingSelect
                   name="guardian_relationship"
-                  label="Relationship"
+                  options={guardianRelationshipOptions}
                   value={form.guardian_relationship}
                   onChange={handleChange}
+                  required
                 />
                 <FloatingInput
                   name="guardian_contact_number"
-                  label="Guardian Contact"
+                  label="Guardian Contact Number"
                   maxLength={11}
                   value={form.guardian_contact_number}
                   onChange={handleChange}
                   icon={Phone}
+                  required
                 />
                 <FloatingInput
                   name="guardian_address"
                   label="Guardian Address"
                   value={form.guardian_address}
                   onChange={handleChange}
+                  required
                 />
               </div>
             </div>
@@ -540,18 +649,39 @@ function MemberRegister() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 {[
-                  { name: "barangay_indigency", label: "Barangay Indigency", accept: ".jpg,.jpeg,.png,.pdf" },
-                  { name: "medical_certificate", label: "Medical Certificate", accept: ".jpg,.jpeg,.png,.pdf" },
-                  { name: "picture_2x2", label: "2x2 Picture", accept: ".jpg,.jpeg,.png" },
-                  { name: "birth_certificate", label: "Birth Certificate", accept: ".jpg,.jpeg,.png,.pdf" }
+                  { 
+                    name: "barangay_indigency", 
+                    label: "Barangay Indigency", 
+                    description: "Certificate from barangay proving indigency status",
+                    accept: ".jpg,.jpeg,.png,.pdf" 
+                  },
+                  { 
+                    name: "medical_certificate", 
+                    label: "Medical Certificate", 
+                    description: "Doctor's certificate confirming disability/medical condition",
+                    accept: ".jpg,.jpeg,.png,.pdf" 
+                  },
+                  { 
+                    name: "picture_2x2", 
+                    label: "2x2 ID Picture", 
+                    description: "Recent 2x2 photo with white background",
+                    accept: ".jpg,.jpeg,.png" 
+                  },
+                  { 
+                    name: "birth_certificate", 
+                    label: "Birth Certificate", 
+                    description: "PSA-authenticated birth certificate",
+                    accept: ".jpg,.jpeg,.png,.pdf" 
+                  }
                 ].map((doc) => (
                   <div key={doc.name} className="relative group">
                     <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 hover:border-blue-400 transition-colors duration-200 group-hover:bg-blue-50/50">
                       <div className="text-center">
                         <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2 group-hover:text-blue-500 transition-colors duration-200" />
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
                           {doc.label}
                         </label>
+                        <p className="text-xs text-gray-500 mb-3">{doc.description}</p>
                         <input
                           type="file"
                           name={doc.name}
@@ -568,7 +698,7 @@ function MemberRegister() {
               <div className="relative">
                 <FloatingInput
                   name="remarks"
-                  label="Additional Remarks"
+                  label="Additional Remarks or Notes"
                   value={documents.remarks}
                   onChange={handleDocChange}
                 />
@@ -614,12 +744,15 @@ function MemberRegister() {
               <h3 className="text-2xl font-bold mb-3 text-gray-900">
                 Registration Successful! 🎉
               </h3>
+              <p className="text-gray-600 mb-6">
+                Member has been registered successfully and is now pending approval.
+              </p>
               <button
                 onClick={closeModalAndRedirect}
                 className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 
                   text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 transform hover:scale-105"
               >
-                Continue
+                Register Another Member
               </button>
             </div>
           </div>

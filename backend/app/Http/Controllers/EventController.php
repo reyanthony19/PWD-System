@@ -23,15 +23,16 @@ class EventController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'title'       => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'event_date'  => 'required|date',
-            'event_time'  => 'nullable|date_format:H:i',
-            'location'    => 'required|string|max:255',
-            'status'      => 'in:upcoming,completed,cancelled',
+            'title'         => 'required|string|max:255',
+            'description'   => 'nullable|string',
+            'event_date'    => 'required|date',
+            'event_time'    => 'nullable|date_format:H:i',
+            'location'      => 'required|string|max:255',
+            'status'        => 'in:upcoming,completed,cancelled',
+            'target_barangay' => 'nullable|string|max:255', 
         ]);
 
-        $validated['user_id'] = Auth::id(); // event creator
+        $validated['user_id'] = Auth::id();
 
         $event = Event::create($validated);
 
@@ -40,6 +41,7 @@ class EventController extends Controller
             'event'   => $event,
         ], 201);
     }
+
 
     /**
      * Display the specified event.

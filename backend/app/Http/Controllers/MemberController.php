@@ -53,10 +53,8 @@ class MemberController extends Controller
 
         DB::beginTransaction();
         try {
-            // Decide status
-            $status = (auth()->check() && auth()->user()->role === 'admin')
-                ? 'approved'
-                : 'pending';
+
+
 
             // Create user
             $user = User::create([
@@ -64,7 +62,7 @@ class MemberController extends Controller
                 'email'    => $validated['email'],
                 'password' => Hash::make($validated['password']),
                 'role'     => 'member',
-                'status'   => 'approved',
+                'status'   => 'pending',
             ]);
 
             // Generate id_number if not provided

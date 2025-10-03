@@ -1,11 +1,18 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Calendar, FileText, MapPin, Clock, CheckCircle, Users } from "lucide-react";
+import { Calendar, FileText, MapPin, Clock, CheckCircle, Users, Navigation } from "lucide-react";
 import api from "./api";
 import Layout from "./Layout";
 
+// Barangay options
+const barangayOptions = [
+  "All", "Awang", "Bagocboc", "Barra", "Bonbon", "Cauyonan", "Igpit",
+  "Limonda", "Luyong Bonbon", "Malanang", "Nangcaon", "Patag",
+  "Poblacion", "Taboc", "Tingalan"
+];
+
 // Floating label input
-const FloatingInput = ({ name, label, type = "text", required = false, value, onChange, icon: Icon }) => (
+const FloatingInput = ({ name, label, type = "text", required = false, value, onChange, icon: Icon, min }) => (
   <div className="relative group">
     {Icon && (
       <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 
@@ -19,6 +26,7 @@ const FloatingInput = ({ name, label, type = "text", required = false, value, on
       value={value}
       onChange={onChange}
       required={required}
+      min={min}
       className={`w-full border-2 rounded-xl bg-white/80 backdrop-blur-sm text-gray-900 
         transition-all duration-200 peer placeholder-transparent
         ${Icon ? "pl-12 pr-4 py-4" : "px-4 py-4"}
@@ -69,20 +77,78 @@ const FloatingTextarea = ({ name, label, value, onChange, required = false, icon
   </div>
 );
 
+// Floating label select
+const FloatingSelect = ({ name, label, required = false, value, onChange, options, icon: Icon }) => (
+  <div className="relative group">
+    {Icon && (
+      <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 
+        group-focus-within:text-blue-500 transition-colors duration-200 z-10">
+        <Icon size={18} />
+      </div>
+    )}
+    <select
+      name={name}
+      value={value}
+      onChange={onChange}
+      required={required}
+      className={`w-full border-2 rounded-xl bg-white/80 backdrop-blur-sm text-gray-900 
+        transition-all duration-200 peer placeholder-transparent appearance-none
+        ${Icon ? "pl-12 pr-10 py-4" : "px-4 py-4"}
+        border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-gray-300
+        ${!value ? "text-gray-400" : "text-gray-900"}`}
+    >
+      <option value="" disabled className="text-gray-400">Event for Barangay {label}</option>
+      {options.map((option) => (
+        <option key={option} value={option} className="text-gray-900">
+          {option}
+        </option>
+      ))}
+    </select>
+    <label
+      className={`absolute transition-all duration-200 pointer-events-none
+        ${Icon ? "left-12" : "left-4"}
+        ${value
+          ? "top-2 text-xs font-medium"
+          : "top-1/2 transform -translate-y-1/2 text-base"}
+        text-gray-500 peer-focus:text-blue-600 peer-focus:top-2 peer-focus:text-xs peer-focus:font-medium`}
+    >
+      {label} {required && <span className="text-red-500"></span>}
+    </label>
+    <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none">
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+      </svg>
+    </div>
+  </div>
+);
+
 function CreateEvent() {
+  const [minDate, setMinDate] = useState("");
   const [form, setForm] = useState({
     title: "",
     description: "",
     event_date: "",
-    event_time: "",
+    event_time: "08:30",
     user_id: "",
     location: "",
-    status: "upcoming", // always upcoming
+    target_barangay: "",
+    status: "upcoming",
   });
 
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const navigate = useNavigate();
+
+  // Calculate minimum date (3 days from current date)
+  useEffect(() => {
+    const today = new Date();
+    const minDate = new Date(today);
+    minDate.setDate(today.getDate() + 3);
+
+    // Format to YYYY-MM-DD for input min attribute
+    const formattedMinDate = minDate.toISOString().split('T')[0];
+    setMinDate(formattedMinDate);
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -97,16 +163,22 @@ function CreateEvent() {
     setLoading(true);
 
     try {
-      // Force status to upcoming
-      await api.post("/events", { ...form, status: "upcoming" });
+      // Force status to upcoming and include target_barangay
+      await api.post("/events", {
+        ...form,
+        status: "upcoming",
+        target_barangay: form.target_barangay
+      });
       setShowModal(true);
+      // Reset form including target_barangay
       setForm({
         title: "",
         description: "",
         event_date: "",
-        event_time: "",
+        event_time: "08:30", // Reset to default time
         user_id: "",
         location: "",
+        target_barangay: "",
         status: "upcoming",
       });
     } catch (err) {
@@ -154,6 +226,7 @@ function CreateEvent() {
                 value={form.event_date}
                 onChange={handleChange}
                 icon={Calendar}
+                min={minDate}
               />
               <FloatingInput
                 name="event_time"
@@ -163,6 +236,15 @@ function CreateEvent() {
                 value={form.event_time}
                 onChange={handleChange}
                 icon={Clock}
+              />
+              {/* Target Barangay Dropdown */}
+              <FloatingSelect
+                name="target_barangay"
+                required
+                value={form.target_barangay}
+                onChange={handleChange}
+                options={barangayOptions}
+                icon={Navigation}
               />
               <div className="md:col-span-2">
                 <FloatingTextarea
@@ -174,6 +256,11 @@ function CreateEvent() {
                   icon={Users}
                 />
               </div>
+            </div>
+
+            {/* Date restriction info */}
+            <div className="text-center text-sm text-gray-600 bg-blue-50 p-3 rounded-lg border border-blue-200">
+              <p>📅 Event dates must be scheduled at least 3 days in advance. The earliest available date is {minDate}.</p>
             </div>
 
             {/* Submit */}
