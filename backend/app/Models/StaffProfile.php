@@ -24,6 +24,7 @@ class StaffProfile extends Model
         'middle_name',
         'birthdate',
         'contact_number',
+        'assigned_barangay',
         'address',
     ];
 

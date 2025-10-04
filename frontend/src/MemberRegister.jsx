@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { User, Mail, Lock, Phone, Calendar, MapPin, Users, FileText, Upload, CheckCircle, Heart, Stethoscope } from "lucide-react";
+import { User, Mail, Lock, Phone, Calendar, MapPin, Users, Upload, CheckCircle, Heart, Stethoscope } from "lucide-react";
 import api from "./api";
 import Layout from "./Layout";
 

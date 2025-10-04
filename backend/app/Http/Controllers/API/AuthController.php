@@ -166,7 +166,6 @@ class AuthController extends Controller
             'disability_type'
         ])->toArray();
 
-        // Handle profile update based on the user role
         if ($role === 'admin' && $user->adminProfile) {
             $user->adminProfile->update($profileData);
         } elseif ($role === 'staff' && $user->staffProfile) {
@@ -175,7 +174,6 @@ class AuthController extends Controller
             $user->memberProfile->update($profileData);
         }
 
-        // Handle document uploads if files are provided
         if ($request->hasFile('barangay_indigency')) {
             $user->memberProfile->documents()->update([
                 'barangay_indigency' => $request->file('barangay_indigency')->store('documents', 'public'),

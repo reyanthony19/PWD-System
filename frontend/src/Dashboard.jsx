@@ -39,14 +39,13 @@ const disabilityTypes = {
 
 function Dashboard() {
   const [members, setMembers] = useState([]);
-  const [memberProfiles, setMemberProfiles] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        await Promise.all([fetchMembers(), fetchMemberProfiles(), fetchCurrentUser()]);
+        await Promise.all([fetchMembers(), fetchCurrentUser()]);
       } catch (err) {
         console.error("Error loading dashboard:", err);
       } finally {
@@ -60,18 +59,8 @@ function Dashboard() {
   }, []);
 
   const fetchMembers = async () => {
-    const res = await api.get("/users");
-    setMembers(res.data.filter((user) => user.role === "member"));
-  };
-
-  const fetchMemberProfiles = async () => {
-    try {
-      const res = await api.get("/member-profiles");
-      setMemberProfiles(res.data);
-    } catch (err) {
-      console.error("Error fetching member profiles:", err);
-      setMemberProfiles([]);
-    }
+    const res = await api.get("/users?role=member");
+    setMembers(res.data);
   };
 
   const fetchCurrentUser = async () => {
@@ -79,14 +68,25 @@ function Dashboard() {
     setCurrentUser(res.data);
   };
 
-  // ✅ Group by disability_type from member_profiles
+  // ✅ Get members with disability data from their member_profile
+  const getMembersWithDisabilities = () => {
+    return members.filter(member =>
+      member.member_profile &&
+      member.member_profile.disability_type
+    );
+  };
+
+  // ✅ Group by disability_type from user.member_profile
   const getDisabilityStats = () => {
     const disabilityCounts = {};
-    
-    memberProfiles.forEach(profile => {
+    const membersWithDisabilities = getMembersWithDisabilities();
+
+    membersWithDisabilities.forEach(member => {
+      const profile = member.member_profile;
+
       // Handle different possible formats of disability_type
       let disabilityType = 'other';
-      
+
       if (profile.disability_type) {
         if (Array.isArray(profile.disability_type)) {
           // If it's an array/tuple, use the first one or join them
@@ -95,10 +95,10 @@ function Dashboard() {
           disabilityType = profile.disability_type;
         }
       }
-      
+
       // Normalize the disability type
       disabilityType = disabilityType.toLowerCase().trim();
-      
+
       // Map to known types or keep as is
       if (!disabilityTypes[disabilityType]) {
         // If it's not in our known types, check if it contains keywords
@@ -111,7 +111,7 @@ function Dashboard() {
         else if (disabilityType.includes('multiple')) disabilityType = 'multiple';
         else disabilityType = 'other';
       }
-      
+
       disabilityCounts[disabilityType] = (disabilityCounts[disabilityType] || 0) + 1;
     });
 
@@ -140,29 +140,28 @@ function Dashboard() {
     const disabilityByStatus = {};
     const statuses = ['approved', 'pending', 'rejected', 'inactive', 'deceased'];
     const disabilityStats = getDisabilityStats();
+    const membersWithDisabilities = getMembersWithDisabilities();
 
     statuses.forEach(status => {
       disabilityByStatus[status] = {};
-      
+
       disabilityStats.forEach(disability => {
         // Count members with this disability type and status
-        const count = memberProfiles.filter(profile => {
-          const member = members.find(m => m.id === profile.user_id);
-          if (!member) return false;
-          
+        const count = membersWithDisabilities.filter(member => {
+          const profile = member.member_profile;
+          if (!profile || !profile.disability_type) return false;
+
           let profileDisabilityType = 'other';
-          if (profile.disability_type) {
-            if (Array.isArray(profile.disability_type)) {
-              profileDisabilityType = profile.disability_type[0] || 'other';
-            } else {
-              profileDisabilityType = profile.disability_type;
-            }
+          if (Array.isArray(profile.disability_type)) {
+            profileDisabilityType = profile.disability_type[0] || 'other';
+          } else {
+            profileDisabilityType = profile.disability_type;
           }
-          
+
           profileDisabilityType = profileDisabilityType.toLowerCase().trim();
           return member.status === status && profileDisabilityType === disability.type;
         }).length;
-        
+
         disabilityByStatus[status][disability.type] = count;
       });
     });
@@ -173,12 +172,7 @@ function Dashboard() {
   const disabilityStats = getDisabilityStats();
   const statusCounts = getStatusCounts();
   const disabilityByStatus = getDisabilityByStatus();
-
-  // Data for status charts
-  const statusChartData = Object.keys(statusCounts).map((status) => ({
-    status,
-    count: statusCounts[status],
-  }));
+  const membersWithDisabilities = getMembersWithDisabilities();
 
   // Data for stacked bar chart (disability by status)
   const stackedChartData = Object.entries(disabilityByStatus).map(([status, disabilities]) => ({
@@ -241,9 +235,9 @@ function Dashboard() {
           {/* Disability Statistics Cards */}
           <section className="mb-12">
             <h2 className="text-2xl font-bold text-gray-800 mb-6">
-              Disability Type Statistics 
+              Disability Type Statistics
               <span className="text-sm font-normal text-gray-600 ml-2">
-                (from {memberProfiles.length} member profiles)
+                (from {membersWithDisabilities.length} member profiles)
               </span>
             </h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -257,7 +251,7 @@ function Dashboard() {
                     <p className="text-3xl font-bold text-gray-800">{disability.count}</p>
                     <p className="text-sm font-medium text-gray-600">{disability.name}</p>
                     <p className="text-xs text-gray-500 mt-1">
-                      {memberProfiles.length > 0 ? ((disability.count / memberProfiles.length) * 100).toFixed(1) : 0}% of profiles
+                      {membersWithDisabilities.length > 0 ? ((disability.count / membersWithDisabilities.length) * 100).toFixed(1) : 0}% of Members
                     </p>
                   </div>
                 ))
@@ -281,11 +275,11 @@ function Dashboard() {
                   <ResponsiveContainer>
                     <BarChart data={disabilityStats}>
                       <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis 
-                        dataKey="name" 
-                        angle={-45} 
-                        textAnchor="end" 
-                        height={80} 
+                      <XAxis
+                        dataKey="name"
+                        angle={-45}
+                        textAnchor="end"
+                        height={80}
                         interval={0}
                       />
                       <YAxis allowDecimals={false} />
@@ -386,9 +380,9 @@ function Dashboard() {
               </div>
               <div className="text-center p-4 bg-sky-50 rounded-lg">
                 <p className="text-2xl font-bold text-sky-600">
-                  {memberProfiles.length}
+                  {membersWithDisabilities.length}
                 </p>
-                <p className="text-sm text-gray-600">Profiles with Data</p>
+                <p className="text-sm text-gray-600">Profiles with Disability Data</p>
               </div>
               <div className="text-center p-4 bg-sky-50 rounded-lg">
                 <p className="text-2xl font-bold text-sky-600">

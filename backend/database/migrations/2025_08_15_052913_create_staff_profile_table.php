@@ -19,6 +19,7 @@ return new class extends Migration
             $table->string('first_name', 255);
             $table->string('last_name', 255);
             $table->string('middle_name', 255)->nullable();
+            $table->string('assigned_barangay');
             $table->date('birthdate');
             $table->string('contact_number', 255);
             $table->string('address', 255);

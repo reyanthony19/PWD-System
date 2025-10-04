@@ -9,9 +9,16 @@ import {
   MapPin,
   Shield,
   CheckCircle,
+  Building,
 } from "lucide-react";
 import api from "./api";
 import Layout from "./Layout";
+
+const barangayOptions = [
+  "Awang", "Bagocboc", "Barra", "Bonbon", "Cauyonan", "Igpit",
+  "Limonda", "Luyong Bonbon", "Malanang", "Nangcaon", "Patag",
+  "Poblacion", "Taboc", "Tingalan"
+];
 
 // ---- Floating Input ----
 const FloatingInput = React.memo(function FloatingInput({
@@ -86,7 +93,7 @@ const FloatingSelect = React.memo(function FloatingSelect({
           transition-all duration-200 cursor-pointer hover:border-gray-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 peer
           ${Icon ? "pl-12 pr-4 py-4" : "px-4 py-4"}`}
       >
-        <option value=""></option>
+        <option value="">Select {label}</option>
         {options.map((option) => (
           <option key={option.value} value={option.value} className="text-gray-900">
             {option.label}
@@ -124,6 +131,7 @@ function Register() {
     contact_number: "",
     birthdate: "",
     address: "",
+    assigned_barangay: "", // new field
   });
 
   const [error, setError] = useState("");
@@ -152,6 +160,7 @@ function Register() {
         first_name: "",
         middle_name: "",
         last_name: "",
+        sex: "",
         email: "",
         role: "staff",
         status: "approved",
@@ -159,7 +168,7 @@ function Register() {
         contact_number: "",
         birthdate: "",
         address: "",
-        id_number: "",
+        assigned_barangay: "",
       });
 
       setShowModal(true);
@@ -275,12 +284,34 @@ function Register() {
                 onChange={handleChange}
                 icon={Calendar}
               />
+              <FloatingSelect
+                name="sex"
+                label="Sex"
+                value={form.sex}
+                onChange={handleChange}
+                options={[
+                  { value: "male", label: "Male" },
+                  { value: "female", label: "Female" },
+                ]}
+                icon={User}
+              />
               <FloatingInput
                 name="address"
                 label="Address"
                 value={form.address}
                 onChange={handleChange}
                 icon={MapPin}
+              />
+              <FloatingSelect
+                name="assigned_barangay"
+                label="Assigned Barangay"
+                value={form.assigned_barangay}
+                onChange={handleChange}
+                options={barangayOptions.map(barangay => ({
+                  value: barangay,
+                  label: barangay
+                }))}
+                icon={Building}
               />
               <FloatingSelect
                 name="role"
@@ -335,12 +366,15 @@ function Register() {
               <h3 className="text-2xl font-bold mb-3 text-gray-900">
                 Registration Successful! 🎉
               </h3>
+              <p className="text-gray-600 mb-6">
+                Staff member has been registered successfully and is now active in the system.
+              </p>
               <button
                 onClick={closeModalAndRedirect}
                 className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 
                   text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 transform hover:scale-105"
               >
-                Continue
+                Register Another Staff
               </button>
             </div>
           </div>

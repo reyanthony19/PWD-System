@@ -21,6 +21,7 @@ class StaffController extends Controller
             'last_name'  => 'required|string|max:255',
             'birthdate'  => 'required|date',
             'address'    => 'required|string|max:255',
+            'assigned_barangay' => 'required|string|max:255',
             'contact_number' => 'nullable|string|max:20',
         ]);
 

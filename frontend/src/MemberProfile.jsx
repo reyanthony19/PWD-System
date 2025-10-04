@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
 import api from "./api";
 import Layout from "./Layout";
@@ -14,10 +14,10 @@ function MemberProfile() {
   const [benefits, setBenefits] = useState([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [loadingBenefits, setLoadingBenefits] = useState(false);
-  const [updatingAttendance, setUpdatingAttendance] = useState({});
   const [sortBy, setSortBy] = useState("event_date");
   const [filterStatus, setFilterStatus] = useState("all");
   const [dateFilter, setDateFilter] = useState("past");
+  const [updatingStatus, setUpdatingStatus] = useState(false);
 
   const API_URL = process.env.REACT_APP_API_URL || "http://127.0.0.1:8000";
 
@@ -39,6 +39,236 @@ function MemberProfile() {
         {config.text}
       </span>
     );
+  };
+
+  // Hard Copy Submission Badge component
+  const HardCopyBadge = ({ hasHardCopy }) => {
+    if (hasHardCopy) {
+      return (
+        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800 ml-2">
+          <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+          </svg>
+          Hard Copy Submitted
+        </span>
+      );
+    }
+    return null;
+  };
+
+  // Check if member has submitted hard copies based on documents.remarks
+  const hasSubmittedHardCopy = useMemo(() => {
+    if (!member || !member.member_profile || !member.member_profile.documents) {
+      return false;
+    }
+    
+    const documents = member.member_profile.documents;
+    const remarks = documents.remarks;
+    
+    // Check if remarks indicate hard copy submission
+    if (!remarks) return false;
+    
+    const hardCopyIndicators = [
+      'hard copy submitted',
+      'hard copy received',
+      'physical copy submitted',
+      'original documents submitted',
+      'hardcopy',
+      'physical'
+    ];
+    
+    return hardCopyIndicators.some(indicator => 
+      remarks.toLowerCase().includes(indicator.toLowerCase())
+    );
+  }, [member]);
+
+  // Success message function
+  const showSuccessMessage = () => {
+    const toast = document.createElement('div');
+    toast.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transform translate-x-full transition-transform duration-300';
+    toast.innerHTML = `
+      <div class="flex items-center">
+        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+        </svg>
+        <span class="font-medium">Member rejected successfully</span>
+      </div>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    // Animate in
+    setTimeout(() => {
+      toast.style.transform = 'translateX(0)';
+    }, 100);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+      toast.style.transform = 'translateX(100%)';
+      setTimeout(() => {
+        if (toast.parentNode) {
+          toast.remove();
+        }
+      }, 300);
+    }, 3000);
+  };
+
+  // Error message function
+  const showErrorMessage = () => {
+    const toast = document.createElement('div');
+    toast.className = 'fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transform translate-x-full transition-transform duration-300';
+    toast.innerHTML = `
+      <div class="flex items-center">
+        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+        </svg>
+        <span class="font-medium">Failed to reject member</span>
+      </div>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    // Animate in
+    setTimeout(() => {
+      toast.style.transform = 'translateX(0)';
+    }, 100);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+      toast.style.transform = 'translateX(100%)';
+      setTimeout(() => {
+        if (toast.parentNode) {
+          toast.remove();
+        }
+      }, 300);
+    }, 3000);
+  };
+
+  // Delete member by changing status to rejected with styled confirmation
+  const handleDeleteMember = async () => {
+    // Create custom modal elements
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
+    modal.innerHTML = `
+      <div class="bg-white rounded-xl shadow-2xl max-w-md w-full transform transition-all">
+        <div class="p-6">
+          <!-- Icon -->
+          <div class="flex justify-center mb-4">
+            <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
+              <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.35 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+              </svg>
+            </div>
+          </div>
+          
+          <!-- Title -->
+          <h3 class="text-xl font-bold text-gray-900 text-center mb-2">Reject Member</h3>
+          
+          <!-- Message -->
+          <p class="text-gray-600 text-center mb-6">
+            Are you sure you want to reject <span class="font-semibold">${fullName}</span>? This action will change their status to "rejected" and cannot be undone.
+          </p>
+          
+          <!-- Buttons -->
+          <div class="flex gap-3">
+            <button 
+              id="cancelBtn"
+              class="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
+            >
+              Cancel
+            </button>
+            <button 
+              id="confirmBtn"
+              class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Reject Member
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Add to DOM
+    document.body.appendChild(modal);
+    
+    // Focus management
+    modal.focus();
+    
+    // Handle confirm button
+    const confirmBtn = modal.querySelector('#confirmBtn');
+    const cancelBtn = modal.querySelector('#cancelBtn');
+    
+    return new Promise((resolve) => {
+      const cleanup = () => {
+        if (modal.parentNode) {
+          modal.remove();
+        }
+        document.removeEventListener('keydown', handleEscape);
+      };
+      
+      const handleConfirm = async () => {
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = `
+          <div class="flex items-center justify-center">
+            <div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+            Rejecting...
+          </div>
+        `;
+        
+        try {
+          setUpdatingStatus(true);
+          
+          // Update user status to rejected using the correct endpoint
+          await api.patch(`/user/${id}/status`, {
+            status: "rejected"
+          });
+
+          // Update local state
+          setMember(prev => prev ? { ...prev, status: "rejected" } : null);
+          
+          cleanup();
+          resolve(true);
+          
+          // Show success message
+          showSuccessMessage();
+          
+        } catch (err) {
+          console.error("Error rejecting member:", err);
+          cleanup();
+          resolve(false);
+          
+          // Show error message
+          showErrorMessage();
+        } finally {
+          setUpdatingStatus(false);
+        }
+      };
+      
+      const handleCancel = () => {
+        cleanup();
+        resolve(false);
+      };
+      
+      const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+          handleCancel();
+        }
+      };
+      
+      const handleBackgroundClick = (e) => {
+        if (e.target === modal) {
+          handleCancel();
+        }
+      };
+      
+      confirmBtn.addEventListener('click', handleConfirm);
+      cancelBtn.addEventListener('click', handleCancel);
+      modal.addEventListener('click', handleBackgroundClick);
+      document.addEventListener('keydown', handleEscape);
+      
+      // Focus the cancel button for better accessibility
+      cancelBtn.focus();
+    });
   };
 
   // Calculate profile completion percentage including images/documents
@@ -305,58 +535,7 @@ function MemberProfile() {
     }
   }, [id]);
 
-  const fetchEvents = async () => {
-    try {
-      setLoadingEvents(true);
-      console.log("🔄 Fetching events...");
-      
-      const res = await api.get("/events");
-      console.log("📦 Events API response:", res);
-      
-      // Use the same pattern as Events page: res.data.data || res.data
-      const eventsData = res.data.data || res.data;
-      console.log("🎯 Processed events data:", eventsData);
-      
-      if (!eventsData || eventsData.length === 0) {
-        console.log("❌ No events data found");
-        setAllEvents([]);
-        return;
-      }
-
-      // Process events with computed fields
-      const processedEvents = eventsData.map(event => {
-        const eventDate = new Date(event.event_date || event.date);
-        const currentDate = new Date();
-        const calculatedStatus = calculateEventStatus(eventDate);
-        
-        return {
-          ...event,
-          computedDate: eventDate,
-          isPast: calculatedStatus === "completed",
-          isUpcoming: calculatedStatus === "upcoming",
-          isOngoing: calculatedStatus === "ongoing",
-          calculatedStatus: calculatedStatus,
-          attendanceRecords: [], // Initialize empty, we'll fetch attendance separately
-          attendance: null,
-          attendance_status: 'absent'
-        };
-      });
-
-      console.log("✅ Processed events:", processedEvents);
-      setAllEvents(processedEvents);
-
-      // Now fetch attendance data for these events
-      await fetchAttendanceData(processedEvents);
-
-    } catch (err) {
-      console.error("❌ Error fetching events:", err);
-      console.error("Error details:", err.response?.data);
-    } finally {
-      setLoadingEvents(false);
-    }
-  };
-
-  const fetchAttendanceData = async (events) => {
+  const fetchAttendanceData = useCallback(async (events) => {
     try {
       console.log("🔄 Fetching attendance data...");
       
@@ -410,7 +589,72 @@ function MemberProfile() {
       console.error("❌ Error in fetchAttendanceData:", err);
       // Keep the events even if attendance fetch fails
     }
-  };
+  }, [id]);
+
+  const fetchEvents = useCallback(async () => {
+    try {
+      setLoadingEvents(true);
+      console.log("🔄 Fetching events...");
+      
+      const res = await api.get("/events");
+      console.log("📦 Events API response:", res);
+      
+      // Use the same pattern as Events page: res.data.data || res.data
+      const eventsData = res.data.data || res.data;
+      console.log("🎯 Processed events data:", eventsData);
+      
+      if (!eventsData || eventsData.length === 0) {
+        console.log("❌ No events data found");
+        setAllEvents([]);
+        return;
+      }
+
+      // Process events with computed fields
+      const processedEvents = eventsData.map(event => {
+        const eventDate = new Date(event.event_date || event.date);
+        const calculatedStatus = calculateEventStatus(eventDate);
+        
+        return {
+          ...event,
+          computedDate: eventDate,
+          isPast: calculatedStatus === "completed",
+          isUpcoming: calculatedStatus === "upcoming",
+          isOngoing: calculatedStatus === "ongoing",
+          calculatedStatus: calculatedStatus,
+          attendanceRecords: [], // Initialize empty, we'll fetch attendance separately
+          attendance: null,
+          attendance_status: 'absent'
+        };
+      });
+
+      console.log("✅ Processed events:", processedEvents);
+      setAllEvents(processedEvents);
+
+      // Now fetch attendance data for these events
+      await fetchAttendanceData(processedEvents);
+
+    } catch (err) {
+      console.error("❌ Error fetching events:", err);
+      console.error("Error details:", err.response?.data);
+    } finally {
+      setLoadingEvents(false);
+    }
+  }, [fetchAttendanceData]);
+
+  const fetchBenefits = useCallback(async () => {
+    try {
+      setLoadingBenefits(true);
+      const res = await api.get(`/users/${id}/benefits`);
+      const benefitsData = res.data.data || res.data || [];
+      // Filter only claimed benefits
+      const claimedBenefits = benefitsData.filter(benefit => benefit.status === 'claimed');
+      setBenefits(claimedBenefits);
+    } catch (err) {
+      console.error("Error fetching benefits:", err);
+    } finally {
+      setLoadingBenefits(false);
+    }
+  }, [id]);
 
   // Filter and sort events based on current filters
   useEffect(() => {
@@ -468,55 +712,13 @@ function MemberProfile() {
     setFilteredEvents(filtered);
   }, [allEvents, dateFilter, filterStatus, sortBy]);
 
-  const fetchBenefits = async () => {
-    try {
-      setLoadingBenefits(true);
-      const res = await api.get(`/users/${id}/benefits`);
-      const benefitsData = res.data.data || res.data || [];
-      // Filter only claimed benefits
-      const claimedBenefits = benefitsData.filter(benefit => benefit.status === 'claimed');
-      setBenefits(claimedBenefits);
-    } catch (err) {
-      console.error("Error fetching benefits:", err);
-    } finally {
-      setLoadingBenefits(false);
-    }
-  };
-
-  const handleAttendance = async (eventId, status) => {
-    try {
-      setUpdatingAttendance(prev => ({ ...prev, [eventId]: true }));
-
-      if (status === 'present') {
-        // Mark as present - create attendance record
-        await api.post(`/events/${eventId}/attendances`, {
-          user_id: parseInt(id),
-          status: 'present',
-          attended_at: new Date().toISOString()
-        });
-      } else {
-        // Mark as absent - delete the attendance record
-        await api.delete(`/events/${eventId}/users/${id}/attendance`);
-      }
-
-      // Refresh events to get updated attendance status
-      await fetchEvents();
-
-    } catch (err) {
-      console.error("Error updating attendance:", err);
-      alert("Failed to update attendance");
-    } finally {
-      setUpdatingAttendance(prev => ({ ...prev, [eventId]: false }));
-    }
-  };
-
   useEffect(() => {
     if (activeTab === "events") {
       fetchEvents();
     } else if (activeTab === "benefits") {
       fetchBenefits();
     }
-  }, [activeTab, id]);
+  }, [activeTab, fetchEvents, fetchBenefits]);
 
   if (loading)
     return (
@@ -576,6 +778,7 @@ function MemberProfile() {
                   <div className="flex items-center gap-4 flex-wrap">
                     <p className="text-blue-100 text-lg capitalize">{member.role} Profile</p>
                     <StatusBadge status={member.status} />
+                    <HardCopyBadge hasHardCopy={hasSubmittedHardCopy} />
                     {profile.id_number && (
                       <p className="text-blue-100 bg-sky-700 px-3 py-1 rounded-lg">
                         ID: {profile.id_number}
@@ -583,7 +786,29 @@ function MemberProfile() {
                     )}
                   </div>
                 </div>
-                <div className="mt-4 md:mt-0">
+                <div className="mt-4 md:mt-0 flex items-center gap-3">
+                  {/* Delete/Reject Button - Only show if member is not already rejected */}
+                  {member.status !== 'rejected' && (
+                    <button
+                      onClick={handleDeleteMember}
+                      disabled={updatingStatus}
+                      className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {updatingStatus ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                          Rejecting...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                          Reject Member
+                        </>
+                      )}
+                    </button>
+                  )}
                   <Link
                     to="/member"
                     className="inline-flex items-center px-4 py-2 bg-white text-sky-600 rounded-lg hover:bg-blue-50 transition font-semibold"
@@ -688,18 +913,72 @@ function MemberProfile() {
                       Profile completion: <span className={`font-semibold ${getCompletionColor(calculateProfileCompletion).replace('bg-', 'text-')}`}>
                         {calculateProfileCompletion}%
                       </span>
+                      {hasSubmittedHardCopy && (
+                        <HardCopyBadge hasHardCopy={hasSubmittedHardCopy} />
+                      )}
                     </p>
                   </div>
-                  {member.role === "member" && (
-                    <Link 
-                      to={`/print/${member.id}`} 
-                      state={{ member }}
-                      className="inline-flex items-center px-4 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition font-semibold"
-                    >
-                      🖨️ Print ID
-                    </Link>
-                  )}
+                  <div className="flex gap-3">
+                    {/* Delete/Reject Button in Profile Tab */}
+                    {member.status !== 'rejected' && (
+                      <button
+                        onClick={handleDeleteMember}
+                        disabled={updatingStatus}
+                        className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {updatingStatus ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                            Rejecting...
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            Reject Member
+                          </>
+                        )}
+                      </button>
+                    )}
+                    {member.role === "member" && (
+                      <Link 
+                        to={`/print/${member.id}`} 
+                        state={{ member }}
+                        className="inline-flex items-center px-4 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition font-semibold"
+                      >
+                        🖨️ Print ID
+                      </Link>
+                    )}
+                  </div>
                 </div>
+
+                {/* Status Alert if Rejected */}
+                {member.status === 'rejected' && (
+                  <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                    <div className="flex items-center">
+                      <svg className="w-5 h-5 text-red-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                      <span className="text-red-800 font-medium">This member has been rejected and is no longer active in the system.</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Hard Copy Remarks Display */}
+                {hasSubmittedHardCopy && docs.remarks && (
+                  <div className="mb-6 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                    <div className="flex items-start">
+                      <svg className="w-5 h-5 text-purple-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                      <div>
+                        <span className="text-purple-800 font-medium">Hard Copy Documents Submitted</span>
+                        <p className="text-purple-700 text-sm mt-1">{docs.remarks}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {[
@@ -735,7 +1014,12 @@ function MemberProfile() {
 
                 {/* Documents Section */}
                 <div className="mt-8 pt-8 border-t">
-                  <h3 className="text-2xl font-bold text-gray-800 mb-6">Required Documents</h3>
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-2xl font-bold text-gray-800">Required Documents</h3>
+                    {hasSubmittedHardCopy && (
+                      <HardCopyBadge hasHardCopy={hasSubmittedHardCopy} />
+                    )}
+                  </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
                     {[
                       { label: "Barangay Indigency", file: docs.barangay_indigency, icon: "📄" },

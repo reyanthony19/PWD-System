@@ -56,7 +56,6 @@ class MemberController extends Controller
 
 
 
-            // Create user
             $user = User::create([
                 'username' => $validated['username'],
                 'email'    => $validated['email'],
@@ -65,10 +64,8 @@ class MemberController extends Controller
                 'status'   => 'pending',
             ]);
 
-            // Generate id_number if not provided
             $idNumber = $request->id_number ?? 'PDAO-' . str_pad($user->id, 4, '0', STR_PAD_LEFT);
 
-            // Create Member Profile
             $profile = $user->memberProfile()->create([
                 'first_name'        => $validated['first_name'],
                 'middle_name'       => $request->middle_name,
