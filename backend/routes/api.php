@@ -7,12 +7,12 @@ use App\Http\Controllers\MemberController;
 use App\Http\Controllers\BenefitController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\AttendanceController;
+
 /*
 |--------------------------------------------------------------------------
 | Public Routes
 |--------------------------------------------------------------------------
 */
-
 
 // Admin login/register
 Route::post('/login', [AuthController::class, 'login']);
@@ -21,13 +21,6 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::post('/member/register', [MemberController::class, 'register']);
 
 Route::get('/scanMember', [MemberController::class, 'scanMember']);
-
-
-// routes/api.php
-
-Route::middleware(['auth:sanctum'])->group(function () {
-    Route::post('/staff/register', [StaffController::class, 'register']);
-});
 
 // Public Benefits (members can view benefits)
 
@@ -44,6 +37,10 @@ Route::middleware('auth:sanctum')->group(function () {
     | Authenticated User Management
     |--------------------------------------------------------------------------
     */
+    
+    // Staff registration (MOVED INSIDE auth group)
+    Route::post('/staff/register', [StaffController::class, 'register']);
+    
     Route::get('/user', [AuthController::class, 'profile']);
     Route::get('/user/documents/{user_id}', [AuthController::class, 'fetchMemberDocuments']);
     Route::get('/users', [AuthController::class, 'listUsers']);
@@ -59,7 +56,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/attendances', [AttendanceController::class, 'index']);
     Route::get('/events/{eventId}/{userId}', [AttendanceController::class, 'checkUserAttendance']);
 
-
     // CRUD for events
     Route::get('/events', [EventController::class, 'index']);
     Route::get('/events/{event}', [EventController::class, 'show']);
@@ -68,12 +64,22 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/events/{event}', [EventController::class, 'update']);
         Route::delete('/events/{event}', [EventController::class, 'destroy']);
     });
+
     /*
     |--------------------------------------------------------------------------
     | Benefits Management (Admin)
     |--------------------------------------------------------------------------
     */
+    
+
+    
+    // Benefit Participants Management (NEW)
+    Route::get('/benefits/{benefitId}/participants', [BenefitController::class, 'getBenefitParticipants']);
+    Route::post('/benefits/{benefitId}/participants', [BenefitController::class, 'addParticipants']);
+    Route::delete('/benefits/{benefitId}/participants', [BenefitController::class, 'removeParticipants']);
+
     // CRUD for benefits
+    Route::get('/benefits', [BenefitController::class, 'index']); // NEW - Added missing route
     Route::post('/benefits', [BenefitController::class, 'storeBenefit']);
     Route::put('/benefits/{benefit}', [BenefitController::class, 'updateBenefit']);
     Route::delete('/benefits/{benefit}', [BenefitController::class, 'destroyBenefit']);

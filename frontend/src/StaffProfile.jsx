@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import api from "./api";
 import Layout from "./Layout";
-import { UserCheck, Ban } from "lucide-react";
+import { UserCheck, Ban, } from "lucide-react";
 
 // ✅ Theme applied consistently
 const theme = {
@@ -20,6 +20,68 @@ function StaffProfile() {
   const [error, setError] = useState("");
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+
+  // Success message function
+  const showSuccessMessage = (message) => {
+    const toast = document.createElement('div');
+    toast.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transform translate-x-full transition-transform duration-300';
+    toast.innerHTML = `
+      <div class="flex items-center">
+        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+        </svg>
+        <span class="font-medium">${message}</span>
+      </div>
+    `;
+
+    document.body.appendChild(toast);
+
+    // Animate in
+    setTimeout(() => {
+      toast.style.transform = 'translateX(0)';
+    }, 100);
+
+    // Remove after 3 seconds
+    setTimeout(() => {
+      toast.style.transform = 'translateX(100%)';
+      setTimeout(() => {
+        if (toast.parentNode) {
+          toast.remove();
+        }
+      }, 300);
+    }, 3000);
+  };
+
+  // Error message function
+  const showErrorMessage = (message) => {
+    const toast = document.createElement('div');
+    toast.className = 'fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transform translate-x-full transition-transform duration-300';
+    toast.innerHTML = `
+      <div class="flex items-center">
+        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+        </svg>
+        <span class="font-medium">${message}</span>
+      </div>
+    `;
+
+    document.body.appendChild(toast);
+
+    // Animate in
+    setTimeout(() => {
+      toast.style.transform = 'translateX(0)';
+    }, 100);
+
+    // Remove after 3 seconds
+    setTimeout(() => {
+      toast.style.transform = 'translateX(100%)';
+      setTimeout(() => {
+        if (toast.parentNode) {
+          toast.remove();
+        }
+      }, 300);
+    }, 3000);
+  };
 
   useEffect(() => {
     const fetchStaff = async () => {
@@ -52,11 +114,13 @@ function StaffProfile() {
       setShowStatusModal(false);
       
       // Show success message
-      alert(`Staff member ${newStatus === 'approved' ? 'activated' : 'deactivated'} successfully!`);
+      showSuccessMessage(
+        `Staff member ${newStatus === 'approved' ? 'activated' : 'deactivated'} successfully!`
+      );
       
     } catch (err) {
       console.error("Error updating staff status:", err);
-      alert(err.response?.data?.message || "Failed to update staff status.");
+      showErrorMessage(err.response?.data?.message || "Failed to update staff status.");
     } finally {
       setUpdatingStatus(false);
     }
@@ -182,6 +246,8 @@ function StaffProfile() {
     };
   };
 
+ 
+
   if (loading) {
     return (
       <Layout>
@@ -239,8 +305,6 @@ function StaffProfile() {
     { label: "Contact Number", value: profile.contact_number },
     { label: "Address", value: profile.address },
     { label: "Assigned Barangay", value: profile.assigned_barangay },
-    { label: "Department", value: profile.department },
-    { label: "Position", value: profile.position },
   ];
 
   return (

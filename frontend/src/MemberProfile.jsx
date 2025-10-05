@@ -61,13 +61,13 @@ function MemberProfile() {
     if (!member || !member.member_profile || !member.member_profile.documents) {
       return false;
     }
-    
+
     const documents = member.member_profile.documents;
     const remarks = documents.remarks;
-    
+
     // Check if remarks indicate hard copy submission
     if (!remarks) return false;
-    
+
     const hardCopyIndicators = [
       'hard copy submitted',
       'hard copy received',
@@ -76,8 +76,8 @@ function MemberProfile() {
       'hardcopy',
       'physical'
     ];
-    
-    return hardCopyIndicators.some(indicator => 
+
+    return hardCopyIndicators.some(indicator =>
       remarks.toLowerCase().includes(indicator.toLowerCase())
     );
   }, [member]);
@@ -94,14 +94,14 @@ function MemberProfile() {
         <span class="font-medium">Member rejected successfully</span>
       </div>
     `;
-    
+
     document.body.appendChild(toast);
-    
+
     // Animate in
     setTimeout(() => {
       toast.style.transform = 'translateX(0)';
     }, 100);
-    
+
     // Remove after 3 seconds
     setTimeout(() => {
       toast.style.transform = 'translateX(100%)';
@@ -125,14 +125,14 @@ function MemberProfile() {
         <span class="font-medium">Failed to reject member</span>
       </div>
     `;
-    
+
     document.body.appendChild(toast);
-    
+
     // Animate in
     setTimeout(() => {
       toast.style.transform = 'translateX(0)';
     }, 100);
-    
+
     // Remove after 3 seconds
     setTimeout(() => {
       toast.style.transform = 'translateX(100%)';
@@ -190,14 +190,14 @@ function MemberProfile() {
 
     // Add to DOM
     document.body.appendChild(modal);
-    
+
     // Focus management
     modal.focus();
-    
+
     // Handle confirm button
     const confirmBtn = modal.querySelector('#confirmBtn');
     const cancelBtn = modal.querySelector('#cancelBtn');
-    
+
     return new Promise((resolve) => {
       const cleanup = () => {
         if (modal.parentNode) {
@@ -205,7 +205,7 @@ function MemberProfile() {
         }
         document.removeEventListener('keydown', handleEscape);
       };
-      
+
       const handleConfirm = async () => {
         confirmBtn.disabled = true;
         confirmBtn.innerHTML = `
@@ -214,10 +214,10 @@ function MemberProfile() {
             Rejecting...
           </div>
         `;
-        
+
         try {
           setUpdatingStatus(true);
-          
+
           // Update user status to rejected using the correct endpoint
           await api.patch(`/user/${id}/status`, {
             status: "rejected"
@@ -225,47 +225,47 @@ function MemberProfile() {
 
           // Update local state
           setMember(prev => prev ? { ...prev, status: "rejected" } : null);
-          
+
           cleanup();
           resolve(true);
-          
+
           // Show success message
           showSuccessMessage();
-          
+
         } catch (err) {
           console.error("Error rejecting member:", err);
           cleanup();
           resolve(false);
-          
+
           // Show error message
           showErrorMessage();
         } finally {
           setUpdatingStatus(false);
         }
       };
-      
+
       const handleCancel = () => {
         cleanup();
         resolve(false);
       };
-      
+
       const handleEscape = (e) => {
         if (e.key === 'Escape') {
           handleCancel();
         }
       };
-      
+
       const handleBackgroundClick = (e) => {
         if (e.target === modal) {
           handleCancel();
         }
       };
-      
+
       confirmBtn.addEventListener('click', handleConfirm);
       cancelBtn.addEventListener('click', handleCancel);
       modal.addEventListener('click', handleBackgroundClick);
       document.addEventListener('keydown', handleEscape);
-      
+
       // Focus the cancel button for better accessibility
       cancelBtn.focus();
     });
@@ -277,7 +277,7 @@ function MemberProfile() {
 
     const profile = member.member_profile;
     const documents = profile.documents || {};
-    
+
     // Define all required fields with their weights
     const fieldWeights = {
       // Personal Information (40% weight)
@@ -290,7 +290,7 @@ function MemberProfile() {
         ],
         totalWeight: 6
       },
-      
+
       // Contact Information (20% weight)
       contact: {
         fields: [
@@ -300,7 +300,7 @@ function MemberProfile() {
         ],
         totalWeight: 3
       },
-      
+
       // Medical Information (15% weight)
       medical: {
         fields: [
@@ -309,7 +309,7 @@ function MemberProfile() {
         ],
         totalWeight: 3
       },
-      
+
       // Government IDs (10% weight)
       government: {
         fields: [
@@ -318,7 +318,7 @@ function MemberProfile() {
         ],
         totalWeight: 2
       },
-      
+
       // Guardian Information (15% weight)
       guardian: {
         fields: [
@@ -329,7 +329,7 @@ function MemberProfile() {
         ],
         totalWeight: 4
       },
-      
+
       // Documents/Images (20% weight) - 5% each
       documents: {
         fields: [
@@ -348,10 +348,10 @@ function MemberProfile() {
     // Calculate scores for each category
     Object.keys(fieldWeights).forEach(category => {
       const categoryConfig = fieldWeights[category];
-      
+
       categoryConfig.fields.forEach(field => {
         maxScore += field.weight;
-        
+
         let fieldValue;
         if (category === 'documents') {
           // For documents, check if the file exists
@@ -360,14 +360,14 @@ function MemberProfile() {
           // For regular fields, get from profile
           fieldValue = profile[field.name];
         }
-        
+
         // Check if field is filled
-        const isFilled = fieldValue !== null && 
-                         fieldValue !== undefined && 
-                         fieldValue !== "" && 
-                         fieldValue !== " " &&
-                         (!Array.isArray(fieldValue) || fieldValue.length > 0);
-        
+        const isFilled = fieldValue !== null &&
+          fieldValue !== undefined &&
+          fieldValue !== "" &&
+          fieldValue !== " " &&
+          (!Array.isArray(fieldValue) || fieldValue.length > 0);
+
         if (isFilled) {
           totalScore += field.weight;
         }
@@ -454,10 +454,10 @@ function MemberProfile() {
     ];
 
     return categories.map(category => {
-      const filledFields = category.fields.filter(field => 
-        field.value !== null && 
-        field.value !== undefined && 
-        field.value !== "" && 
+      const filledFields = category.fields.filter(field =>
+        field.value !== null &&
+        field.value !== undefined &&
+        field.value !== "" &&
         field.value !== " " &&
         (!Array.isArray(field.value) || field.value.length > 0)
       ).length;
@@ -500,11 +500,11 @@ function MemberProfile() {
   const calculateEventStatus = (eventDate) => {
     const today = new Date();
     const event = new Date(eventDate);
-    
+
     // Reset time parts to compare only dates
     today.setHours(0, 0, 0, 0);
     event.setHours(0, 0, 0, 0);
-    
+
     if (event > today) {
       return "upcoming";
     } else if (event < today) {
@@ -538,7 +538,7 @@ function MemberProfile() {
   const fetchAttendanceData = useCallback(async (events) => {
     try {
       console.log("🔄 Fetching attendance data...");
-      
+
       // Try to get user's attendance records
       try {
         const userAttendancesRes = await api.get(`/users/${id}/attendances`);
@@ -569,7 +569,7 @@ function MemberProfile() {
             const attendanceRes = await api.get(`/attendances/${event.id}`);
             const attendanceRecords = attendanceRes.data.data || attendanceRes.data || [];
             const userAttendance = attendanceRecords.find(att => att.user_id === parseInt(id));
-            
+
             return {
               ...event,
               attendanceRecords,
@@ -584,7 +584,7 @@ function MemberProfile() {
       );
 
       setAllEvents(eventsWithAttendance);
-      
+
     } catch (err) {
       console.error("❌ Error in fetchAttendanceData:", err);
       // Keep the events even if attendance fetch fails
@@ -595,14 +595,14 @@ function MemberProfile() {
     try {
       setLoadingEvents(true);
       console.log("🔄 Fetching events...");
-      
+
       const res = await api.get("/events");
       console.log("📦 Events API response:", res);
-      
+
       // Use the same pattern as Events page: res.data.data || res.data
       const eventsData = res.data.data || res.data;
       console.log("🎯 Processed events data:", eventsData);
-      
+
       if (!eventsData || eventsData.length === 0) {
         console.log("❌ No events data found");
         setAllEvents([]);
@@ -613,7 +613,7 @@ function MemberProfile() {
       const processedEvents = eventsData.map(event => {
         const eventDate = new Date(event.event_date || event.date);
         const calculatedStatus = calculateEventStatus(eventDate);
-        
+
         return {
           ...event,
           computedDate: eventDate,
@@ -788,27 +788,6 @@ function MemberProfile() {
                 </div>
                 <div className="mt-4 md:mt-0 flex items-center gap-3">
                   {/* Delete/Reject Button - Only show if member is not already rejected */}
-                  {member.status !== 'rejected' && (
-                    <button
-                      onClick={handleDeleteMember}
-                      disabled={updatingStatus}
-                      className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {updatingStatus ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                          Rejecting...
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                          Reject Member
-                        </>
-                      )}
-                    </button>
-                  )}
                   <Link
                     to="/member"
                     className="inline-flex items-center px-4 py-2 bg-white text-sky-600 rounded-lg hover:bg-blue-50 transition font-semibold"
@@ -818,7 +797,7 @@ function MemberProfile() {
                 </div>
               </div>
             </div>
-            
+
             {/* Profile Completion Progress Bar */}
             {member.role === "member" && (
               <div className="bg-white border-t border-gray-200 p-6">
@@ -833,7 +812,7 @@ function MemberProfile() {
                       </span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-3">
-                      <div 
+                      <div
                         className={`h-3 rounded-full transition-all duration-500 ${getCompletionColor(calculateProfileCompletion)}`}
                         style={{ width: `${calculateProfileCompletion}%` }}
                       ></div>
@@ -859,12 +838,11 @@ function MemberProfile() {
                         </span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div 
-                          className={`h-2 rounded-full ${
-                            category.percentage >= 90 ? 'bg-green-400' :
-                            category.percentage >= 70 ? 'bg-blue-400' :
-                            category.percentage >= 50 ? 'bg-yellow-400' : 'bg-red-400'
-                          }`}
+                        <div
+                          className={`h-2 rounded-full ${category.percentage >= 90 ? 'bg-green-400' :
+                              category.percentage >= 70 ? 'bg-blue-400' :
+                                category.percentage >= 50 ? 'bg-yellow-400' : 'bg-red-400'
+                            }`}
                           style={{ width: `${category.percentage}%` }}
                         ></div>
                       </div>
@@ -889,11 +867,10 @@ function MemberProfile() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex-1 min-w-0 px-6 py-4 text-sm font-medium border-b-2 transition ${
-                    activeTab === tab.id
+                  className={`flex-1 min-w-0 px-6 py-4 text-sm font-medium border-b-2 transition ${activeTab === tab.id
                       ? "border-sky-500 text-sky-600 bg-blue-50"
                       : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                  }`}
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -942,8 +919,8 @@ function MemberProfile() {
                       </button>
                     )}
                     {member.role === "member" && (
-                      <Link 
-                        to={`/print/${member.id}`} 
+                      <Link
+                        to={`/print/${member.id}`}
                         state={{ member }}
                         className="inline-flex items-center px-4 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition font-semibold"
                       >
@@ -1027,9 +1004,8 @@ function MemberProfile() {
                       { label: "2x2 Picture", file: docs.picture_2x2, icon: "📷" },
                       { label: "Birth Certificate", file: docs.birth_certificate, icon: "🎂" },
                     ].map((doc, i) => (
-                      <div key={i} className={`border-2 rounded-xl overflow-hidden transition group ${
-                        doc.file ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
-                      }`}>
+                      <div key={i} className={`border-2 rounded-xl overflow-hidden transition group ${doc.file ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
+                        }`}>
                         <div className="aspect-square bg-gray-100 overflow-hidden">
                           {doc.file ? (
                             <img
@@ -1050,9 +1026,8 @@ function MemberProfile() {
                         <div className="p-4 text-center">
                           <div className="text-2xl mb-2">{doc.icon}</div>
                           <p className="text-sm font-medium text-gray-700 mb-2">{doc.label}</p>
-                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                            doc.file ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                          }`}>
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${doc.file ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                            }`}>
                             {doc.file ? 'Uploaded' : 'Missing'}
                           </span>
                         </div>
@@ -1068,7 +1043,7 @@ function MemberProfile() {
               <div className="p-8">
                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6">
                   <h2 className="text-2xl font-bold text-gray-800 mb-4 lg:mb-0">Events & Attendance</h2>
-                  
+
                   {/* Debug Info */}
                   <div className="text-sm text-gray-500 mb-4 lg:mb-0">
                     Showing {filteredEvents.length} of {allEvents.length} events
@@ -1158,22 +1133,17 @@ function MemberProfile() {
                   <div className="text-center py-12">
                     <div className="text-6xl mb-4">📅</div>
                     <p className="text-gray-500 text-lg">
-                      {allEvents.length === 0 ? 'No events found in system.' : 
-                       dateFilter === 'past' ? 'No past events found.' : 
-                       dateFilter === 'upcoming' ? 'No upcoming events found.' : 
-                       dateFilter === 'ongoing' ? 'No ongoing events found.' : 
-                       'No events match your filters.'}
+                      {allEvents.length === 0 ? 'No events found in system.' :
+                        dateFilter === 'past' ? 'No past events found.' :
+                          dateFilter === 'upcoming' ? 'No upcoming events found.' :
+                            dateFilter === 'ongoing' ? 'No ongoing events found.' :
+                              'No events match your filters.'}
                     </p>
                     <p className="text-gray-400 text-sm mt-2">
                       {allEvents.length === 0 ? 'Events will appear here once they are created in the system.' :
-                       'Try adjusting your filters to see more events.'}
+                        'Try adjusting your filters to see more events.'}
                     </p>
-                    <button 
-                      onClick={() => console.log('All events:', allEvents, 'Filtered:', filteredEvents)}
-                      className="mt-4 text-sky-600 hover:text-sky-700 text-sm underline"
-                    >
-                      Debug Events Data
-                    </button>
+                   
                   </div>
                 ) : (
                   <>
@@ -1294,15 +1264,14 @@ function MemberProfile() {
 
                                 {/* Event Status */}
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                    event.calculatedStatus === "completed" 
+                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${event.calculatedStatus === "completed"
                                       ? 'bg-green-100 text-green-800'
                                       : event.calculatedStatus === "upcoming"
-                                      ? 'bg-blue-100 text-blue-800'
-                                      : event.calculatedStatus === "ongoing"
-                                      ? 'bg-orange-100 text-orange-800'
-                                      : 'bg-yellow-100 text-yellow-800'
-                                  }`}>
+                                        ? 'bg-blue-100 text-blue-800'
+                                        : event.calculatedStatus === "ongoing"
+                                          ? 'bg-orange-100 text-orange-800'
+                                          : 'bg-yellow-100 text-yellow-800'
+                                    }`}>
                                     {event.calculatedStatus?.charAt(0).toUpperCase() + event.calculatedStatus?.slice(1) || 'Scheduled'}
                                   </span>
                                 </td>
@@ -1331,7 +1300,7 @@ function MemberProfile() {
             {activeTab === "benefits" && (
               <div className="p-8">
                 <h2 className="text-2xl font-bold text-gray-800 mb-6">Benefits & Claims</h2>
-                
+
                 {loadingBenefits ? (
                   <div className="text-center py-12">
                     <div className="w-12 h-12 border-4 border-sky-200 border-t-sky-600 rounded-full animate-spin mx-auto"></div>
@@ -1349,15 +1318,14 @@ function MemberProfile() {
                         <div className="text-center mb-4">
                           <div className="text-4xl mb-3">{benefit.type === 'financial' ? '💰' : benefit.type === 'medical' ? '🏥' : '🎁'}</div>
                           <h3 className="text-lg font-semibold text-gray-800 mb-2">{benefit.name}</h3>
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                            benefit.status === 'claimed' ? 'bg-green-100 text-green-800' :
-                            benefit.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-gray-100 text-gray-800'
-                          }`}>
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${benefit.status === 'claimed' ? 'bg-green-100 text-green-800' :
+                              benefit.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                'bg-gray-100 text-gray-800'
+                            }`}>
                             {benefit.status.toUpperCase()}
                           </span>
                         </div>
-                        
+
                         <div className="space-y-2 text-sm text-gray-600">
                           <div className="flex justify-between">
                             <span>Type:</span>
