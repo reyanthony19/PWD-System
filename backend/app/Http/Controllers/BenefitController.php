@@ -8,6 +8,7 @@ use App\Models\BenefitParticipant;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class BenefitController extends Controller
 {
@@ -226,7 +227,7 @@ class BenefitController extends Controller
         ]);
 
         // ✅ Check if user is in benefit_participants
-        $isParticipant = \App\Models\BenefitParticipant::where('benefit_id', $benefit->id)
+        $isParticipant = BenefitParticipant::where('benefit_id', $benefit->id)
             ->where('user_id', $validated['user_id'])
             ->exists();
 
@@ -255,7 +256,189 @@ class BenefitController extends Controller
                 : null,
         ]);
 
-
         return response()->json($record, 201);
+    }
+
+    /**
+     * ----------------------------
+     * BENEFIT PARTICIPANTS MANAGEMENT
+     * ----------------------------
+     */
+
+    /**
+     * Get all participants for a specific benefit
+     * GET /benefits/{benefitId}/participants
+     */
+    public function getBenefitParticipants($benefitId)
+{
+    $participants = BenefitParticipant::with('user')
+        ->where('benefit_id', $benefitId)
+        ->get();
+
+    return response()->json($participants);
+}
+
+    /**
+     * Add participants to a benefit
+     * POST /benefits/{benefitId}/participants
+     */
+    public function addParticipants(Request $request, $benefitId)
+    {
+        $benefit = Benefit::findOrFail($benefitId);
+
+        $request->validate([
+            'user_ids' => 'required|array',
+            'user_ids.*' => 'required|exists:users,id',
+        ]);
+
+        $addedParticipants = [];
+        $existingParticipants = [];
+        $invalidUsers = [];
+
+        DB::beginTransaction();
+
+        try {
+            foreach ($request->user_ids as $userId) {
+                $user = User::find($userId);
+
+                // Check if user is eligible (member and approved status)
+                if ($user->role !== 'member' || $user->status !== 'approved') {
+                    $invalidUsers[] = [
+                        'id' => $userId,
+                        'name' => $user->name,
+                        'reason' => $user->role !== 'member' ? 'User is not a member' : 'User is not approved'
+                    ];
+                    continue;
+                }
+
+                // Check if already a participant
+                $existingParticipant = BenefitParticipant::where('benefit_id', $benefitId)
+                    ->where('user_id', $userId)
+                    ->first();
+
+                if ($existingParticipant) {
+                    $existingParticipants[] = [
+                        'id' => $userId,
+                        'name' => $user->name,
+                    ];
+                    continue;
+                }
+
+                // Add as participant
+                $participant = BenefitParticipant::create([
+                    'benefit_id' => $benefitId,
+                    'user_id' => $userId,
+                ]);
+
+                $addedParticipants[] = [
+                    'id' => $userId,
+                    'name' => $user->name,
+                    'participant_id' => $participant->id,
+                ];
+            }
+
+            // Update the locked_member_count
+            $newCount = BenefitParticipant::where('benefit_id', $benefitId)->count();
+            $benefit->update([
+                'locked_member_count' => $newCount
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Participants added successfully',
+                'added' => $addedParticipants,
+                'existing' => $existingParticipants,
+                'invalid' => $invalidUsers,
+                'new_participant_count' => $newCount,
+            ], 201);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'Failed to add participants',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Remove participants from a benefit
+     * DELETE /benefits/{benefitId}/participants
+     */
+    public function removeParticipants(Request $request, $benefitId)
+    {
+        $benefit = Benefit::findOrFail($benefitId);
+
+        $request->validate([
+            'user_ids' => 'required|array',
+            'user_ids.*' => 'required|exists:users,id',
+        ]);
+
+        $removedParticipants = [];
+        $nonParticipants = [];
+        $hasClaims = [];
+
+        DB::beginTransaction();
+
+        try {
+            foreach ($request->user_ids as $userId) {
+                // Check if user is actually a participant
+                $participant = BenefitParticipant::where('benefit_id', $benefitId)
+                    ->where('user_id', $userId)
+                    ->first();
+
+                if (!$participant) {
+                    $nonParticipants[] = [
+                        'id' => $userId,
+                        'name' => User::find($userId)->name,
+                    ];
+                    continue;
+                }
+
+                // Check if user has already claimed the benefit
+                $hasClaimed = BenefitRecord::where('benefit_id', $benefitId)
+                    ->where('user_id', $userId)
+                    ->exists();
+
+                if ($hasClaimed) {
+                    $hasClaims[] = [
+                        'id' => $userId,
+                        'name' => User::find($userId)->name,
+                    ];
+                    continue;
+                }
+
+                // Remove participant
+                $participant->delete();
+                $removedParticipants[] = [
+                    'id' => $userId,
+                    'name' => User::find($userId)->name,
+                ];
+            }
+
+            // Update the locked_member_count
+            $newCount = BenefitParticipant::where('benefit_id', $benefitId)->count();
+            $benefit->update([
+                'locked_member_count' => $newCount
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Participants removed successfully',
+                'removed' => $removedParticipants,
+                'non_participants' => $nonParticipants,
+                'has_claims' => $hasClaims,
+                'new_participant_count' => $newCount,
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'Failed to remove participants',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 }

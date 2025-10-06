@@ -71,17 +71,17 @@ function BenefitsList() {
   const getTypeInfo = (type) => {
     switch (type) {
       case "cash":
-        return { 
+        return {
           color: "bg-green-100 text-green-800",
           icon: "💰"
         };
       case "relief":
-        return { 
+        return {
           color: "bg-orange-100 text-orange-800",
           icon: "🛒"
         };
       default:
-        return { 
+        return {
           color: "bg-gray-100 text-gray-800",
           icon: "🎁"
         };
@@ -195,7 +195,7 @@ function BenefitsList() {
             {(searchTerm || typeFilter !== "all") && (
               <span className="text-xs text-gray-600 font-medium">Active filters:</span>
             )}
-            
+
             {searchTerm && (
               <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full flex items-center gap-1">
                 Search: "{searchTerm}"
@@ -207,7 +207,7 @@ function BenefitsList() {
                 </button>
               </span>
             )}
-            
+
             {typeFilter !== "all" && (
               <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full flex items-center gap-1">
                 Type: {typeOptions.find(opt => opt.key === typeFilter)?.label}
@@ -256,7 +256,7 @@ function BenefitsList() {
                     return (
                       <tr
                         key={benefit.id}
-                        onClick={() => navigate(`/benefits/claim/${benefit.id}`)}
+                        onClick={() => navigate(`/benefits/${benefit.id}/participants`)}
                         className="odd:bg-gray-100 even:bg-gray-50 hover:bg-sky-100 cursor-pointer transition"
                       >
                         <td className="px-4 py-3 font-medium text-gray-700">
@@ -298,7 +298,7 @@ function BenefitsList() {
                         <div className="text-4xl mb-2">🎁</div>
                         <p className="text-lg font-medium mb-1">No benefits found</p>
                         <p className="text-sm text-gray-600">
-                          {searchTerm || typeFilter !== "all" 
+                          {searchTerm || typeFilter !== "all"
                             ? "Try adjusting your search or filter criteria"
                             : "No benefits have been created yet"
                           }

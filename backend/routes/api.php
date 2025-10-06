@@ -22,8 +22,6 @@ Route::post('/member/register', [MemberController::class, 'register']);
 
 Route::get('/scanMember', [MemberController::class, 'scanMember']);
 
-// Public Benefits (members can view benefits)
-
 /*
 |--------------------------------------------------------------------------
 | Protected Routes (requires authentication)
@@ -38,7 +36,7 @@ Route::middleware('auth:sanctum')->group(function () {
     |--------------------------------------------------------------------------
     */
     
-    // Staff registration (MOVED INSIDE auth group)
+    // Staff registration
     Route::post('/staff/register', [StaffController::class, 'register']);
     
     Route::get('/user', [AuthController::class, 'profile']);
@@ -50,36 +48,19 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/user/{id}', [AuthController::class, 'deleteUser']);
     Route::post('/logout', [AuthController::class, 'logout']);
 
-    // Scanner from mobile app
-    Route::get('/events/{event}/attendances', [AttendanceController::class, 'index']);
-    Route::post('/events/{event}/attendances', [AttendanceController::class, 'store']);
-    Route::get('/attendances', [AttendanceController::class, 'index']);
-    Route::get('/events/{eventId}/{userId}', [AttendanceController::class, 'checkUserAttendance']);
-
-    // CRUD for events
-    Route::get('/events', [EventController::class, 'index']);
-    Route::get('/events/{event}', [EventController::class, 'show']);
-    Route::middleware('auth:sanctum')->group(function () {
-        Route::post('/events', [EventController::class, 'store']);
-        Route::put('/events/{event}', [EventController::class, 'update']);
-        Route::delete('/events/{event}', [EventController::class, 'destroy']);
-    });
-
     /*
     |--------------------------------------------------------------------------
-    | Benefits Management (Admin)
+    | Benefits Management
     |--------------------------------------------------------------------------
     */
     
-
-    
-    // Benefit Participants Management (NEW)
-    Route::get('/benefits/{benefitId}/participants', [BenefitController::class, 'getBenefitParticipants']);
+    // ✅ Benefit Participants Management
+    Route::get('/benefits/{id}/participants', [BenefitController::class, 'getBenefitParticipants']);
     Route::post('/benefits/{benefitId}/participants', [BenefitController::class, 'addParticipants']);
     Route::delete('/benefits/{benefitId}/participants', [BenefitController::class, 'removeParticipants']);
 
     // CRUD for benefits
-    Route::get('/benefits', [BenefitController::class, 'index']); // NEW - Added missing route
+    Route::get('/benefits', [BenefitController::class, 'index']);
     Route::post('/benefits', [BenefitController::class, 'storeBenefit']);
     Route::put('/benefits/{benefit}', [BenefitController::class, 'updateBenefit']);
     Route::delete('/benefits/{benefit}', [BenefitController::class, 'destroyBenefit']);
@@ -98,18 +79,29 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/benefits/{benefit}/claims', [BenefitController::class, 'indexClaims']);
     Route::post('/benefits/{benefit}/claims', [BenefitController::class, 'storeClaim']);
 
-    // Attendance Routes
-    Route::middleware('auth:sanctum')->group(function () {
-        Route::get('/events/{event}/attendances', [AttendanceController::class, 'index']);
-        Route::get('/attendances/{eventId}', [AttendanceController::class, 'getEventAttendances']);
-        Route::post('/events/{event}/attendances', [AttendanceController::class, 'store']);
-        Route::post('/events/{eventId}/attendances/create', [AttendanceController::class, 'createAttendance']);
-        Route::get('/attendances/{eventId}/user/{userId}', [AttendanceController::class, 'checkUserAttendance']);
-        Route::get('/users/{userId}/attendances', [AttendanceController::class, 'getUserAttendances']);
-        Route::post('/events/{eventId}/bulk-check-attendance', [AttendanceController::class, 'bulkCheckAttendance']);
-        Route::delete('/events/{eventId}/attendances/{attendance}', [AttendanceController::class, 'destroy']);
-        Route::delete('/events/{eventId}/users/{userId}/attendance', [AttendanceController::class, 'destroyByEventAndUser']);
-        Route::get('/attendances/{attendance}', [AttendanceController::class, 'show']);
-        Route::put('/attendances/{attendance}', [AttendanceController::class, 'update']);
-    });
+    /*
+    |--------------------------------------------------------------------------
+    | Events & Attendance Management
+    |--------------------------------------------------------------------------
+    */
+    
+    // Events
+    Route::get('/events', [EventController::class, 'index']);
+    Route::get('/events/{event}', [EventController::class, 'show']);
+    Route::post('/events', [EventController::class, 'store']);
+    Route::put('/events/{event}', [EventController::class, 'update']);
+    Route::delete('/events/{event}', [EventController::class, 'destroy']);
+
+    // Attendance
+    Route::get('/events/{event}/attendances', [AttendanceController::class, 'index']);
+    Route::get('/attendances/{eventId}', [AttendanceController::class, 'getEventAttendances']);
+    Route::post('/events/{event}/attendances', [AttendanceController::class, 'store']);
+    Route::post('/events/{eventId}/attendances/create', [AttendanceController::class, 'createAttendance']);
+    Route::get('/attendances/{eventId}/user/{userId}', [AttendanceController::class, 'checkUserAttendance']);
+    Route::get('/users/{userId}/attendances', [AttendanceController::class, 'getUserAttendances']);
+    Route::post('/events/{eventId}/bulk-check-attendance', [AttendanceController::class, 'bulkCheckAttendance']);
+    Route::delete('/events/{eventId}/attendances/{attendance}', [AttendanceController::class, 'destroy']);
+    Route::delete('/events/{eventId}/users/{userId}/attendance', [AttendanceController::class, 'destroyByEventAndUser']);
+    Route::get('/attendances/{attendance}', [AttendanceController::class, 'show']);
+    Route::put('/attendances/{attendance}', [AttendanceController::class, 'update']);
 });

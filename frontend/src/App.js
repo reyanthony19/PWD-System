@@ -69,8 +69,7 @@ function App() {
 
           <Route path="/benefits/list" element={<BenefitsList />} />
           <Route path="/benefits/create" element={<BenefitsCreate />} />
-          <Route path="/benefits/claim/:id" element={<BenefitsClaimRecord />} />
-          
+          <Route path="/benefits/:benefitId/participants" element={<BenefitsClaimRecord />} />
         </Route>
 
         {/* Default Redirect */}
