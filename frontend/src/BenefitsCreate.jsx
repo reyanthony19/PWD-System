@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Gift, CheckCircle, Users, Search,X, MapPin, Stethoscope, Calculator } from "lucide-react";
+import { Gift, CheckCircle, Users, Search,X, MapPin, Stethoscope, Calculator, TrendingUp } from "lucide-react";
 import api from "./api";
 import Layout from "./Layout";
 
@@ -25,6 +25,7 @@ function BenefitsCreate() {
         barangay: "",
         disability_type: ""
     });
+    const [sortBy, setSortBy] = useState("priority"); // Default sort by priority score
     
     const navigate = useNavigate();
 
@@ -42,6 +43,77 @@ function BenefitsCreate() {
         { value: "packs", label: "Packs" },
     ];
 
+    // Severity scoring system (higher score = more severe)
+    const severityScores = {
+        "mild": 1,
+        "moderate": 3,
+        "severe": 5,
+        "profound": 7
+    };
+
+    // Income brackets scoring (lower income = higher score)
+    const getIncomeScore = (monthlyIncome) => {
+        if (!monthlyIncome || monthlyIncome === 0) return 10; // No income - highest priority
+        if (monthlyIncome <= 3000) return 8;  // Extreme poverty
+        if (monthlyIncome <= 6000) return 6;  // Poverty
+        if (monthlyIncome <= 10000) return 4; // Low income
+        if (monthlyIncome <= 15000) return 2; // Lower middle
+        return 1; // Middle income and above
+    };
+
+    // Dependants scoring (more dependants = higher score)
+    const getDependantsScore = (dependants) => {
+        if (!dependants || dependants === 0) return 1;
+        if (dependants === 1) return 2;
+        if (dependants === 2) return 3;
+        if (dependants === 3) return 4;
+        if (dependants >= 4) return 5;
+        return 1;
+    };
+
+    // Calculate priority score for each member
+    const calculatePriorityScore = (member) => {
+        const profile = member.member_profile || {};
+        
+        // Severity score (0-7 points)
+        const severityScore = severityScores[profile.severity?.toLowerCase()] || 1;
+        
+        // Income score (1-10 points)
+        const incomeScore = getIncomeScore(parseFloat(profile.monthly_income) || 0);
+        
+        // Dependants score (1-5 points)
+        const dependantsScore = getDependantsScore(parseInt(profile.dependants) || 0);
+        
+        // Additional factors
+        const isSeniorCitizen = profile.age >= 60 ? 2 : 0;
+        const isSoloParent = profile.is_solo_parent ? 2 : 0;
+        
+        // Total priority score (weighted)
+        const totalScore = 
+            (severityScore * 3) +        // Severity is most important (weight: 3)
+            (incomeScore * 2.5) +        // Income is very important (weight: 2.5)
+            (dependantsScore * 2) +      // Dependants are important (weight: 2)
+            isSeniorCitizen +            // Additional factors
+            isSoloParent;
+
+        return {
+            totalScore: Math.round(totalScore * 100) / 100,
+            severityScore,
+            incomeScore,
+            dependantsScore,
+            isSeniorCitizen: profile.age >= 60,
+            isSoloParent: profile.is_solo_parent
+        };
+    };
+
+    // Get priority level based on score
+    const getPriorityLevel = (score) => {
+        if (score >= 35) return { level: "Very High", color: "bg-red-100 text-red-800", icon: "🔥" };
+        if (score >= 25) return { level: "High", color: "bg-orange-100 text-orange-800", icon: "⭐" };
+        if (score >= 15) return { level: "Medium", color: "bg-yellow-100 text-yellow-800", icon: "📊" };
+        return { level: "Standard", color: "bg-blue-100 text-blue-800", icon: "📝" };
+    };
+
     // Calculate totals based on per-member amounts and selected members
     const totalBudgetAmount = form.per_member_amount && selectedMembers.length > 0 
         ? (parseFloat(form.per_member_amount) * selectedMembers.length).toFixed(2)
@@ -50,6 +122,20 @@ function BenefitsCreate() {
     const totalBudgetQuantity = form.per_member_quantity && selectedMembers.length > 0
         ? (parseFloat(form.per_member_quantity) * selectedMembers.length).toFixed(1)
         : "0.0";
+
+    // Helper function to get full name from member profile
+    const getFullName = (member) => {
+        if (!member.member_profile) return "Unnamed Member";
+        
+        const { first_name, middle_name, last_name } = member.member_profile;
+        const nameParts = [first_name, middle_name, last_name].filter(Boolean);
+        return nameParts.join(" ").trim() || "Unnamed Member";
+    };
+
+    // Helper function to get member ID (prefer member_profile.id_number, fallback to user id)
+    const getMemberId = (member) => {
+        return member.member_profile?.id_number || member.id;
+    };
 
     // Fetch members using your existing route
     useEffect(() => {
@@ -61,7 +147,22 @@ function BenefitsCreate() {
                 const approvedMembers = response.data.data ? 
                     response.data.data.filter(user => user.status === 'approved') :
                     response.data.filter(user => user.status === 'approved');
-                setMembers(approvedMembers);
+                
+                // Process members to include full name, member ID, and priority score
+                const processedMembers = approvedMembers.map(member => {
+                    const priorityData = calculatePriorityScore(member);
+                    const priorityLevel = getPriorityLevel(priorityData.totalScore);
+                    
+                    return {
+                        ...member,
+                        fullName: getFullName(member),
+                        memberId: getMemberId(member),
+                        priorityData,
+                        priorityLevel
+                    };
+                });
+                
+                setMembers(processedMembers);
             } catch (err) {
                 setError("Failed to load members. Please try again.");
                 console.error("Error fetching members:", err);
@@ -74,22 +175,66 @@ function BenefitsCreate() {
     }, []);
 
     // Get unique barangays and disability types for filters
-    const barangays = [...new Set(members.map(member => member.barangay).filter(Boolean))].sort();
-    const disabilityTypes = [...new Set(members.map(member => member.disability_type).filter(Boolean))].sort();
+    const barangays = [...new Set(members.map(member => member.member_profile?.barangay).filter(Boolean))].sort();
+    const disabilityTypes = [...new Set(members.map(member => member.member_profile?.disability_type).filter(Boolean))].sort();
 
-    // Filter members based on search and filters
-    const filteredMembers = members.filter(member => {
-        const matchesSearch = 
-            member.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            member.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            member.id?.toString().includes(searchTerm) ||
-            member.phone?.includes(searchTerm);
+    // Sort options
+    const sortOptions = [
+        { value: "priority", label: "Priority Score (Highest First)" },
+        { value: "name-asc", label: "Name (A-Z)" },
+        { value: "name-desc", label: "Name (Z-A)" },
+        { value: "severity", label: "Disability Severity" },
+        { value: "income", label: "Monthly Income (Lowest First)" },
+        { value: "dependants", label: "Number of Dependants" },
+        { value: "barangay", label: "Barangay" },
+    ];
 
-        const matchesBarangay = !filters.barangay || member.barangay === filters.barangay;
-        const matchesDisabilityType = !filters.disability_type || member.disability_type === filters.disability_type;
+    // Filter and sort members based on search, filters, and sort option
+    const filteredMembers = members
+        .filter(member => {
+            const fullName = getFullName(member).toLowerCase();
+            const memberId = getMemberId(member).toString().toLowerCase();
+            const barangay = member.member_profile?.barangay?.toLowerCase() || '';
+            const disabilityType = member.member_profile?.disability_type?.toLowerCase() || '';
+            const contactNumber = member.member_profile?.contact_number?.toLowerCase() || '';
+            const severity = member.member_profile?.severity?.toLowerCase() || '';
 
-        return matchesSearch && matchesBarangay && matchesDisabilityType;
-    });
+            const matchesSearch = 
+                fullName.includes(searchTerm.toLowerCase()) ||
+                memberId.includes(searchTerm.toLowerCase()) ||
+                barangay.includes(searchTerm.toLowerCase()) ||
+                disabilityType.includes(searchTerm.toLowerCase()) ||
+                contactNumber.includes(searchTerm.toLowerCase()) ||
+                severity.includes(searchTerm.toLowerCase());
+
+            const matchesBarangay = !filters.barangay || member.member_profile?.barangay === filters.barangay;
+            const matchesDisabilityType = !filters.disability_type || member.member_profile?.disability_type === filters.disability_type;
+
+            return matchesSearch && matchesBarangay && matchesDisabilityType;
+        })
+        .sort((a, b) => {
+            switch (sortBy) {
+                case "priority":
+                    return b.priorityData.totalScore - a.priorityData.totalScore;
+                case "name-asc":
+                    return a.fullName.localeCompare(b.fullName);
+                case "name-desc":
+                    return b.fullName.localeCompare(a.fullName);
+                case "severity":
+                    return (severityScores[b.member_profile?.severity?.toLowerCase()] || 0) - 
+                           (severityScores[a.member_profile?.severity?.toLowerCase()] || 0);
+                case "income":
+                    return (parseFloat(a.member_profile?.monthly_income) || Infinity) - 
+                           (parseFloat(b.member_profile?.monthly_income) || Infinity);
+                case "dependants":
+                    return (parseInt(b.member_profile?.dependants) || 0) - 
+                           (parseInt(a.member_profile?.dependants) || 0);
+                case "barangay":
+                    return (a.member_profile?.barangay || "").localeCompare(b.member_profile?.barangay || "");
+                default:
+                    return b.priorityData.totalScore - a.priorityData.totalScore;
+            }
+        });
 
     const handleMemberSelection = (memberId) => {
         setSelectedMembers(prev => {
@@ -209,6 +354,7 @@ function BenefitsCreate() {
     const clearFilters = () => {
         setFilters({ barangay: "", disability_type: "" });
         setSearchTerm("");
+        setSortBy("priority");
     };
 
     const closeModalAndRedirect = () => {
@@ -235,7 +381,7 @@ function BenefitsCreate() {
                         </h1>
                         <p className="text-lg text-gray-600 max-w-2xl mx-auto">
                             Create a new benefit and select specific PWD members to participate. 
-                            Choose between cash assistance or relief goods distribution.
+                            Members are prioritized based on severity, income, and dependants.
                         </p>
                     </div>
 
@@ -327,7 +473,7 @@ function BenefitsCreate() {
                                             </div>
                                         </div>
                                         <p className="text-sm text-gray-500 mt-1">
-                                            Select members from the list on the right
+                                            Select members from the prioritized list on the right
                                         </p>
                                     </div>
 
@@ -474,15 +620,15 @@ function BenefitsCreate() {
                                     <Search className="w-5 h-5 absolute left-3 top-3 text-gray-400" />
                                     <input
                                         type="text"
-                                        placeholder="Search members by name, email, phone, or ID..."
+                                        placeholder="Search members by name, member ID, barangay, disability type, or contact number..."
                                         value={searchTerm}
                                         onChange={(e) => setSearchTerm(e.target.value)}
                                         className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100 transition-colors"
                                     />
                                 </div>
 
-                                {/* Filters */}
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                {/* Filters and Sort */}
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                                     <div className="relative">
                                         <MapPin className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
                                         <select
@@ -511,12 +657,25 @@ function BenefitsCreate() {
                                         </select>
                                     </div>
 
+                                    <div className="relative">
+                                        <TrendingUp className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
+                                        <select
+                                            value={sortBy}
+                                            onChange={(e) => setSortBy(e.target.value)}
+                                            className="w-full pl-10 pr-4 py-2 border-2 border-gray-200 rounded-xl focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100 transition-colors"
+                                        >
+                                            {sortOptions.map(option => (
+                                                <option key={option.value} value={option.value}>{option.label}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
                                     <button
                                         onClick={clearFilters}
                                         className="flex items-center justify-center px-4 py-2 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors font-medium"
                                     >
                                         <X className="w-4 h-4 mr-1" />
-                                        Clear Filters
+                                        Clear All
                                     </button>
                                 </div>
 
@@ -576,39 +735,79 @@ function BenefitsCreate() {
                                                 <div className="flex items-start justify-between">
                                                     <div>
                                                         <h3 className="font-semibold text-gray-900 group-hover:text-yellow-700">
-                                                            {member.name}
+                                                            {member.fullName}
                                                         </h3>
-                                                        <p className="text-sm text-gray-600 mt-1">{member.email}</p>
+                                                        {member.member_profile?.contact_number && (
+                                                            <p className="text-sm text-gray-600 mt-1">
+                                                                📞 {member.member_profile.contact_number}
+                                                            </p>
+                                                        )}
                                                     </div>
-                                                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-medium">
-                                                        ID: {member.id}
+                                                    <div className="flex items-center space-x-2">
+                                                        <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-medium">
+                                                            ID: {member.memberId}
+                                                        </span>
+                                                        <span className={`text-xs px-2 py-1 rounded-full font-medium ${member.priorityLevel.color}`}>
+                                                            {member.priorityLevel.icon} {member.priorityLevel.level}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                
+                                                {/* Priority Score Details */}
+                                                <div className="flex flex-wrap gap-1 mt-2 text-xs">
+                                                    <span className="bg-red-100 text-red-800 px-2 py-1 rounded-full">
+                                                        Severity: {member.priorityData.severityScore}pts
+                                                    </span>
+                                                    <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                                                        Income: {member.priorityData.incomeScore}pts
+                                                    </span>
+                                                    <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full">
+                                                        Dependants: {member.priorityData.dependantsScore}pts
+                                                    </span>
+                                                    {member.priorityData.isSeniorCitizen && (
+                                                        <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded-full">
+                                                            👵 Senior
+                                                        </span>
+                                                    )}
+                                                    {member.priorityData.isSoloParent && (
+                                                        <span className="bg-pink-100 text-pink-800 px-2 py-1 rounded-full">
+                                                            👨‍👦 Solo Parent
+                                                        </span>
+                                                    )}
+                                                    <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-bold">
+                                                        Total: {member.priorityData.totalScore}pts
                                                     </span>
                                                 </div>
+
+                                                {/* Member Details */}
                                                 <div className="flex flex-wrap gap-2 mt-2">
-                                                    {member.barangay && (
+                                                    {member.member_profile?.barangay && (
                                                         <span className="inline-flex items-center text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
                                                             <MapPin className="w-3 h-3 mr-1" />
-                                                            {member.barangay}
+                                                            {member.member_profile.barangay}
                                                         </span>
                                                     )}
-                                                    {member.disability_type && (
+                                                    {member.member_profile?.disability_type && (
                                                         <span className="inline-flex items-center text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full">
                                                             <Stethoscope className="w-3 h-3 mr-1" />
-                                                            {member.disability_type}
+                                                            {member.member_profile.disability_type}
                                                         </span>
                                                     )}
-                                                    {member.phone && (
+                                                    {member.member_profile?.severity && (
                                                         <span className="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded-full">
-                                                            📞 {member.phone}
+                                                            {member.member_profile.severity}
                                                         </span>
                                                     )}
-                                                    <span className={`text-xs px-2 py-1 rounded-full ${
-                                                        member.status === 'approved' 
-                                                            ? 'bg-green-100 text-green-800' 
-                                                            : 'bg-yellow-100 text-yellow-800'
-                                                    }`}>
-                                                        {member.status}
-                                                    </span>
+                                                    {member.member_profile?.monthly_income && (
+                                                        <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                                                            ₱{parseFloat(member.member_profile.monthly_income).toLocaleString()}/mo
+                                                        </span>
+                                                    )}
+                                                    {member.member_profile?.dependants && (
+                                                        <span className="text-xs bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full">
+                                                            👥 {member.member_profile.dependants} dependants
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>

@@ -82,8 +82,70 @@ function MemberProfile() {
     );
   }, [member]);
 
-  // Success message function
-  const showSuccessMessage = () => {
+  // Success message function for approve
+  const showApproveSuccessMessage = () => {
+    const toast = document.createElement('div');
+    toast.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transform translate-x-full transition-transform duration-300';
+    toast.innerHTML = `
+      <div class="flex items-center">
+        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+        </svg>
+        <span class="font-medium">Member approved successfully</span>
+      </div>
+    `;
+
+    document.body.appendChild(toast);
+
+    // Animate in
+    setTimeout(() => {
+      toast.style.transform = 'translateX(0)';
+    }, 100);
+
+    // Remove after 3 seconds
+    setTimeout(() => {
+      toast.style.transform = 'translateX(100%)';
+      setTimeout(() => {
+        if (toast.parentNode) {
+          toast.remove();
+        }
+      }, 300);
+    }, 3000);
+  };
+
+  // Error message function for approve
+  const showApproveErrorMessage = () => {
+    const toast = document.createElement('div');
+    toast.className = 'fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transform translate-x-full transition-transform duration-300';
+    toast.innerHTML = `
+      <div class="flex items-center">
+        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+        </svg>
+        <span class="font-medium">Failed to approve member</span>
+      </div>
+    `;
+
+    document.body.appendChild(toast);
+
+    // Animate in
+    setTimeout(() => {
+      toast.style.transform = 'translateX(0)';
+    }, 100);
+
+    // Remove after 3 seconds
+    setTimeout(() => {
+      toast.style.transform = 'translateX(100%)';
+      setTimeout(() => {
+        if (toast.parentNode) {
+          toast.remove();
+        }
+      }, 300);
+    }, 3000);
+  };
+
+  // Success message function for reject
+  const showRejectSuccessMessage = () => {
     const toast = document.createElement('div');
     toast.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transform translate-x-full transition-transform duration-300';
     toast.innerHTML = `
@@ -113,8 +175,8 @@ function MemberProfile() {
     }, 3000);
   };
 
-  // Error message function
-  const showErrorMessage = () => {
+  // Error message function for reject
+  const showRejectErrorMessage = () => {
     const toast = document.createElement('div');
     toast.className = 'fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transform translate-x-full transition-transform duration-300';
     toast.innerHTML = `
@@ -144,8 +206,135 @@ function MemberProfile() {
     }, 3000);
   };
 
-  // Delete member by changing status to rejected with styled confirmation
-  const handleDeleteMember = async () => {
+  // Approve member by changing status to approved
+  const handleApproveMember = async () => {
+    // Create custom modal elements
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
+    modal.innerHTML = `
+      <div class="bg-white rounded-xl shadow-2xl max-w-md w-full transform transition-all">
+        <div class="p-6">
+          <!-- Icon -->
+          <div class="flex justify-center mb-4">
+            <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+              <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+              </svg>
+            </div>
+          </div>
+          
+          <!-- Title -->
+          <h3 class="text-xl font-bold text-gray-900 text-center mb-2">Approve Member</h3>
+          
+          <!-- Message -->
+          <p class="text-gray-600 text-center mb-6">
+            Are you sure you want to approve <span class="font-semibold">${fullName}</span>? This action will change their status to "approved".
+          </p>
+          
+          <!-- Buttons -->
+          <div class="flex gap-3">
+            <button 
+              id="cancelBtn"
+              class="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
+            >
+              Cancel
+            </button>
+            <button 
+              id="confirmBtn"
+              class="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Approve Member
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Add to DOM
+    document.body.appendChild(modal);
+
+    // Focus management
+    modal.focus();
+
+    // Handle confirm button
+    const confirmBtn = modal.querySelector('#confirmBtn');
+    const cancelBtn = modal.querySelector('#cancelBtn');
+
+    return new Promise((resolve) => {
+      const cleanup = () => {
+        if (modal.parentNode) {
+          modal.remove();
+        }
+        document.removeEventListener('keydown', handleEscape);
+      };
+
+      const handleConfirm = async () => {
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = `
+          <div class="flex items-center justify-center">
+            <div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+            Approving...
+          </div>
+        `;
+
+        try {
+          setUpdatingStatus(true);
+
+          // Update user status to approved using the correct endpoint
+          await api.patch(`/user/${id}/status`, {
+            status: "approved"
+          });
+
+          // Update local state
+          setMember(prev => prev ? { ...prev, status: "approved" } : null);
+
+          cleanup();
+          resolve(true);
+
+          // Show success message
+          showApproveSuccessMessage();
+
+        } catch (err) {
+          console.error("Error approving member:", err);
+          cleanup();
+          resolve(false);
+
+          // Show error message
+          showApproveErrorMessage();
+        } finally {
+          setUpdatingStatus(false);
+        }
+      };
+
+      const handleCancel = () => {
+        cleanup();
+        resolve(false);
+      };
+
+      const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+          handleCancel();
+        }
+      };
+
+      const handleBackgroundClick = (e) => {
+        if (e.target === modal) {
+          handleCancel();
+        }
+      };
+
+      confirmBtn.addEventListener('click', handleConfirm);
+      cancelBtn.addEventListener('click', handleCancel);
+      modal.addEventListener('click', handleBackgroundClick);
+      document.addEventListener('keydown', handleEscape);
+
+      // Focus the cancel button for better accessibility
+      cancelBtn.focus();
+    });
+  };
+
+  // Reject member by changing status to rejected with styled confirmation
+  const handleRejectMember = async () => {
     // Create custom modal elements
     const modal = document.createElement('div');
     modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
@@ -230,7 +419,7 @@ function MemberProfile() {
           resolve(true);
 
           // Show success message
-          showSuccessMessage();
+          showRejectSuccessMessage();
 
         } catch (err) {
           console.error("Error rejecting member:", err);
@@ -238,7 +427,7 @@ function MemberProfile() {
           resolve(false);
 
           // Show error message
-          showErrorMessage();
+          showRejectErrorMessage();
         } finally {
           setUpdatingStatus(false);
         }
@@ -787,7 +976,6 @@ function MemberProfile() {
                   </div>
                 </div>
                 <div className="mt-4 md:mt-0 flex items-center gap-3">
-                  {/* Delete/Reject Button - Only show if member is not already rejected */}
                   <Link
                     to="/member"
                     className="inline-flex items-center px-4 py-2 bg-white text-sky-600 rounded-lg hover:bg-blue-50 transition font-semibold"
@@ -896,10 +1084,33 @@ function MemberProfile() {
                     </p>
                   </div>
                   <div className="flex gap-3">
-                    {/* Delete/Reject Button in Profile Tab */}
-                    {member.status !== 'rejected' && (
+                    {/* Approve Button - Only show when status is pending */}
+                    {member.status === 'pending' && (
                       <button
-                        onClick={handleDeleteMember}
+                        onClick={handleApproveMember}
+                        disabled={updatingStatus}
+                        className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {updatingStatus ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                            Approving...
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            Approve Member
+                          </>
+                        )}
+                      </button>
+                    )}
+                    
+                    {/* Reject Button - Only show if member is approved (not pending and not rejected) */}
+                    {member.status === 'approved' && (
+                      <button
+                        onClick={handleRejectMember}
                         disabled={updatingStatus}
                         className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                       >
@@ -918,6 +1129,7 @@ function MemberProfile() {
                         )}
                       </button>
                     )}
+                    
                     {member.role === "member" && (
                       <Link
                         to={`/print/${member.id}`}
@@ -938,6 +1150,18 @@ function MemberProfile() {
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                       </svg>
                       <span className="text-red-800 font-medium">This member has been rejected and is no longer active in the system.</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Status Alert if Approved */}
+                {member.status === 'approved' && (
+                  <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                    <div className="flex items-center">
+                      <svg className="w-5 h-5 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                      <span className="text-green-800 font-medium">This member has been approved and is active in the system.</span>
                     </div>
                   </div>
                 )}

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { User, Mail, Lock, Phone, Calendar, MapPin, Users, Upload, CheckCircle, Heart, Stethoscope } from "lucide-react";
+import { User, Mail, Lock, Phone, Calendar, MapPin, Users, Upload, CheckCircle, Heart, Stethoscope, DollarSign, AlertTriangle, Users2, Home, FileText, UserCheck } from "lucide-react";
 import api from "./api";
 import Layout from "./Layout";
 
@@ -123,8 +123,13 @@ function FloatingSelect({ name, label, options, value, onChange, required = fals
   const hasValue = value && value !== "";
 
   return (
-    <div className="relative group">
-      <div className="relative">
+    <div className="relative">
+      {/* Static Label */}
+      <label className="block text-sm font-medium text-gray-700 mb-2">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      
+      <div className="relative group">
         {Icon && (
           <div className={`absolute left-3 top-1/2 transform -translate-y-1/2 transition-colors duration-200 z-10
             ${hasValue ? "text-blue-500" : "text-gray-400 group-focus-within:text-blue-500"}`}>
@@ -137,28 +142,19 @@ function FloatingSelect({ name, label, options, value, onChange, required = fals
           onChange={onChange}
           required={required}
           className={`w-full border-2 border-gray-200 rounded-xl bg-white/80 backdrop-blur-sm 
-            transition-all duration-200 cursor-pointer hover:border-gray-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 peer
-            ${Icon ? "pl-12 pr-10 py-4" : "px-4 py-4"}
+            transition-all duration-200 cursor-pointer hover:border-gray-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-100
+            appearance-none focus:outline-none
+            ${Icon ? "pl-12 pr-10 py-3" : "px-4 py-3 pr-10"}
             ${hasValue ? "text-gray-900" : "text-gray-500"}`}
         >
+          <option value="">Select {label}</option>
           {options.map((option) => (
             <option key={option.value} value={option.value} className="text-gray-900">
               {option.label}
             </option>
           ))}
         </select>
-        <label
-          className={`absolute transition-all duration-200 pointer-events-none
-            ${Icon ? "left-12" : "left-4"}
-            ${hasValue || value === ""
-              ? "top-2 text-xs font-medium text-blue-600"
-              : "top-1/2 transform -translate-y-1/2 text-base text-gray-500"
-            }
-            peer-focus:top-2 peer-focus:text-xs peer-focus:font-medium peer-focus:text-blue-600`}
-        >
-          {label} {required && <span className="text-red-500">*</span>}
-        </label>
-        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none">
+        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none transition-colors duration-200 group-hover:text-gray-600 group-focus-within:text-blue-500">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
@@ -185,6 +181,8 @@ function MemberRegister() {
     address: "",
     sex: "",
     disability_type: "",
+    severity: "",
+    monthly_income: "",
     barangay: "",
     blood_type: "",
     sss_number: "",
@@ -193,6 +191,7 @@ function MemberRegister() {
     guardian_relationship: "",
     guardian_contact_number: "",
     guardian_address: "",
+    dependent: "",
   });
 
   const [documents, setDocuments] = useState({
@@ -210,16 +209,13 @@ function MemberRegister() {
 
   // Barangay options
   const barangayOptions = [
-    { value: "", label: "Select Barangay" },
-    ...["Awang", "Bagocboc", "Barra", "Bonbon", "Cauyonan", "Igpit",
-        "Limonda", "Luyong Bonbon", "Malanang", "Nangcaon", "Patag",
-        "Poblacion", "Taboc", "Tingalan"
-    ].map(b => ({ value: b, label: b }))
-  ];
+    "Awang", "Bagocboc", "Barra", "Bonbon", "Cauyonan", "Igpit",
+    "Limonda", "Luyong Bonbon", "Malanang", "Nangcaon", "Patag",
+    "Poblacion", "Taboc", "Tingalan"
+  ].map(b => ({ value: b, label: b }));
 
   // Disability types based on medical certificate standards
   const disabilityTypeOptions = [
-    { value: "", label: "Select Disability Type" },
     { 
       value: "physical", 
       label: "Physical Disability", 
@@ -257,9 +253,27 @@ function MemberRegister() {
     }
   ];
 
+  // Severity options
+  const severityOptions = [
+    { value: "mild", label: "Mild", description: "Minimal impact on daily activities" },
+    { value: "moderate", label: "Moderate", description: "Noticeable impact on daily activities" },
+    { value: "severe", label: "Severe", description: "Significant impact requiring assistance" },
+    { value: "profound", label: "Profound", description: "Complete dependence on others for daily activities" }
+  ];
+
+  // Monthly income options
+  const monthlyIncomeOptions = [
+    { value: "below_5000", label: "Below ₱5,000", description: "Extremely low income" },
+    { value: "5000_10000", label: "₱5,000 - ₱10,000", description: "Low income" },
+    { value: "10000_20000", label: "₱10,000 - ₱20,000", description: "Lower middle income" },
+    { value: "20000_30000", label: "₱20,000 - ₱30,000", description: "Middle income" },
+    { value: "30000_50000", label: "₱30,000 - ₱50,000", description: "Upper middle income" },
+    { value: "above_50000", label: "Above ₱50,000", description: "High income" },
+    { value: "no_income", label: "No Income", description: "Unemployed or no regular income" }
+  ];
+
   // Blood type options
   const bloodTypeOptions = [
-    { value: "", label: "Select Blood Type" },
     { value: "A+", label: "A Positive (A+)" },
     { value: "A-", label: "A Negative (A-)" },
     { value: "B+", label: "B Positive (B+)" },
@@ -273,7 +287,6 @@ function MemberRegister() {
 
   // Sex options
   const sexOptions = [
-    { value: "", label: "Select Sex" },
     { value: "male", label: "Male" },
     { value: "female", label: "Female" },
     { value: "other", label: "Other" }
@@ -281,7 +294,6 @@ function MemberRegister() {
 
   // Guardian relationship options
   const guardianRelationshipOptions = [
-    { value: "", label: "Select Relationship" },
     { value: "parent", label: "Parent" },
     { value: "spouse", label: "Spouse" },
     { value: "child", label: "Child" },
@@ -295,7 +307,16 @@ function MemberRegister() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    
+    // For dependents field, only allow numbers
+    if (name === "dependent") {
+      // Allow only numbers and empty string
+      if (value === "" || /^\d+$/.test(value)) {
+        setForm((prev) => ({ ...prev, [name]: value }));
+      }
+    } else {
+      setForm((prev) => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleDocChange = (e) => {
@@ -350,6 +371,8 @@ function MemberRegister() {
         address: "",
         sex: "",
         disability_type: "",
+        severity: "",
+        monthly_income: "",
         barangay: "",
         blood_type: "",
         sss_number: "",
@@ -358,6 +381,7 @@ function MemberRegister() {
         guardian_relationship: "",
         guardian_contact_number: "",
         guardian_address: "",
+        dependent: "",
       });
       setDocuments({
         barangay_indigency: null,
@@ -390,6 +414,22 @@ function MemberRegister() {
       option => option.value === form.disability_type
     );
     return selectedDisability?.description || "";
+  };
+
+  // Get severity description for selected level
+  const getSeverityDescription = () => {
+    const selectedSeverity = severityOptions.find(
+      option => option.value === form.severity
+    );
+    return selectedSeverity?.description || "";
+  };
+
+  // Get monthly income description for selected range
+  const getMonthlyIncomeDescription = () => {
+    const selectedIncome = monthlyIncomeOptions.find(
+      option => option.value === form.monthly_income
+    );
+    return selectedIncome?.description || "";
   };
 
   return (
@@ -426,13 +466,13 @@ function MemberRegister() {
           )}
 
           <form onSubmit={handleRegister} className="max-w-4xl mx-auto space-y-8">
-            {/* Personal Information Section */}
+            {/* Account Information Section */}
             <div className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-8">
               <div className="flex items-center mb-6">
                 <div className="flex items-center justify-center w-10 h-10 bg-blue-600 rounded-lg mr-4">
-                  <User className="w-5 h-5 text-white" />
+                  <UserCheck className="w-5 h-5 text-white" />
                 </div>
-                <h2 className="text-2xl font-bold text-gray-900">Personal Information</h2>
+                <h2 className="text-2xl font-bold text-gray-900">Account Information</h2>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -470,6 +510,19 @@ function MemberRegister() {
                   onChange={handleChange}
                   icon={Phone}
                 />
+              </div>
+            </div>
+
+            {/* Personal Information Section */}
+            <div className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-8">
+              <div className="flex items-center mb-6">
+                <div className="flex items-center justify-center w-10 h-10 bg-green-600 rounded-lg mr-4">
+                  <User className="w-5 h-5 text-white" />
+                </div>
+                <h2 className="text-2xl font-bold text-gray-900">Personal Information</h2>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <FloatingInput
                   name="first_name"
                   label="First Name"
@@ -499,16 +552,24 @@ function MemberRegister() {
                   onChange={handleChange}
                   icon={Calendar}
                 />
+                <FloatingSelect
+                  name="sex"
+                  label="Sex"
+                  options={sexOptions}
+                  value={form.sex}
+                  onChange={handleChange}
+                  required
+                />
               </div>
             </div>
 
-            {/* Address & Location Section */}
+            {/* Address Information Section */}
             <div className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-8">
               <div className="flex items-center mb-6">
-                <div className="flex items-center justify-center w-10 h-10 bg-green-600 rounded-lg mr-4">
-                  <MapPin className="w-5 h-5 text-white" />
+                <div className="flex items-center justify-center w-10 h-10 bg-purple-600 rounded-lg mr-4">
+                  <Home className="w-5 h-5 text-white" />
                 </div>
-                <h2 className="text-2xl font-bold text-gray-900">Address & Location</h2>
+                <h2 className="text-2xl font-bold text-gray-900">Address Information</h2>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -523,35 +584,31 @@ function MemberRegister() {
                 </div>
                 <FloatingSelect
                   name="barangay"
+                  label="Barangay"
                   options={barangayOptions}
                   value={form.barangay}
                   onChange={handleChange}
                   required
                   icon={MapPin}
                 />
-                <FloatingSelect
-                  name="sex"
-                  options={sexOptions}
-                  value={form.sex}
-                  onChange={handleChange}
-                  required
-                />
               </div>
             </div>
 
-            {/* Medical & Health Information Section */}
+            {/* Disability & Medical Information Section */}
             <div className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-8">
               <div className="flex items-center mb-6">
                 <div className="flex items-center justify-center w-10 h-10 bg-red-600 rounded-lg mr-4">
                   <Stethoscope className="w-5 h-5 text-white" />
                 </div>
-                <h2 className="text-2xl font-bold text-gray-900">Medical & Health Information</h2>
+                <h2 className="text-2xl font-bold text-gray-900">Disability & Medical Information</h2>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Disability Type - Full Width */}
                 <div className="md:col-span-2">
                   <FloatingSelect
                     name="disability_type"
+                    label="Disability Type"
                     options={disabilityTypeOptions}
                     value={form.disability_type}
                     onChange={handleChange}
@@ -566,16 +623,68 @@ function MemberRegister() {
                   )}
                 </div>
                 
+                {/* Severity and Blood Type */}
+                <FloatingSelect
+                  name="severity"
+                  label="Severity Level"
+                  options={severityOptions}
+                  value={form.severity}
+                  onChange={handleChange}
+                  icon={AlertTriangle}
+                />
+                
                 <FloatingSelect
                   name="blood_type"
+                  label="Blood Type"
                   options={bloodTypeOptions}
                   value={form.blood_type}
                   onChange={handleChange}
                   icon={Heart}
                 />
                 
-                <div></div> {/* Spacer */}
+                {/* Severity Description */}
+                {form.severity && getSeverityDescription() && (
+                  <div className="md:col-span-2 mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <p className="text-sm text-yellow-700">
+                      <strong>Severity Level:</strong> {getSeverityDescription()}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Financial & Government Information Section */}
+            <div className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-8">
+              <div className="flex items-center mb-6">
+                <div className="flex items-center justify-center w-10 h-10 bg-orange-600 rounded-lg mr-4">
+                  <FileText className="w-5 h-5 text-white" />
+                </div>
+                <h2 className="text-2xl font-bold text-gray-900">Financial & Government Information</h2>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Monthly Income and Dependents */}
+                <FloatingSelect
+                  name="monthly_income"
+                  label="Monthly Income"
+                  options={monthlyIncomeOptions}
+                  value={form.monthly_income}
+                  onChange={handleChange}
+                  icon={DollarSign}
+                />
                 
+                <FloatingInput
+                  name="dependent"
+                  label="Number of Dependents"
+                  type="text"
+                  value={form.dependent}
+                  onChange={handleChange}
+                  icon={Users2}
+                  maxLength={2}
+                  placeholder="0"
+                />
+                
+                {/* SSS and PhilHealth Numbers */}
                 <FloatingInput
                   name="sss_number"
                   label="SSS Number"
@@ -592,13 +701,22 @@ function MemberRegister() {
                   onBlur={handleBlur}
                   placeholder="XX-XXXXXXXXX-X"
                 />
+                
+                {/* Monthly Income Description */}
+                {form.monthly_income && getMonthlyIncomeDescription() && (
+                  <div className="md:col-span-2 mt-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <p className="text-sm text-green-700">
+                      <strong>Income Category:</strong> {getMonthlyIncomeDescription()}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 
             {/* Guardian Information Section */}
             <div className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-8">
               <div className="flex items-center mb-6">
-                <div className="flex items-center justify-center w-10 h-10 bg-orange-600 rounded-lg mr-4">
+                <div className="flex items-center justify-center w-10 h-10 bg-indigo-600 rounded-lg mr-4">
                   <Users className="w-5 h-5 text-white" />
                 </div>
                 <h2 className="text-2xl font-bold text-gray-900">Guardian Information</h2>
@@ -610,14 +728,13 @@ function MemberRegister() {
                   label="Guardian Full Name"
                   value={form.guardian_full_name}
                   onChange={handleChange}
-                  required
                 />
                 <FloatingSelect
                   name="guardian_relationship"
+                  label="Guardian Relationship"
                   options={guardianRelationshipOptions}
                   value={form.guardian_relationship}
                   onChange={handleChange}
-                  required
                 />
                 <FloatingInput
                   name="guardian_contact_number"
@@ -626,14 +743,12 @@ function MemberRegister() {
                   value={form.guardian_contact_number}
                   onChange={handleChange}
                   icon={Phone}
-                  required
                 />
                 <FloatingInput
                   name="guardian_address"
                   label="Guardian Address"
                   value={form.guardian_address}
                   onChange={handleChange}
-                  required
                 />
               </div>
             </div>
@@ -641,7 +756,7 @@ function MemberRegister() {
             {/* Documents Section */}
             <div className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-8">
               <div className="flex items-center mb-6">
-                <div className="flex items-center justify-center w-10 h-10 bg-indigo-600 rounded-lg mr-4">
+                <div className="flex items-center justify-center w-10 h-10 bg-teal-600 rounded-lg mr-4">
                   <Upload className="w-5 h-5 text-white" />
                 </div>
                 <h2 className="text-2xl font-bold text-gray-900">Required Documents</h2>

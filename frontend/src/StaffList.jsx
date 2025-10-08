@@ -69,10 +69,10 @@ function StaffList() {
 
   // Correct status configuration matching your database
   const getStatusConfig = (status) => {
-    const statusConfig = {
+    const statusConfig = {  
       approved: {
         color: "bg-green-100 text-green-800",
-        text: "Approved",
+        text: "Active",
         icon: <CheckCircle size={14} />,
         countText: "Approved"
       },

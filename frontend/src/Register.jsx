@@ -68,6 +68,7 @@ const FloatingInput = React.memo(function FloatingInput({
 });
 
 // ---- Floating Select ----
+// ---- Fixed Floating Select with Better Z-index ----
 const FloatingSelect = React.memo(function FloatingSelect({
   name,
   label,
@@ -77,10 +78,12 @@ const FloatingSelect = React.memo(function FloatingSelect({
   required = false,
   icon: Icon,
 }) {
+  const hasValue = value !== "";
+
   return (
     <div className="relative group">
       {Icon && (
-        <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors duration-200 z-10">
+        <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors duration-200 z-20">
           <Icon size={18} />
         </div>
       )}
@@ -89,11 +92,12 @@ const FloatingSelect = React.memo(function FloatingSelect({
         value={value}
         onChange={onChange}
         required={required}
-        className={`w-full border-2 border-gray-200 rounded-xl bg-white/80 backdrop-blur-sm text-gray-900 
-          transition-all duration-200 cursor-pointer hover:border-gray-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 peer
+        className={`w-full border-2 border-gray-200 rounded-xl bg-white/80 backdrop-blur-sm 
+          transition-all duration-200 cursor-pointer hover:border-gray-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 relative z-10
+          ${hasValue ? "text-gray-900" : "text-gray-500"}
           ${Icon ? "pl-12 pr-4 py-4" : "px-4 py-4"}`}
       >
-        <option value="">Select {label}</option>
+        <option value="" className="text-gray-500">Select {label}</option>
         {options.map((option) => (
           <option key={option.value} value={option.value} className="text-gray-900">
             {option.label}
@@ -101,10 +105,10 @@ const FloatingSelect = React.memo(function FloatingSelect({
         ))}
       </select>
       <label
-        className={`absolute transition-all duration-200 pointer-events-none
+        className={`absolute transition-all duration-200 pointer-events-none z-0
           ${Icon ? "left-12" : "left-4"}
           ${
-            value
+            hasValue
               ? "top-2 text-xs font-medium text-blue-600"
               : "top-1/2 transform -translate-y-1/2 text-base text-gray-500"
           }

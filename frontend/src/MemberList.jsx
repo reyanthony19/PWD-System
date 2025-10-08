@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CheckCircle, XCircle, Clock, Ban, UserX, Search, Filter, MapPin } from "lucide-react";
+import { CheckCircle, XCircle, Clock, Ban, UserX, Search,  MapPin } from "lucide-react";
 import api from "./api";
 import Layout from "./Layout";
 
@@ -24,7 +24,7 @@ const theme = {
 function MemberList() {
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("approved"); // Changed default to "approved" (Active)
   const [barangayFilter, setBarangayFilter] = useState("All");
   const [searchTerm, setSearchTerm] = useState("");
   const [sortOption, setSortOption] = useState("name-asc");
@@ -113,14 +113,8 @@ function MemberList() {
       return 0;
     });
 
-  // Status options with correct terms
+  // Status options with "All members" removed and "Active" as first option
   const statusOptions = [
-    { 
-      key: "all", 
-      label: "All Members", 
-      icon: <Filter size={16} />, 
-      color: "bg-gray-100 text-gray-700 hover:bg-gray-200" 
-    },
     { 
       key: "approved", 
       label: "Active", 
@@ -303,18 +297,16 @@ function MemberList() {
                 >
                   {icon}
                   {label}
-                  {key !== "all" && (
-                    <span className="bg-white bg-opacity-50 px-1.5 py-0.5 rounded-full text-xs">
-                      {statusCounts[key] || 0}
-                    </span>
-                  )}
+                  <span className="bg-white bg-opacity-50 px-1.5 py-0.5 rounded-full text-xs">
+                    {statusCounts[key] || 0}
+                  </span>
                 </button>
               ))}
             </div>
           </div>
 
           {/* Active Filters Display */}
-          {(searchTerm || barangayFilter !== "All" || statusFilter !== "all") && (
+          {(searchTerm || barangayFilter !== "All" || statusFilter !== "approved") && (
             <div className="mt-4 flex flex-wrap gap-2 items-center">
               <span className="text-sm text-gray-600 font-medium">Active filters:</span>
               
@@ -336,10 +328,10 @@ function MemberList() {
                 </span>
               )}
 
-              {statusFilter !== "all" && (
+              {statusFilter !== "approved" && (
                 <span className="bg-green-100 text-green-800 text-sm px-3 py-1 rounded-full flex items-center gap-2">
                   Status: {statusOptions.find(s => s.key === statusFilter)?.label}
-                  <button onClick={() => setStatusFilter("all")} className="text-green-600 hover:text-green-800 font-bold">
+                  <button onClick={() => setStatusFilter("approved")} className="text-green-600 hover:text-green-800 font-bold">
                     ×
                   </button>
                 </span>
@@ -349,7 +341,7 @@ function MemberList() {
                 onClick={() => {
                   setSearchTerm("");
                   setBarangayFilter("All");
-                  setStatusFilter("all");
+                  setStatusFilter("approved");
                 }}
                 className="text-sm text-gray-600 hover:text-gray-800 font-medium underline"
               >
@@ -363,7 +355,7 @@ function MemberList() {
         <div className="mb-4 text-sm text-gray-600">
           Showing {filteredMembers.length} of {members.length} members
           {barangayFilter !== "All" && ` from ${barangayFilter}`}
-          {statusFilter !== "all" && ` with status: ${statusOptions.find(s => s.key === statusFilter)?.label}`}
+          {statusFilter !== "approved" && ` with status: ${statusOptions.find(s => s.key === statusFilter)?.label}`}
           {searchTerm && ` matching "${searchTerm}"`}
         </div>
 
@@ -434,7 +426,7 @@ function MemberList() {
                         <UserX className="w-16 h-16 mb-4 text-gray-300" />
                         <p className="text-lg font-medium mb-2">No members found</p>
                         <p className="text-sm">
-                          {searchTerm || barangayFilter !== "All" || statusFilter !== "all"
+                          {searchTerm || barangayFilter !== "All" || statusFilter !== "approved"
                             ? "Try adjusting your search or filter criteria"
                             : "No members have been registered yet"
                           }

@@ -492,7 +492,7 @@ function BenefitsClaimRecord() {
           {/* Back Button */}
           <div className="mt-8 text-center">
             <button
-              onClick={() => navigate("/benefits")}
+              onClick={() => navigate("/benefits/list")}
               className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-xl shadow-lg transition-all duration-200 transform hover:scale-105 active:scale-95"
             >
               <ArrowLeft className="w-5 h-5" />

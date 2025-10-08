@@ -42,6 +42,7 @@ class StaffController extends Controller
             'birthdate'       => $validated['birthdate'],
             'address'         => $validated['address'],
             'contact_number'  => $validated['contact_number'] ?? null,
+            'assigned_barangay' => $validated['assigned_barangay'], 
         ]);
 
         return response()->json([

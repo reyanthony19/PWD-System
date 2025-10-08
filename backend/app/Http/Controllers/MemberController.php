@@ -24,6 +24,9 @@ class MemberController extends Controller
             // Profile fields
             'first_name'   => 'required|string|max:255',
             'last_name'    => 'required|string|max:255',
+            'severity'     => 'required|string|max:255',
+            'monthly_income' => 'required|string|max:255|in:below_5000,5000_10000,10000_20000,20000_30000,30000_50000,above_50000,no_income',
+            'dependent' => 'nullable|integer',
             'birthdate'    => 'required|date',
             'sex'          => 'required|string|in:male,female,other',
             'address'      => 'required|string|max:255',
@@ -53,9 +56,7 @@ class MemberController extends Controller
 
         DB::beginTransaction();
         try {
-
-
-
+            // Create User
             $user = User::create([
                 'username' => $validated['username'],
                 'email'    => $validated['email'],
@@ -64,8 +65,10 @@ class MemberController extends Controller
                 'status'   => 'pending',
             ]);
 
+            // Generate ID number
             $idNumber = $request->id_number ?? 'PDAO-' . str_pad($user->id, 4, '0', STR_PAD_LEFT);
 
+            // Create Member Profile with additional fields
             $profile = $user->memberProfile()->create([
                 'first_name'        => $validated['first_name'],
                 'middle_name'       => $request->middle_name,
@@ -84,6 +87,9 @@ class MemberController extends Controller
                 'guardian_relationship' => $request->guardian_relationship,
                 'guardian_contact_number' => $request->guardian_contact_number,
                 'guardian_address'       => $request->guardian_address,
+                'severity'            => $validated['severity'],
+                'monthly_income'      => $validated['monthly_income'],
+                'dependent' => $validated['dependent'],
             ]);
 
             // Handle documents
@@ -99,8 +105,6 @@ class MemberController extends Controller
                 'remarks'             => $request->remarks ?? null,
             ]);
 
-
-
             DB::commit();
 
             return response()->json([
@@ -115,8 +119,6 @@ class MemberController extends Controller
             ], 500);
         }
     }
-
-
 
     /**
      * Scan member by ID number
