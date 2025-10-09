@@ -21,7 +21,8 @@ return new class extends Migration
             $table->string('medical_certificate')->nullable();
             $table->string('picture_2x2')->nullable();
             $table->string('birth_certificate')->nullable();
-
+            $table->boolean('hard_copy_submitted')->nullable();
+            
             // Optional remarks (e.g., "pending", "needs clearer copy")
             $table->text('remarks')->nullable();
 

@@ -25,7 +25,15 @@ function BenefitsCreate() {
         barangay: "",
         disability_type: ""
     });
-    const [sortBy, setSortBy] = useState("priority"); // Default sort by priority score
+    const [sortBy, setSortBy] = useState("priority");
+    const [successData, setSuccessData] = useState({
+        name: "",
+        selectedCount: 0,
+        perMemberAmount: "",
+        perMemberQuantity: "",
+        unit: "",
+        type: ""
+    });
     
     const navigate = useNavigate();
 
@@ -71,7 +79,7 @@ function BenefitsCreate() {
         return 1;
     };
 
-    // Calculate priority score for each member
+    // Calculate priority score for each member and convert to percentage
     const calculatePriorityScore = (member) => {
         const profile = member.member_profile || {};
         
@@ -96,8 +104,13 @@ function BenefitsCreate() {
             isSeniorCitizen +            // Additional factors
             isSoloParent;
 
+        // Calculate maximum possible score for percentage conversion
+        const maxPossibleScore = (7 * 3) + (10 * 2.5) + (5 * 2) + 2 + 2; // 21 + 25 + 10 + 4 = 60
+        const percentageScore = Math.round((totalScore / maxPossibleScore) * 100);
+
         return {
             totalScore: Math.round(totalScore * 100) / 100,
+            percentageScore,
             severityScore,
             incomeScore,
             dependantsScore,
@@ -106,11 +119,11 @@ function BenefitsCreate() {
         };
     };
 
-    // Get priority level based on score
-    const getPriorityLevel = (score) => {
-        if (score >= 35) return { level: "Very High", color: "bg-red-100 text-red-800", icon: "🔥" };
-        if (score >= 25) return { level: "High", color: "bg-orange-100 text-orange-800", icon: "⭐" };
-        if (score >= 15) return { level: "Medium", color: "bg-yellow-100 text-yellow-800", icon: "📊" };
+    // Get priority level based on percentage score
+    const getPriorityLevel = (percentage) => {
+        if (percentage >= 80) return { level: "Very High", color: "bg-red-100 text-red-800", icon: "🔥" };
+        if (percentage >= 60) return { level: "High", color: "bg-orange-100 text-orange-800", icon: "⭐" };
+        if (percentage >= 40) return { level: "Medium", color: "bg-yellow-100 text-yellow-800", icon: "📊" };
         return { level: "Standard", color: "bg-blue-100 text-blue-800", icon: "📝" };
     };
 
@@ -151,7 +164,7 @@ function BenefitsCreate() {
                 // Process members to include full name, member ID, and priority score
                 const processedMembers = approvedMembers.map(member => {
                     const priorityData = calculatePriorityScore(member);
-                    const priorityLevel = getPriorityLevel(priorityData.totalScore);
+                    const priorityLevel = getPriorityLevel(priorityData.percentageScore);
                     
                     return {
                         ...member,
@@ -215,7 +228,7 @@ function BenefitsCreate() {
         .sort((a, b) => {
             switch (sortBy) {
                 case "priority":
-                    return b.priorityData.totalScore - a.priorityData.totalScore;
+                    return b.priorityData.percentageScore - a.priorityData.percentageScore;
                 case "name-asc":
                     return a.fullName.localeCompare(b.fullName);
                 case "name-desc":
@@ -232,7 +245,7 @@ function BenefitsCreate() {
                 case "barangay":
                     return (a.member_profile?.barangay || "").localeCompare(b.member_profile?.barangay || "");
                 default:
-                    return b.priorityData.totalScore - a.priorityData.totalScore;
+                    return b.priorityData.percentageScore - a.priorityData.percentageScore;
             }
         });
 
@@ -330,6 +343,17 @@ function BenefitsCreate() {
 
             await api.post("/benefits", payload);
 
+            // Store success data before resetting form
+            setSuccessData({
+                name: form.name,
+                selectedCount: selectedMembers.length,
+                perMemberAmount: form.per_member_amount,
+                perMemberQuantity: form.per_member_quantity,
+                unit: form.unit,
+                type: form.type
+            });
+
+            // Reset the form
             setForm({
                 name: "",
                 type: "",
@@ -339,6 +363,7 @@ function BenefitsCreate() {
                 locked_member_count: "0",
             });
             setSelectedMembers([]);
+            
             setShowModal(true);
         } catch (err) {
             const errors = err.response?.data?.errors;
@@ -753,30 +778,20 @@ function BenefitsCreate() {
                                                     </div>
                                                 </div>
                                                 
-                                                {/* Priority Score Details */}
-                                                <div className="flex flex-wrap gap-1 mt-2 text-xs">
-                                                    <span className="bg-red-100 text-red-800 px-2 py-1 rounded-full">
-                                                        Severity: {member.priorityData.severityScore}pts
-                                                    </span>
-                                                    <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full">
-                                                        Income: {member.priorityData.incomeScore}pts
-                                                    </span>
-                                                    <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full">
-                                                        Dependants: {member.priorityData.dependantsScore}pts
-                                                    </span>
-                                                    {member.priorityData.isSeniorCitizen && (
-                                                        <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded-full">
-                                                            👵 Senior
+                                                {/* Priority Score Display */}
+                                                <div className="mt-2">
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <span className="text-xs font-medium text-gray-600">Priority Score:</span>
+                                                        <span className="text-xs font-bold text-yellow-700">
+                                                            {member.priorityData.percentageScore}%
                                                         </span>
-                                                    )}
-                                                    {member.priorityData.isSoloParent && (
-                                                        <span className="bg-pink-100 text-pink-800 px-2 py-1 rounded-full">
-                                                            👨‍👦 Solo Parent
-                                                        </span>
-                                                    )}
-                                                    <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-bold">
-                                                        Total: {member.priorityData.totalScore}pts
-                                                    </span>
+                                                    </div>
+                                                    <div className="w-full bg-gray-200 rounded-full h-2">
+                                                        <div 
+                                                            className="bg-yellow-600 h-2 rounded-full transition-all duration-300"
+                                                            style={{ width: `${member.priorityData.percentageScore}%` }}
+                                                        ></div>
+                                                    </div>
                                                 </div>
 
                                                 {/* Member Details */}
@@ -808,6 +823,16 @@ function BenefitsCreate() {
                                                             👥 {member.member_profile.dependants} dependants
                                                         </span>
                                                     )}
+                                                    {member.priorityData.isSeniorCitizen && (
+                                                        <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded-full">
+                                                            👵 Senior Citizen
+                                                        </span>
+                                                    )}
+                                                    {member.priorityData.isSoloParent && (
+                                                        <span className="text-xs bg-pink-100 text-pink-800 px-2 py-1 rounded-full">
+                                                            👨‍👦 Solo Parent
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
@@ -831,20 +856,20 @@ function BenefitsCreate() {
                                 Benefit Created Successfully! 🎉
                             </h3>
                             <p className="text-gray-600 mb-4">
-                                Your benefit "<strong>{form.name}</strong>" has been created successfully.
+                                Your benefit "<strong>{successData.name}</strong>" has been created successfully.
                             </p>
                             <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-6">
                                 <p className="text-sm text-yellow-800">
-                                    <strong>{selectedMembers.length}</strong> members have been enrolled in this benefit.
+                                    <strong>{successData.selectedCount}</strong> members have been enrolled in this benefit.
                                 </p>
-                                {form.type === "cash" && (
+                                {successData.type === "cash" && (
                                     <p className="text-sm text-yellow-800 mt-1">
-                                        Each member will receive: <strong>₱{form.per_member_amount}</strong>
+                                        Each member will receive: <strong>₱{successData.perMemberAmount}</strong>
                                     </p>
                                 )}
-                                {form.type === "relief" && (
+                                {successData.type === "relief" && (
                                     <p className="text-sm text-yellow-800 mt-1">
-                                        Each member will receive: <strong>{form.per_member_quantity} {form.unit}</strong>
+                                        Each member will receive: <strong>{successData.perMemberQuantity} {successData.unit}</strong>
                                     </p>
                                 )}
                             </div>

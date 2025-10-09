@@ -16,8 +16,10 @@ function BenefitsList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("active"); // Default to active
   const [searchTerm, setSearchTerm] = useState("");
   const [sortOption, setSortOption] = useState("name-asc");
+  const [updatingStatus, setUpdatingStatus] = useState(null);
   const navigate = useNavigate();
 
   // Fetch benefits
@@ -44,15 +46,51 @@ function BenefitsList() {
   const filteredBenefits = useMemo(() => {
     return benefits
       .filter((b) => (typeFilter === "all" ? true : b.type === typeFilter))
+      .filter((b) => (statusFilter === "all" ? true : b.status === statusFilter))
       .filter((b) => b.name.toLowerCase().includes(searchTerm.toLowerCase()))
       .sort((a, b) => {
         if (sortOption === "name-asc") return a.name.localeCompare(b.name);
         if (sortOption === "name-desc") return b.name.localeCompare(a.name);
         if (sortOption === "amount-asc") return (a.budget_amount || 0) - (b.budget_amount || 0);
         if (sortOption === "amount-desc") return (b.budget_amount || 0) - (a.budget_amount || 0);
+        if (sortOption === "status") {
+          // Sort by status: active first, then inactive
+          if (a.status === "active" && b.status !== "active") return -1;
+          if (a.status !== "active" && b.status === "active") return 1;
+          return 0;
+        }
         return 0;
       });
-  }, [benefits, typeFilter, searchTerm, sortOption]);
+  }, [benefits, typeFilter, statusFilter, searchTerm, sortOption]);
+
+  // Handle status change - uses the toggle function
+  const handleStatusChange = async (benefitId, newStatus, e) => {
+    e.stopPropagation(); // Prevent row click when changing status
+    const oldBenefits = [...benefits];
+    try {
+      setUpdatingStatus(benefitId);
+      
+      // Update local state immediately for better UX
+      setBenefits(prev => 
+        prev.map(benefit => 
+          benefit.id === benefitId 
+            ? { ...benefit, status: newStatus }
+            : benefit
+        )
+      );
+
+      // Call the DELETE endpoint which now toggles the status
+      await api.delete(`/benefits/${benefitId}`);
+      
+    } catch (err) {
+      console.error("Failed to update benefit status", err);
+      // Revert on error
+      setBenefits(oldBenefits);
+      setError("Failed to update benefit status.");
+    } finally {
+      setUpdatingStatus(null);
+    }
+  };
 
   const typeOptions = [
     { key: "all", label: "All Types" },
@@ -60,10 +98,21 @@ function BenefitsList() {
     { key: "relief", label: "Relief Goods" },
   ];
 
-  // Count benefits by type for the filter badge
+  const statusOptions = [
+    { key: "active", label: "Active", color: "bg-green-100 text-green-700 hover:bg-green-200" },
+    { key: "inactive", label: "Inactive", color: "bg-gray-100 text-gray-700 hover:bg-gray-200" },
+  ];
+
+  // Count benefits by type and status
   const typeCounts = benefits.reduce((acc, benefit) => {
     const type = benefit.type || "other";
     acc[type] = (acc[type] || 0) + 1;
+    return acc;
+  }, {});
+
+  const statusCounts = benefits.reduce((acc, benefit) => {
+    const status = benefit.status || "active";
+    acc[status] = (acc[status] || 0) + 1;
     return acc;
   }, {});
 
@@ -120,19 +169,25 @@ function BenefitsList() {
           Manage Benefits
         </h1>
 
-        {/* Type Summary */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="bg-green-50 p-4 rounded-xl text-center">
-            <div className="text-2xl font-bold text-green-600">{typeCounts.cash || 0}</div>
-            <div className="text-sm text-green-800">Cash Benefits</div>
+        {/* Status Summary */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-green-50 p-4 rounded-xl text-center border border-green-200">
+            <div className="text-2xl font-bold text-green-600">{statusCounts.active || 0}</div>
+            <div className="text-sm text-green-800">Active Benefits</div>
+            <div className="text-xs text-green-600 mt-1">Distribution available</div>
           </div>
-          <div className="bg-orange-50 p-4 rounded-xl text-center">
+          <div className="bg-gray-50 p-4 rounded-xl text-center border border-gray-200">
+            <div className="text-2xl font-bold text-gray-600">{statusCounts.inactive || 0}</div>
+            <div className="text-sm text-gray-800">Inactive Benefits</div>
+            <div className="text-xs text-gray-600 mt-1">Not available</div>
+          </div>
+          <div className="bg-blue-50 p-4 rounded-xl text-center border border-blue-200">
+            <div className="text-2xl font-bold text-blue-600">{typeCounts.cash || 0}</div>
+            <div className="text-sm text-blue-800">Cash Benefits</div>
+          </div>
+          <div className="bg-orange-50 p-4 rounded-xl text-center border border-orange-200">
             <div className="text-2xl font-bold text-orange-600">{typeCounts.relief || 0}</div>
             <div className="text-sm text-orange-800">Relief Goods</div>
-          </div>
-          <div className="bg-gray-50 p-4 rounded-xl text-center">
-            <div className="text-2xl font-bold text-gray-600">{benefits.length}</div>
-            <div className="text-sm text-gray-800">Total Benefits</div>
           </div>
         </div>
 
@@ -149,6 +204,26 @@ function BenefitsList() {
                 {typeOptions.map((option) => (
                   <option key={option.key} value={option.key}>
                     {option.label} {option.key !== "all" && `(${typeCounts[option.key] || 0})`}
+                  </option>
+                ))}
+              </select>
+              <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </div>
+
+            {/* Status Filter */}
+            <div className="relative">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="border border-gray-300 rounded-lg px-4 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 appearance-none cursor-pointer"
+              >
+                {statusOptions.map((option) => (
+                  <option key={option.key} value={option.key}>
+                    {option.label} ({statusCounts[option.key] || 0})
                   </option>
                 ))}
               </select>
@@ -178,6 +253,7 @@ function BenefitsList() {
               <option value="name-desc">Name (Z-A)</option>
               <option value="amount-asc">Per Member (Low-High)</option>
               <option value="amount-desc">Per Member (High-Low)</option>
+              <option value="status">Status (Active First)</option>
             </select>
 
             {/* Add Button */}
@@ -190,9 +266,34 @@ function BenefitsList() {
             </button>
           </div>
 
+          {/* Status Filter Buttons */}
+          <div className="mt-6">
+            <label className="block text-sm font-medium text-gray-600 mb-3">
+              Filter by Status
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {statusOptions.map(({ key, label, color }) => (
+                <button
+                  key={key}
+                  onClick={() => setStatusFilter(key)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
+                    statusFilter === key 
+                      ? "ring-2 ring-sky-500 ring-offset-2 transform scale-105" 
+                      : "hover:scale-105"
+                  } ${color}`}
+                >
+                  {label}
+                  <span className="bg-white bg-opacity-50 px-1.5 py-0.5 rounded-full text-xs">
+                    {statusCounts[key] || 0}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Active Filters Display */}
           <div className="mt-4 flex flex-wrap gap-2 items-center">
-            {(searchTerm || typeFilter !== "all") && (
+            {(searchTerm || typeFilter !== "all" || statusFilter !== "active") && (
               <span className="text-xs text-gray-600 font-medium">Active filters:</span>
             )}
 
@@ -219,6 +320,31 @@ function BenefitsList() {
                 </button>
               </span>
             )}
+
+            {statusFilter !== "active" && (
+              <span className="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded-full flex items-center gap-1">
+                Status: {statusOptions.find(opt => opt.key === statusFilter)?.label}
+                <button
+                  onClick={() => setStatusFilter("active")}
+                  className="text-purple-600 hover:text-purple-800 font-bold"
+                >
+                  ×
+                </button>
+              </span>
+            )}
+
+            {(searchTerm || typeFilter !== "all" || statusFilter !== "active") && (
+              <button
+                onClick={() => {
+                  setSearchTerm("");
+                  setTypeFilter("all");
+                  setStatusFilter("active");
+                }}
+                className="text-xs text-gray-600 hover:text-gray-800 font-medium underline"
+              >
+                Clear all filters
+              </button>
+            )}
           </div>
         </section>
 
@@ -226,6 +352,7 @@ function BenefitsList() {
         <div className="mb-4 text-sm text-gray-600">
           Showing {filteredBenefits.length} of {benefits.length} benefits
           {typeFilter !== "all" && ` of type "${typeOptions.find(opt => opt.key === typeFilter)?.label}"`}
+          {statusFilter !== "active" && ` with status "${statusOptions.find(opt => opt.key === statusFilter)?.label}"`}
           {searchTerm && ` matching "${searchTerm}"`}
         </div>
 
@@ -240,6 +367,7 @@ function BenefitsList() {
                   <th className="px-4 py-3">Per Member</th>
                   <th className="px-4 py-3">Total Budget</th>
                   <th className="px-4 py-3">Remaining</th>
+                  <th className="px-4 py-3">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -257,12 +385,21 @@ function BenefitsList() {
                       <tr
                         key={benefit.id}
                         onClick={() => navigate(`/benefits/${benefit.id}/participants`)}
-                        className="odd:bg-gray-100 even:bg-gray-50 hover:bg-sky-100 cursor-pointer transition"
+                        className={`odd:bg-gray-100 even:bg-gray-50 hover:bg-sky-100 cursor-pointer transition ${
+                          benefit.status === 'inactive' ? 'opacity-75' : ''
+                        }`}
                       >
                         <td className="px-4 py-3 font-medium text-gray-700">
                           <div className="flex items-center gap-2">
                             <span className="text-lg">{typeInfo.icon}</span>
-                            {benefit.name}
+                            <div>
+                              <div>{benefit.name}</div>
+                              {benefit.status === 'inactive' && (
+                                <div className="text-xs text-gray-500 mt-1">
+                                  Not available for distribution
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </td>
                         <td className="px-4 py-3">
@@ -285,29 +422,46 @@ function BenefitsList() {
                             ? `₱${Number(remaining).toLocaleString()}`
                             : `${(benefit.budget_quantity || 0) * (benefit.locked_member_count || 0) - (benefit.records_count || 0)} ${benefit.unit || ""}`}
                         </td>
+                        <td className="px-4 py-3">
+                          <div onClick={(e) => e.stopPropagation()}>
+                            <select
+                              value={benefit.status || "active"}
+                              onChange={(e) => handleStatusChange(benefit.id, e.target.value, e)}
+                              disabled={updatingStatus === benefit.id}
+                              className="border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500 text-sm"
+                            >
+                              <option value="active">Active</option>
+                              <option value="inactive">Inactive</option>
+                            </select>
+                            {updatingStatus === benefit.id && (
+                              <div className="text-xs text-gray-500 mt-1">Updating...</div>
+                            )}
+                          </div>
+                        </td>
                       </tr>
                     );
                   })
                 ) : (
                   <tr>
                     <td
-                      colSpan="5"
+                      colSpan="6"
                       className="px-4 py-8 text-center text-gray-500"
                     >
                       <div className="flex flex-col items-center justify-center">
                         <div className="text-4xl mb-2">🎁</div>
                         <p className="text-lg font-medium mb-1">No benefits found</p>
                         <p className="text-sm text-gray-600">
-                          {searchTerm || typeFilter !== "all"
+                          {searchTerm || typeFilter !== "all" || statusFilter !== "active"
                             ? "Try adjusting your search or filter criteria"
                             : "No benefits have been created yet"
                           }
                         </p>
-                        {(searchTerm || typeFilter !== "all") && (
+                        {(searchTerm || typeFilter !== "all" || statusFilter !== "active") && (
                           <button
                             onClick={() => {
                               setSearchTerm("");
                               setTypeFilter("all");
+                              setStatusFilter("active");
                             }}
                             className="mt-3 text-sky-600 hover:text-sky-700 text-sm font-medium"
                           >

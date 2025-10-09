@@ -56,7 +56,7 @@ class AuthController extends Controller
      */
     public function showUser($id)
     {
-        $user = User::with('memberProfile','memberProfile.documents', 'adminProfile', 'staffProfile')
+        $user = User::with('memberProfile', 'memberProfile.documents', 'adminProfile', 'staffProfile')
             ->findOrFail($id);
 
         return response()->json($user);
@@ -104,104 +104,67 @@ class AuthController extends Controller
         return response()->json($documents);
     }
 
-    /**
-     * Update user (role-specific validation)
-     */
-    public function updateUser(Request $request, $id)
+    //Hard Copy Checker kung na submit ba o wala 
+    public function updateHardCopyStatus(Request $request, $id)
     {
-        // Find the user to update
+        // Find the user (member)
         $user = User::findOrFail($id);
-        $role = $user->role;
 
-        $rules = [
-            'username'     => 'required|string|max:255',
-            'email'        => 'required|email|unique:users,email,' . $id,
-
-            // Profile fields validation
-            'first_name'     => 'nullable|string|max:255',
-            'middle_name'    => 'nullable|string|max:255',
-            'last_name'      => 'nullable|string|max:255',
-            'contact_number' => 'nullable|string|max:50',
-            'birthdate'      => 'nullable|date',
-            'address'        => 'nullable|string|max:500',
-            'gender'         => 'nullable|string|in:male,female,other',
-            'barangay'       => 'nullable|string|max:255',
-            'blood_type'     => 'nullable|string|max:5',
-            'disability_type' => 'nullable|string|max:255',
-        ];
-
-        // File validation (for document uploads)
-        if ($request->hasFile('barangay_indigency')) {
-            $rules['barangay_indigency'] = 'file|mimes:jpg,jpeg,png,pdf|max:2048';
-        }
-        if ($request->hasFile('medical_certificate')) {
-            $rules['medical_certificate'] = 'file|mimes:jpg,jpeg,png,pdf|max:2048';
-        }
-        if ($request->hasFile('picture_2x2')) {
-            $rules['picture_2x2'] = 'file|mimes:jpg,jpeg,png|max:2048';
-        }
-        if ($request->hasFile('birth_certificate')) {
-            $rules['birth_certificate'] = 'file|mimes:jpg,jpeg,png,pdf|max:2048';
+        // Verify the user is a member
+        if ($user->role !== 'member') {
+            return response()->json([
+                'message' => 'This endpoint is only for members.'
+            ], 400);
         }
 
-        // Validate the incoming request
-        $validated = $request->validate($rules);
-
-        // Update the user table (without password validation)
-        $user->username = $validated['username'];
-        $user->email    = $validated['email'];
-        $user->save();
-
-        // Prepare profile data (from validated fields)
-        $profileData = collect($validated)->only([
-            'first_name',
-            'middle_name',
-            'last_name',
-            'contact_number',
-            'birthdate',
-            'address',
-            'gender',
-            'barangay',
-            'blood_type',
-            'disability_type'
-        ])->toArray();
-
-        if ($role === 'admin' && $user->adminProfile) {
-            $user->adminProfile->update($profileData);
-        } elseif ($role === 'staff' && $user->staffProfile) {
-            $user->staffProfile->update($profileData);
-        } elseif ($role === 'member' && $user->memberProfile) {
-            $user->memberProfile->update($profileData);
+        // Verify the member has a profile
+        if (!$user->memberProfile) {
+            return response()->json([
+                'message' => 'Member profile not found.'
+            ], 404);
         }
 
-        if ($request->hasFile('barangay_indigency')) {
-            $user->memberProfile->documents()->update([
-                'barangay_indigency' => $request->file('barangay_indigency')->store('documents', 'public'),
-            ]);
-        }
-        if ($request->hasFile('medical_certificate')) {
-            $user->memberProfile->documents()->update([
-                'medical_certificate' => $request->file('medical_certificate')->store('documents', 'public'),
-            ]);
-        }
-        if ($request->hasFile('picture_2x2')) {
-            $user->memberProfile->documents()->update([
-                'picture_2x2' => $request->file('picture_2x2')->store('documents', 'public'),
-            ]);
-        }
-        if ($request->hasFile('birth_certificate')) {
-            $user->memberProfile->documents()->update([
-                'birth_certificate' => $request->file('birth_certificate')->store('documents', 'public'),
-            ]);
-        }
-
-        return response()->json([
-            'message' => 'User and profile updated successfully!',
-            'user'    => $user->load($role . 'Profile')
+        // Validate the request
+        $validated = $request->validate([
+            'hard_copy_submitted' => 'required|boolean',
+            'remarks' => 'nullable|string|max:500',
         ]);
+
+        try {
+
+            // Update or create member documents record
+            $updateData = [
+                'hard_copy_submitted' => $validated['hard_copy_submitted'],
+                'remarks' => $validated['remarks'] ?? null,
+            ];
+
+            // Debug: Log the update data
+
+            if ($user->memberProfile->documents) {
+                // Update existing documents record
+                $user->memberProfile->documents()->update($updateData);
+            } else {
+                // Create new documents record
+                $updateData['member_profile_id'] = $user->memberProfile->id;
+                \App\Models\MemberDocument::create($updateData);
+            }
+
+            // Reload the user with fresh data
+            $user->load('memberProfile.documents');
+
+            // Debug: Log success
+
+            return response()->json([
+                'message' => 'Hard copy status updated successfully!',
+                'user' => $user
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to update hard copy status.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
-
-
 
     /**
      * Update status

@@ -73,7 +73,7 @@ class BenefitController extends Controller
             'benefit' => $benefit,
         ], 201);
     }
-    
+
     public function checkUserClaim($benefitId, $userId)
     {
         // Check if the user has claimed the benefit
@@ -105,22 +105,90 @@ class BenefitController extends Controller
             'budget_quantity' => 'nullable|integer',
             'unit'   => 'nullable|string|max:50',
             'status' => 'nullable|in:active,inactive',
+            'selected_members' => 'nullable|array', // New field for adding participants
+            'selected_members.*' => 'integer|exists:users,id', // Validate each member ID
         ]);
 
-        $benefit->update($request->all());
+        // Update basic benefit information
+        $benefit->update($request->except(['selected_members']));
 
-        return response()->json($benefit);
+        // Handle adding new participants if selected_members is provided
+        if ($request->has('selected_members') && is_array($request->selected_members)) {
+            $selectedMembers = $request->selected_members;
+
+            // Get existing participant user IDs to avoid duplicates
+            $existingParticipantIds = BenefitParticipant::where('benefit_id', $benefit->id)
+                ->pluck('user_id')
+                ->toArray();
+
+            // Filter out already existing participants
+            $newParticipantIds = array_diff($selectedMembers, $existingParticipantIds);
+
+            // Add new participants
+            foreach ($newParticipantIds as $userId) {
+                // Verify user is an approved member
+                $user = User::where('id', $userId)
+                    ->where('role', 'member')
+                    ->where('status', 'approved')
+                    ->first();
+
+                if ($user) {
+                    BenefitParticipant::create([
+                        'benefit_id' => $benefit->id,
+                        'user_id'    => $userId,
+                    ]);
+                }
+            }
+
+            // Update locked_member_count
+            $totalParticipants = BenefitParticipant::where('benefit_id', $benefit->id)->count();
+            $benefit->locked_member_count = $totalParticipants;
+            $benefit->save();
+
+            // Recalculate budget if needed
+            if ($benefit->type === 'cash' && $benefit->per_participant_amount) {
+                $benefit->budget_amount = $benefit->per_participant_amount * $totalParticipants;
+            }
+
+            if ($benefit->type === 'relief' && $benefit->per_participant_quantity) {
+                $benefit->budget_quantity = $benefit->per_participant_quantity * $totalParticipants;
+            }
+
+            $benefit->save();
+        }
+
+        // Load the updated benefit with participants
+        $benefit->load(['participants', 'participants.member_profile']);
+
+        return response()->json([
+            'message' => 'Benefit updated successfully' .
+                ($request->has('selected_members') ? ' with new participants added' : ''),
+            'benefit' => $benefit,
+            'added_participants_count' => $request->has('selected_members') ? count($newParticipantIds ?? []) : 0
+        ]);
     }
-
     /**
      * Delete a benefit
      */
     public function destroyBenefit($id)
     {
         $benefit = Benefit::findOrFail($id);
-        $benefit->delete();
 
-        return response()->json(['message' => 'Benefit deleted successfully']);
+        // Get the current status and toggle it
+        $currentStatus = $benefit->status;
+        $newStatus = $currentStatus === 'active' ? 'inactive' : 'active';
+
+        // Update the status
+        $benefit->update([
+            'status' => $newStatus
+        ]);
+
+        $action = $newStatus === 'active' ? 'activated' : 'deactivated';
+
+        return response()->json([
+            'message' => "Benefit {$action} successfully",
+            'status' => $newStatus
+        ]);
     }
 
     /**
@@ -270,13 +338,13 @@ class BenefitController extends Controller
      * GET /benefits/{benefitId}/participants
      */
     public function getBenefitParticipants($benefitId)
-{
-    $participants = BenefitParticipant::with('user')
-        ->where('benefit_id', $benefitId)
-        ->get();
+    {
+        $participants = BenefitParticipant::with('user')
+            ->where('benefit_id', $benefitId)
+            ->get();
 
-    return response()->json($participants);
-}
+        return response()->json($participants);
+    }
 
     /**
      * Add participants to a benefit
@@ -352,7 +420,6 @@ class BenefitController extends Controller
                 'invalid' => $invalidUsers,
                 'new_participant_count' => $newCount,
             ], 201);
-
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json([
@@ -432,7 +499,6 @@ class BenefitController extends Controller
                 'has_claims' => $hasClaims,
                 'new_participant_count' => $newCount,
             ]);
-
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json([

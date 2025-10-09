@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
 import api from "./api";
 import Layout from "./Layout";
+import { Key, Eye, EyeOff, Save, X, Check, Edit } from "lucide-react";
 
 function MemberProfile() {
   const { id } = useParams();
@@ -18,8 +19,207 @@ function MemberProfile() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [dateFilter, setDateFilter] = useState("past");
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [updatingPassword, setUpdatingPassword] = useState(false);
+  const [passwordData, setPasswordData] = useState({
+    newPassword: "",
+    confirmPassword: ""
+  });
+  const [showPassword, setShowPassword] = useState({
+    newPassword: false,
+    confirmPassword: false
+  });
+  const [editingHardCopy, setEditingHardCopy] = useState(false);
+  const [hardCopyData, setHardCopyData] = useState({
+    submitted: false,
+    remarks: ""
+  });
+  const [updatingHardCopy, setUpdatingHardCopy] = useState(false);
 
   const API_URL = process.env.REACT_APP_API_URL || "http://127.0.0.1:8000";
+
+  // Success message function
+  const showSuccessMessage = (message) => {
+    const toast = document.createElement('div');
+    toast.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transform translate-x-full transition-transform duration-300';
+    toast.innerHTML = `
+      <div class="flex items-center">
+        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+        </svg>
+        <span class="font-medium">${message}</span>
+      </div>
+    `;
+
+    document.body.appendChild(toast);
+
+    // Animate in
+    setTimeout(() => {
+      toast.style.transform = 'translateX(0)';
+    }, 100);
+
+    // Remove after 3 seconds
+    setTimeout(() => {
+      toast.style.transform = 'translateX(100%)';
+      setTimeout(() => {
+        if (toast.parentNode) {
+          toast.remove();
+        }
+      }, 300);
+    }, 3000);
+  };
+
+  // Error message function
+  const showErrorMessage = (message) => {
+    const toast = document.createElement('div');
+    toast.className = 'fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transform translate-x-full transition-transform duration-300';
+    toast.innerHTML = `
+      <div class="flex items-center">
+        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+        </svg>
+        <span class="font-medium">${message}</span>
+      </div>
+    `;
+
+    document.body.appendChild(toast);
+
+    // Animate in
+    setTimeout(() => {
+      toast.style.transform = 'translateX(0)';
+    }, 100);
+
+    // Remove after 3 seconds
+    setTimeout(() => {
+      toast.style.transform = 'translateX(100%)';
+      setTimeout(() => {
+        if (toast.parentNode) {
+          toast.remove();
+        }
+      }, 300);
+    }, 3000);
+  };
+
+  // Password update handler
+  const handlePasswordUpdate = async () => {
+    // Validation
+    if (!passwordData.newPassword) {
+      showErrorMessage("Please enter a new password.");
+      return;
+    }
+
+    if (passwordData.newPassword.length < 6) {
+      showErrorMessage("Password must be at least 6 characters long.");
+      return;
+    }
+
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      showErrorMessage("Passwords do not match.");
+      return;
+    }
+
+    try {
+      setUpdatingPassword(true);
+
+      // Call API to update password
+      await api.put(`/user/${id}`, {
+        username: member.username,
+        email: member.email,
+        password: passwordData.newPassword,
+        password_confirmation: passwordData.confirmPassword
+      });
+
+      // Reset form and close modal
+      setPasswordData({
+        newPassword: "",
+        confirmPassword: ""
+      });
+      setShowPasswordModal(false);
+
+      showSuccessMessage("Password updated successfully!");
+
+    } catch (err) {
+      console.error("Error updating password:", err);
+      showErrorMessage(err.response?.data?.message || "Failed to update password.");
+    } finally {
+      setUpdatingPassword(false);
+    }
+  };
+
+  // Hard copy status update handler
+  const handleHardCopyUpdate = async () => {
+    try {
+      setUpdatingHardCopy(true);
+
+      console.log("🔄 Sending hard copy update:", {
+        hard_copy_submitted: hardCopyData.submitted,
+        remarks: hardCopyData.remarks || ""
+      });
+
+      // Use the new dedicated endpoint
+      const response = await api.put(`/member-documents/${id}/hard-copy-status`, {
+        hard_copy_submitted: Boolean(hardCopyData.submitted), // Force boolean
+        remarks: hardCopyData.remarks || ""
+      });
+
+      console.log("✅ Update response:", response.data);
+
+      // Update local state with the response data
+      setMember(prev => ({
+        ...prev,
+        member_profile: {
+          ...prev.member_profile,
+          documents: {
+            ...prev.member_profile?.documents,
+            ...response.data.user?.member_profile?.documents
+          }
+        }
+      }));
+
+      setEditingHardCopy(false);
+      showSuccessMessage("Hard copy status updated successfully!");
+
+    } catch (err) {
+      console.error("❌ Error updating hard copy status:", err);
+      console.error("Error response:", err.response?.data);
+      console.error("Error details:", {
+        status: err.response?.status,
+        statusText: err.response?.statusText,
+        data: err.response?.data
+      });
+      showErrorMessage(err.response?.data?.message || "Failed to update hard copy status.");
+    } finally {
+      setUpdatingHardCopy(false);
+    }
+  };
+
+  const cancelPasswordUpdate = () => {
+    setPasswordData({
+      newPassword: "",
+      confirmPassword: ""
+    });
+    setShowPassword({
+      newPassword: false,
+      confirmPassword: false
+    });
+    setShowPasswordModal(false);
+  };
+
+  const cancelHardCopyEdit = () => {
+    const docs = member?.member_profile?.documents || {};
+    setHardCopyData({
+      submitted: Boolean(docs.hard_copy_submitted),
+      remarks: docs.remarks || ""
+    });
+    setEditingHardCopy(false);
+  };
+
+  const togglePasswordVisibility = (field) => {
+    setShowPassword(prev => ({
+      ...prev,
+      [field]: !prev[field]
+    }));
+  };
 
   // StatusBadge component
   const StatusBadge = ({ status }) => {
@@ -43,167 +243,63 @@ function MemberProfile() {
 
   // Hard Copy Submission Badge component
   const HardCopyBadge = ({ hasHardCopy }) => {
+    console.log("🪪 HardCopyBadge rendering with hasHardCopy:", hasHardCopy);
+
     if (hasHardCopy) {
       return (
         <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800 ml-2">
-          <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-          </svg>
+          <Check size={14} className="mr-1" />
           Hard Copy Submitted
         </span>
       );
     }
-    return null;
+
+    return (
+      <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800 ml-2">
+        <X size={14} className="mr-1" />
+        Hard Copy Not Submitted
+      </span>
+    );
   };
 
-  // Check if member has submitted hard copies based on documents.remarks
+  // Check if member has submitted hard copies based on documents data
   const hasSubmittedHardCopy = useMemo(() => {
     if (!member || !member.member_profile || !member.member_profile.documents) {
       return false;
     }
 
     const documents = member.member_profile.documents;
-    const remarks = documents.remarks;
 
-    // Check if remarks indicate hard copy submission
-    if (!remarks) return false;
+    console.log("📋 Hard copy documents data:", documents);
+    console.log("🔍 hard_copy_submitted value:", documents.hard_copy_submitted);
+    console.log("🔍 hard_copy_submitted type:", typeof documents.hard_copy_submitted);
 
-    const hardCopyIndicators = [
-      'hard copy submitted',
-      'hard copy received',
-      'physical copy submitted',
-      'original documents submitted',
-      'hardcopy',
-      'physical'
-    ];
+    // Convert to boolean to handle both 1/0 and true/false
+    const hasHardCopy = Boolean(documents.hard_copy_submitted);
 
-    return hardCopyIndicators.some(indicator =>
-      remarks.toLowerCase().includes(indicator.toLowerCase())
-    );
+    console.log("✅ Final hasHardCopy value:", hasHardCopy);
+
+    return hasHardCopy;
   }, [member]);
 
   // Success message function for approve
   const showApproveSuccessMessage = () => {
-    const toast = document.createElement('div');
-    toast.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transform translate-x-full transition-transform duration-300';
-    toast.innerHTML = `
-      <div class="flex items-center">
-        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-          <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
-        </svg>
-        <span class="font-medium">Member approved successfully</span>
-      </div>
-    `;
-
-    document.body.appendChild(toast);
-
-    // Animate in
-    setTimeout(() => {
-      toast.style.transform = 'translateX(0)';
-    }, 100);
-
-    // Remove after 3 seconds
-    setTimeout(() => {
-      toast.style.transform = 'translateX(100%)';
-      setTimeout(() => {
-        if (toast.parentNode) {
-          toast.remove();
-        }
-      }, 300);
-    }, 3000);
+    showSuccessMessage("Member approved successfully");
   };
 
   // Error message function for approve
   const showApproveErrorMessage = () => {
-    const toast = document.createElement('div');
-    toast.className = 'fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transform translate-x-full transition-transform duration-300';
-    toast.innerHTML = `
-      <div class="flex items-center">
-        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
-        </svg>
-        <span class="font-medium">Failed to approve member</span>
-      </div>
-    `;
-
-    document.body.appendChild(toast);
-
-    // Animate in
-    setTimeout(() => {
-      toast.style.transform = 'translateX(0)';
-    }, 100);
-
-    // Remove after 3 seconds
-    setTimeout(() => {
-      toast.style.transform = 'translateX(100%)';
-      setTimeout(() => {
-        if (toast.parentNode) {
-          toast.remove();
-        }
-      }, 300);
-    }, 3000);
+    showErrorMessage("Failed to approve member");
   };
 
   // Success message function for reject
   const showRejectSuccessMessage = () => {
-    const toast = document.createElement('div');
-    toast.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transform translate-x-full transition-transform duration-300';
-    toast.innerHTML = `
-      <div class="flex items-center">
-        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-          <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
-        </svg>
-        <span class="font-medium">Member rejected successfully</span>
-      </div>
-    `;
-
-    document.body.appendChild(toast);
-
-    // Animate in
-    setTimeout(() => {
-      toast.style.transform = 'translateX(0)';
-    }, 100);
-
-    // Remove after 3 seconds
-    setTimeout(() => {
-      toast.style.transform = 'translateX(100%)';
-      setTimeout(() => {
-        if (toast.parentNode) {
-          toast.remove();
-        }
-      }, 300);
-    }, 3000);
+    showSuccessMessage("Member rejected successfully");
   };
 
   // Error message function for reject
   const showRejectErrorMessage = () => {
-    const toast = document.createElement('div');
-    toast.className = 'fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transform translate-x-full transition-transform duration-300';
-    toast.innerHTML = `
-      <div class="flex items-center">
-        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
-        </svg>
-        <span class="font-medium">Failed to reject member</span>
-      </div>
-    `;
-
-    document.body.appendChild(toast);
-
-    // Animate in
-    setTimeout(() => {
-      toast.style.transform = 'translateX(0)';
-    }, 100);
-
-    // Remove after 3 seconds
-    setTimeout(() => {
-      toast.style.transform = 'translateX(100%)';
-      setTimeout(() => {
-        if (toast.parentNode) {
-          toast.remove();
-        }
-      }, 300);
-    }, 3000);
+    showErrorMessage("Failed to reject member");
   };
 
   // Approve member by changing status to approved
@@ -685,6 +781,22 @@ function MemberProfile() {
     return profile?.documents || {};
   }, [profile]);
 
+  // Initialize hard copy data when member data loads
+  useEffect(() => {
+    if (member && member.member_profile?.documents) {
+      const documents = member.member_profile.documents;
+      console.log("🔄 Initializing hard copy data:", {
+        hard_copy_submitted: documents.hard_copy_submitted,
+        remarks: documents.remarks
+      });
+
+      setHardCopyData({
+        submitted: Boolean(documents.hard_copy_submitted),
+        remarks: documents.remarks || ""
+      });
+    }
+  }, [member]);
+
   // Helper function to calculate event status based on date
   const calculateEventStatus = (eventDate) => {
     const today = new Date();
@@ -1028,8 +1140,8 @@ function MemberProfile() {
                       <div className="w-full bg-gray-200 rounded-full h-2">
                         <div
                           className={`h-2 rounded-full ${category.percentage >= 90 ? 'bg-green-400' :
-                              category.percentage >= 70 ? 'bg-blue-400' :
-                                category.percentage >= 50 ? 'bg-yellow-400' : 'bg-red-400'
+                            category.percentage >= 70 ? 'bg-blue-400' :
+                              category.percentage >= 50 ? 'bg-yellow-400' : 'bg-red-400'
                             }`}
                           style={{ width: `${category.percentage}%` }}
                         ></div>
@@ -1056,8 +1168,8 @@ function MemberProfile() {
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex-1 min-w-0 px-6 py-4 text-sm font-medium border-b-2 transition ${activeTab === tab.id
-                      ? "border-sky-500 text-sky-600 bg-blue-50"
-                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                    ? "border-sky-500 text-sky-600 bg-blue-50"
+                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
                     }`}
                 >
                   {tab.label}
@@ -1084,6 +1196,15 @@ function MemberProfile() {
                     </p>
                   </div>
                   <div className="flex gap-3">
+                    {/* Reset Password Button */}
+                    <button
+                      onClick={() => setShowPasswordModal(true)}
+                      className="inline-flex items-center px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition font-semibold"
+                    >
+                      <Key size={16} className="mr-2" />
+                      Reset Password
+                    </button>
+
                     {/* Approve Button - Only show when status is pending */}
                     {member.status === 'pending' && (
                       <button
@@ -1106,7 +1227,7 @@ function MemberProfile() {
                         )}
                       </button>
                     )}
-                    
+
                     {/* Reject Button - Only show if member is approved (not pending and not rejected) */}
                     {member.status === 'approved' && (
                       <button
@@ -1129,7 +1250,7 @@ function MemberProfile() {
                         )}
                       </button>
                     )}
-                    
+
                     {member.role === "member" && (
                       <Link
                         to={`/print/${member.id}`}
@@ -1166,20 +1287,110 @@ function MemberProfile() {
                   </div>
                 )}
 
-                {/* Hard Copy Remarks Display */}
-                {hasSubmittedHardCopy && docs.remarks && (
-                  <div className="mb-6 p-4 bg-purple-50 border border-purple-200 rounded-lg">
-                    <div className="flex items-start">
-                      <svg className="w-5 h-5 text-purple-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
+                {/* Hard Copy Status Section - Updated Display */}
+                <div className="mb-6 p-6 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-xl font-bold text-gray-800">Hard Copy Documents Status</h3>
+                    <button
+                      onClick={() => setEditingHardCopy(true)}
+                      className="inline-flex items-center px-3 py-1 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition font-medium text-sm"
+                    >
+                      <Edit size={14} className="mr-1" />
+                      Edit Status
+                    </button>
+                  </div>
+
+                  {editingHardCopy ? (
+                    <div className="space-y-4">
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          id="hardCopySubmitted"
+                          checked={hardCopyData.submitted}
+                          onChange={(e) => setHardCopyData(prev => ({
+                            ...prev,
+                            submitted: e.target.checked
+                          }))}
+                          className="w-4 h-4 text-sky-600 bg-gray-100 border-gray-300 rounded focus:ring-sky-500 focus:ring-2"
+                        />
+                        <label htmlFor="hardCopySubmitted" className="ml-2 text-sm font-medium text-gray-900">
+                          Hard Copy Documents Submitted
+                        </label>
+                      </div>
+
                       <div>
-                        <span className="text-purple-800 font-medium">Hard Copy Documents Submitted</span>
-                        <p className="text-purple-700 text-sm mt-1">{docs.remarks}</p>
+                        <label htmlFor="hardCopyRemarks" className="block text-sm font-medium text-gray-700 mb-1">
+                          Remarks (Optional)
+                        </label>
+                        <textarea
+                          id="hardCopyRemarks"
+                          value={hardCopyData.remarks}
+                          onChange={(e) => setHardCopyData(prev => ({
+                            ...prev,
+                            remarks: e.target.value
+                          }))}
+                          rows={3}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+                          placeholder="Add any remarks about the hard copy submission..."
+                        />
+                      </div>
+
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleHardCopyUpdate}
+                          disabled={updatingHardCopy}
+                          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium disabled:opacity-50 flex items-center gap-2"
+                        >
+                          {updatingHardCopy ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                              Saving...
+                            </>
+                          ) : (
+                            <>
+                              <Save size={16} />
+                              Save
+                            </>
+                          )}
+                        </button>
+                        <button
+                          onClick={cancelHardCopyEdit}
+                          disabled={updatingHardCopy}
+                          className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition font-medium disabled:opacity-50 flex items-center gap-2"
+                        >
+                          <X size={16} />
+                          Cancel
+                        </button>
                       </div>
                     </div>
-                  </div>
-                )}
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center">
+                          <div className={`w-3 h-3 rounded-full mr-2 ${hasSubmittedHardCopy ? 'bg-green-500' : 'bg-gray-400'}`}></div>
+                          <span className={`font-medium ${hasSubmittedHardCopy ? 'text-green-700' : 'text-gray-700'}`}>
+                            {hasSubmittedHardCopy ? 'Hard Copy Documents Submitted' : 'Hard Copy Documents Not Submitted'}
+                          </span>
+                        </div>
+
+                      </div>
+
+                      {docs.remarks && (
+                        <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                          <p className="text-sm text-blue-800">
+                            <strong>Remarks:</strong> {docs.remarks}
+                          </p>
+                        </div>
+                      )}
+
+                      {docs.status && (
+                        <div className="text-sm text-gray-600">
+                          <strong>Status:</strong> <span className="capitalize">{docs.status}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {[
@@ -1367,7 +1578,7 @@ function MemberProfile() {
                       {allEvents.length === 0 ? 'Events will appear here once they are created in the system.' :
                         'Try adjusting your filters to see more events.'}
                     </p>
-                   
+
                   </div>
                 ) : (
                   <>
@@ -1489,12 +1700,12 @@ function MemberProfile() {
                                 {/* Event Status */}
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${event.calculatedStatus === "completed"
-                                      ? 'bg-green-100 text-green-800'
-                                      : event.calculatedStatus === "upcoming"
-                                        ? 'bg-blue-100 text-blue-800'
-                                        : event.calculatedStatus === "ongoing"
-                                          ? 'bg-orange-100 text-orange-800'
-                                          : 'bg-yellow-100 text-yellow-800'
+                                    ? 'bg-green-100 text-green-800'
+                                    : event.calculatedStatus === "upcoming"
+                                      ? 'bg-blue-100 text-blue-800'
+                                      : event.calculatedStatus === "ongoing"
+                                        ? 'bg-orange-100 text-orange-800'
+                                        : 'bg-yellow-100 text-yellow-800'
                                     }`}>
                                     {event.calculatedStatus?.charAt(0).toUpperCase() + event.calculatedStatus?.slice(1) || 'Scheduled'}
                                   </span>
@@ -1543,8 +1754,8 @@ function MemberProfile() {
                           <div className="text-4xl mb-3">{benefit.type === 'financial' ? '💰' : benefit.type === 'medical' ? '🏥' : '🎁'}</div>
                           <h3 className="text-lg font-semibold text-gray-800 mb-2">{benefit.name}</h3>
                           <span className={`px-3 py-1 rounded-full text-xs font-medium ${benefit.status === 'claimed' ? 'bg-green-100 text-green-800' :
-                              benefit.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                                'bg-gray-100 text-gray-800'
+                            benefit.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-gray-100 text-gray-800'
                             }`}>
                             {benefit.status.toUpperCase()}
                           </span>
@@ -1582,6 +1793,111 @@ function MemberProfile() {
           </div>
         </div>
       </div>
+
+      {/* ✅ Password Update Modal */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center">
+                <Key className="w-6 h-6 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">
+                  Reset Password
+                </h3>
+                <p className="text-gray-600 text-sm">
+                  Set a new password for {fullName}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  New Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword.newPassword ? "text" : "password"}
+                    value={passwordData.newPassword}
+                    onChange={(e) => setPasswordData(prev => ({
+                      ...prev,
+                      newPassword: e.target.value
+                    }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent pr-10"
+                    placeholder="Enter new password"
+                    disabled={updatingPassword}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => togglePasswordVisibility('newPassword')}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showPassword.newPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Password must be at least 6 characters long
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Confirm Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword.confirmPassword ? "text" : "password"}
+                    value={passwordData.confirmPassword}
+                    onChange={(e) => setPasswordData(prev => ({
+                      ...prev,
+                      confirmPassword: e.target.value
+                    }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent pr-10"
+                    placeholder="Confirm new password"
+                    disabled={updatingPassword}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => togglePasswordVisibility('confirmPassword')}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showPassword.confirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={cancelPasswordUpdate}
+                disabled={updatingPassword}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handlePasswordUpdate}
+                disabled={updatingPassword}
+                className="flex-1 px-4 py-2 bg-amber-600 text-white rounded-lg transition font-medium hover:bg-amber-700 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {updatingPassword ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Updating...
+                  </>
+                ) : (
+                  <>
+                    <Save size={16} />
+                    Update Password
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import api from "./api";
 import Layout from "./Layout";
-import { UserCheck, Ban, } from "lucide-react";
+import { UserCheck, Ban, Edit, Save, X, Key, Eye, EyeOff } from "lucide-react";
 
 // ✅ Theme applied consistently
 const theme = {
@@ -13,6 +13,13 @@ const theme = {
   footerBg: "bg-sky-700",
 };
 
+// Barangay options
+const barangayOptions = [
+  "All", "Awang", "Bagocboc", "Barra", "Bonbon", "Cauyonan", "Igpit",
+  "Limonda", "Luyong Bonbon", "Malanang", "Nangcaon", "Patag",
+  "Poblacion", "Taboc", "Tingalan"
+];
+
 function StaffProfile() {
   const { id } = useParams();
   const [staff, setStaff] = useState(null);
@@ -20,6 +27,19 @@ function StaffProfile() {
   const [error, setError] = useState("");
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [editingBarangay, setEditingBarangay] = useState(false);
+  const [assignedBarangay, setAssignedBarangay] = useState("");
+  const [updatingBarangay, setUpdatingBarangay] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [updatingPassword, setUpdatingPassword] = useState(false);
+  const [passwordData, setPasswordData] = useState({
+    newPassword: "",
+    confirmPassword: ""
+  });
+  const [showPassword, setShowPassword] = useState({
+    newPassword: false,
+    confirmPassword: false
+  });
 
   // Success message function
   const showSuccessMessage = (message) => {
@@ -88,6 +108,7 @@ function StaffProfile() {
       try {
         const res = await api.get(`/user/${id}`);
         setStaff(res.data);
+        setAssignedBarangay(res.data.staff_profile?.assigned_barangay || "");
       } catch (err) {
         console.error("Error fetching staff:", err);
         setError(err.response?.data?.message || "Failed to load staff profile.");
@@ -124,6 +145,119 @@ function StaffProfile() {
     } finally {
       setUpdatingStatus(false);
     }
+  };
+
+  const handleBarangayUpdate = async () => {
+    if (!assignedBarangay.trim()) {
+      showErrorMessage("Please select a barangay.");
+      return;
+    }
+
+    try {
+      setUpdatingBarangay(true);
+      
+      // Prepare update data
+      const updateData = {
+        username: staff.username,
+        email: staff.email,
+        first_name: staff.staff_profile?.first_name || "",
+        middle_name: staff.staff_profile?.middle_name || "",
+        last_name: staff.staff_profile?.last_name || "",
+        contact_number: staff.staff_profile?.contact_number || "",
+        birthdate: staff.staff_profile?.birthdate || "",
+        address: staff.staff_profile?.address || "",
+        barangay: assignedBarangay, // This will update assigned_barangay in staff_profile
+      };
+
+      await api.put(`/user/${id}`, updateData);
+      
+      // Update local state
+      setStaff(prev => prev ? {
+        ...prev,
+        staff_profile: {
+          ...prev.staff_profile,
+          assigned_barangay: assignedBarangay
+        }
+      } : null);
+      
+      setEditingBarangay(false);
+      showSuccessMessage("Assigned barangay updated successfully!");
+      
+    } catch (err) {
+      console.error("Error updating assigned barangay:", err);
+      showErrorMessage(err.response?.data?.message || "Failed to update assigned barangay.");
+    } finally {
+      setUpdatingBarangay(false);
+    }
+  };
+
+  const handlePasswordUpdate = async () => {
+    // Validation
+    if (!passwordData.newPassword) {
+      showErrorMessage("Please enter a new password.");
+      return;
+    }
+
+    if (passwordData.newPassword.length < 6) {
+      showErrorMessage("Password must be at least 6 characters long.");
+      return;
+    }
+
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      showErrorMessage("Passwords do not match.");
+      return;
+    }
+
+    try {
+      setUpdatingPassword(true);
+      
+      // Call API to update password
+      await api.put(`/user/${id}`, {
+        username: staff.username,
+        email: staff.email,
+        password: passwordData.newPassword,
+        password_confirmation: passwordData.confirmPassword
+      });
+      
+      // Reset form and close modal
+      setPasswordData({
+        newPassword: "",
+        confirmPassword: ""
+      });
+      setShowPasswordModal(false);
+      
+      showSuccessMessage("Password updated successfully!");
+      
+    } catch (err) {
+      console.error("Error updating password:", err);
+      showErrorMessage(err.response?.data?.message || "Failed to update password.");
+    } finally {
+      setUpdatingPassword(false);
+    }
+  };
+
+  const cancelBarangayEdit = () => {
+    setAssignedBarangay(staff.staff_profile?.assigned_barangay || "");
+    setEditingBarangay(false);
+  };
+
+  const cancelPasswordUpdate = () => {
+    setPasswordData({
+      newPassword: "",
+      confirmPassword: ""
+    });
+    setShowPassword({
+      newPassword: false,
+      confirmPassword: false
+    });
+    setShowPasswordModal(false);
+  };
+
+  const togglePasswordVisibility = (field) => {
+    setShowPassword(prev => ({
+      ...prev,
+      [field]: !prev[field]
+    }));
   };
 
   const getStatusConfig = (status) => {
@@ -246,8 +380,6 @@ function StaffProfile() {
     };
   };
 
- 
-
   if (loading) {
     return (
       <Layout>
@@ -304,7 +436,6 @@ function StaffProfile() {
     { label: "Birthdate", value: formatDate(profile.birthdate) },
     { label: "Contact Number", value: profile.contact_number },
     { label: "Address", value: profile.address },
-    { label: "Assigned Barangay", value: profile.assigned_barangay },
   ];
 
   return (
@@ -361,6 +492,77 @@ function StaffProfile() {
                 )}
               </div>
             ))}
+            
+            {/* Assigned Barangay Field with Edit Option */}
+            <div className={`p-4 rounded-lg ${!profile.assigned_barangay ? 'bg-red-50 border border-red-200' : 'bg-gray-50'}`}>
+              <div className="flex justify-between items-start">
+                <div className="flex-1">
+                  <p className="text-gray-500 text-sm">Assigned Barangay</p>
+                  {editingBarangay ? (
+                    <div className="mt-2">
+                      <select
+                        value={assignedBarangay}
+                        onChange={(e) => setAssignedBarangay(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+                        disabled={updatingBarangay}
+                      >
+                        <option value="">Select a barangay</option>
+                        {barangayOptions.map((barangay) => (
+                          <option key={barangay} value={barangay}>
+                            {barangay}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="flex gap-2 mt-3">
+                        <button
+                          onClick={handleBarangayUpdate}
+                          disabled={updatingBarangay || !assignedBarangay}
+                          className="px-3 py-1 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                        >
+                          {updatingBarangay ? (
+                            <>
+                              <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                              Saving...
+                            </>
+                          ) : (
+                            <>
+                              <Save size={14} />
+                              Save
+                            </>
+                          )}
+                        </button>
+                        <button
+                          onClick={cancelBarangayEdit}
+                          disabled={updatingBarangay}
+                          className="px-3 py-1 bg-gray-500 text-white rounded-lg text-sm font-medium hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                        >
+                          <X size={14} />
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex justify-between items-center">
+                      <p className={`font-medium ${!profile.assigned_barangay ? 'text-red-600' : 'text-gray-900'}`}>
+                        {profile.assigned_barangay || "Not assigned"}
+                      </p>
+                      <button
+                        onClick={() => setEditingBarangay(true)}
+                        className="ml-2 p-1 text-sky-600 hover:bg-sky-100 rounded transition-colors"
+                        title="Edit assigned barangay"
+                      >
+                        <Edit size={16} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {!profile.assigned_barangay && !editingBarangay && (
+                <p className="text-xs text-red-500 mt-1">
+                  This field needs to be completed
+                </p>
+              )}
+            </div>
           </div>
 
           {/* ✅ Back & Action buttons */}
@@ -373,6 +575,13 @@ function StaffProfile() {
             </Link>
 
             <div className="flex gap-2">
+              <button
+                onClick={() => setShowPasswordModal(true)}
+                className="px-4 py-2 rounded-lg flex items-center gap-2 transition-colors bg-amber-600 hover:bg-amber-700 text-white font-medium"
+              >
+                <Key size={18} />
+                Reset Password
+              </button>
               {actionConfig && (
                 <button
                   onClick={() => setShowStatusModal(true)}
@@ -434,6 +643,111 @@ function StaffProfile() {
                 ) : (
                   <>
                     {actionConfig.confirmText}
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ Password Update Modal */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center">
+                <Key className="w-6 h-6 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">
+                  Reset Password
+                </h3>
+                <p className="text-gray-600 text-sm">
+                  Set a new password for {profile.first_name} {profile.last_name}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  New Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword.newPassword ? "text" : "password"}
+                    value={passwordData.newPassword}
+                    onChange={(e) => setPasswordData(prev => ({
+                      ...prev,
+                      newPassword: e.target.value
+                    }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent pr-10"
+                    placeholder="Enter new password"
+                    disabled={updatingPassword}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => togglePasswordVisibility('newPassword')}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showPassword.newPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Password must be at least 6 characters long
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Confirm Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword.confirmPassword ? "text" : "password"}
+                    value={passwordData.confirmPassword}
+                    onChange={(e) => setPasswordData(prev => ({
+                      ...prev,
+                      confirmPassword: e.target.value
+                    }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent pr-10"
+                    placeholder="Confirm new password"
+                    disabled={updatingPassword}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => togglePasswordVisibility('confirmPassword')}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showPassword.confirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={cancelPasswordUpdate}
+                disabled={updatingPassword}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handlePasswordUpdate}
+                disabled={updatingPassword}
+                className="flex-1 px-4 py-2 bg-amber-600 text-white rounded-lg transition font-medium hover:bg-amber-700 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {updatingPassword ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Updating...
+                  </>
+                ) : (
+                  <>
+                    <Save size={16} />
+                    Update Password
                   </>
                 )}
               </button>

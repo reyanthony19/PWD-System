@@ -15,6 +15,7 @@ class MemberDocument extends Model
         'medical_certificate',
         'picture_2x2',
         'birth_certificate',
+        'hard_copy_submitted',
         'remarks',
     ];
 

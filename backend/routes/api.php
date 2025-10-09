@@ -35,25 +35,31 @@ Route::middleware('auth:sanctum')->group(function () {
     | Authenticated User Management
     |--------------------------------------------------------------------------
     */
-    
+
     // Staff registration
     Route::post('/staff/register', [StaffController::class, 'register']);
-    
+
     Route::get('/user', [AuthController::class, 'profile']);
     Route::get('/user/documents/{user_id}', [AuthController::class, 'fetchMemberDocuments']);
     Route::get('/users', [AuthController::class, 'listUsers']);
     Route::get('/user/{id}', [AuthController::class, 'showUser']);
+
+    //mobile app profile update sa member
     Route::put('/user/{id}', [AuthController::class, 'updateUser']);
+    
     Route::patch('/user/{id}/status', [AuthController::class, 'updateStatus']);
     Route::delete('/user/{id}', [AuthController::class, 'deleteUser']);
     Route::post('/logout', [AuthController::class, 'logout']);
+
+    //gamit pang check sa hard copy 
+    Route::put('/member-documents/{id}/hard-copy-status', [AuthController::class, 'updateHardCopyStatus']);
 
     /*
     |--------------------------------------------------------------------------
     | Benefits Management
     |--------------------------------------------------------------------------
     */
-    
+
     // ✅ Benefit Participants Management
     Route::get('/benefits/{id}/participants', [BenefitController::class, 'getBenefitParticipants']);
     Route::post('/benefits/{benefitId}/participants', [BenefitController::class, 'addParticipants']);
@@ -84,7 +90,7 @@ Route::middleware('auth:sanctum')->group(function () {
     | Events & Attendance Management
     |--------------------------------------------------------------------------
     */
-    
+
     // Events
     Route::get('/events', [EventController::class, 'index']);
     Route::get('/events/{event}', [EventController::class, 'show']);
