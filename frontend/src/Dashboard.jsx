@@ -12,8 +12,6 @@ import {
   PieChart,
   Pie,
   Cell,
-  LineChart,
-  Line,
   AreaChart,
   Area
 } from "recharts";
@@ -39,6 +37,13 @@ const disabilityTypes = {
   neurological: { name: "Neurological", color: "#0c4a6e" },
   multiple: { name: "Multiple Disabilities", color: "#38a169" },
   other: { name: "Other", color: "#d69e2e" }
+};
+
+// Benefit type colors and labels
+const benefitTypes = {
+  cash: { name: "Cash Benefits", color: "#10b981", icon: "💰" },
+  relief: { name: "Relief Benefits", color: "#f59e0b", icon: "📦" },
+  other: { name: "Other Benefits", color: "#6b7280", icon: "🛠️" }
 };
 
 function Dashboard() {
@@ -228,18 +233,18 @@ function Dashboard() {
     return disabilityByStatus;
   };
 
-  // 🔍 ANALYTICS: Get benefit distribution by type
+  // 🔍 ANALYTICS: Get benefit distribution by type - UPDATED for "other" type
   const getBenefitAnalytics = () => {
-    const benefitTypes = {};
+    const benefitTypesCount = {};
     (benefits || []).forEach(benefit => {
       const type = benefit.type || 'unknown';
-      benefitTypes[type] = (benefitTypes[type] || 0) + 1;
+      benefitTypesCount[type] = (benefitTypesCount[type] || 0) + 1;
     });
 
-    return Object.entries(benefitTypes).map(([type, count]) => ({
+    return Object.entries(benefitTypesCount).map(([type, count]) => ({
       type: type.charAt(0).toUpperCase() + type.slice(1),
       count,
-      color: type === 'cash' ? '#10b981' : type === 'relief' ? '#f59e0b' : '#6b7280'
+      color: benefitTypes[type]?.color || '#6b7280'
     }));
   };
 
@@ -283,7 +288,7 @@ function Dashboard() {
     }).slice(0, 5); // Top 5 events
   };
 
-  // 🚚 LOGISTICS: Get benefit distribution status - FIXED
+  // 🚚 LOGISTICS: Get benefit distribution status - UPDATED for "other" type
   const getBenefitDistribution = () => {
     if (!Array.isArray(benefits)) {
       return [];
@@ -302,7 +307,8 @@ function Dashboard() {
         total: benefit.locked_member_count || 0,
         claimed,
         remaining: Math.max(0, remaining),
-        completion: Math.round((claimed / (benefit.locked_member_count || 1)) * 100)
+        completion: Math.round((claimed / (benefit.locked_member_count || 1)) * 100),
+        itemName: benefit.item_name // For other benefits
       };
     });
 
@@ -322,7 +328,7 @@ function Dashboard() {
       .slice(0, 4);
   };
 
-  // 🚚 LOGISTICS: Get resource allocation summary - FIXED with proper budget calculation for both cash and relief
+  // 🚚 LOGISTICS: Get resource allocation summary - UPDATED for "other" type
   const getResourceAllocation = () => {
     if (!Array.isArray(benefits)) {
       return {
@@ -332,7 +338,8 @@ function Dashboard() {
         totalParticipants: 0,
         utilizationRate: 0,
         cashBudget: 0,
-        reliefBudget: 0
+        reliefBudget: 0,
+        otherBudget: 0
       };
     }
     
@@ -340,6 +347,7 @@ function Dashboard() {
     let allocatedBudget = 0;
     let cashBudget = 0;
     let reliefBudget = 0;
+    let otherBudget = 0;
 
     benefits.forEach(benefit => {
       const participants = benefit.locked_member_count || 0;
@@ -363,6 +371,14 @@ function Dashboard() {
         totalBudget += benefitTotal;
         allocatedBudget += benefitAllocated;
         reliefBudget += benefitTotal;
+      } else if (benefit.type === 'other') {
+        // For other benefits: item_quantity × participants
+        const benefitTotal = (benefit.item_quantity || 0) * participants;
+        const benefitAllocated = (benefit.item_quantity || 0) * claimed;
+        
+        totalBudget += benefitTotal;
+        allocatedBudget += benefitAllocated;
+        otherBudget += benefitTotal;
       }
     });
 
@@ -378,11 +394,12 @@ function Dashboard() {
       totalParticipants,
       utilizationRate: Math.round((allocatedBudget / (totalBudget || 1)) * 100),
       cashBudget,
-      reliefBudget
+      reliefBudget,
+      otherBudget
     };
   };
 
-  // 🚚 LOGISTICS: Get budget breakdown by benefit type - FIXED for both cash and relief
+  // 🚚 LOGISTICS: Get budget breakdown by benefit type - UPDATED for "other" type
   const getBudgetBreakdown = () => {
     if (!Array.isArray(benefits)) {
       return [];
@@ -398,6 +415,7 @@ function Dashboard() {
       let allocatedBudget = 0;
       let unit = '';
       let perParticipant = 0;
+      let displayName = benefit.name || 'Unnamed Benefit';
 
       if (benefit.type === 'cash') {
         perParticipant = benefit.budget_amount || 0;
@@ -409,10 +427,19 @@ function Dashboard() {
         totalBudget = perParticipant * participants;
         allocatedBudget = perParticipant * claimed;
         unit = benefit.unit || 'pcs';
+      } else if (benefit.type === 'other') {
+        perParticipant = benefit.item_quantity || 0;
+        totalBudget = perParticipant * participants;
+        allocatedBudget = perParticipant * claimed;
+        unit = 'items';
+        // Include item name for other benefits
+        if (benefit.item_name) {
+          displayName = `${benefit.name} (${benefit.item_name})`;
+        }
       }
 
       return {
-        name: benefit.name || 'Unnamed Benefit',
+        name: displayName,
         type: benefit.type || 'unknown',
         totalBudget,
         allocatedBudget,
@@ -420,14 +447,15 @@ function Dashboard() {
         claimed,
         unit,
         perParticipant,
-        completion: Math.round((claimed / (participants || 1)) * 100)
+        completion: Math.round((claimed / (participants || 1)) * 100),
+        itemName: benefit.item_name // For display purposes
       };
     });
 
     return breakdown.sort((a, b) => b.totalBudget - a.totalBudget).slice(0, 5);
   };
 
-  // 🚚 LOGISTICS: Get benefit type summary
+  // 🚚 LOGISTICS: Get benefit type summary - UPDATED for "other" type
   const getBenefitTypeSummary = () => {
     if (!Array.isArray(benefits)) {
       return [];
@@ -435,7 +463,8 @@ function Dashboard() {
 
     const summary = {
       cash: { count: 0, totalBudget: 0, participants: 0 },
-      relief: { count: 0, totalBudget: 0, participants: 0 }
+      relief: { count: 0, totalBudget: 0, participants: 0 },
+      other: { count: 0, totalBudget: 0, participants: 0 }
     };
 
     benefits.forEach(benefit => {
@@ -449,6 +478,10 @@ function Dashboard() {
         summary.relief.count += 1;
         summary.relief.totalBudget += (benefit.budget_quantity || 0) * participants;
         summary.relief.participants += participants;
+      } else if (benefit.type === 'other') {
+        summary.other.count += 1;
+        summary.other.totalBudget += (benefit.item_quantity || 0) * participants;
+        summary.other.participants += participants;
       }
     });
 
@@ -458,14 +491,24 @@ function Dashboard() {
         count: summary.cash.count,
         totalBudget: summary.cash.totalBudget,
         participants: summary.cash.participants,
-        color: '#10b981'
+        color: benefitTypes.cash.color,
+        icon: benefitTypes.cash.icon
       },
       {
         type: 'Relief Benefits',
         count: summary.relief.count,
         totalBudget: summary.relief.totalBudget,
         participants: summary.relief.participants,
-        color: '#f59e0b'
+        color: benefitTypes.relief.color,
+        icon: benefitTypes.relief.icon
+      },
+      {
+        type: 'Other Benefits',
+        count: summary.other.count,
+        totalBudget: summary.other.totalBudget,
+        participants: summary.other.participants,
+        color: benefitTypes.other.color,
+        icon: benefitTypes.other.icon
       }
     ];
   };
@@ -692,11 +735,13 @@ function Dashboard() {
             </h2>
 
             {/* Benefit Type Summary */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
               {benefitTypeSummary.map((summary, index) => (
                 <div key={index} className="bg-white rounded-xl shadow p-6">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-gray-800">{summary.type}</h3>
+                    <h3 className="text-lg font-semibold text-gray-800">
+                      {summary.icon} {summary.type}
+                    </h3>
                     <div className="w-4 h-4 rounded-full" style={{ backgroundColor: summary.color }}></div>
                   </div>
                   <div className="grid grid-cols-3 gap-4 text-center">
@@ -727,14 +772,14 @@ function Dashboard() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
               <div className="bg-white p-6 rounded-xl shadow text-center">
                 <p className="text-2xl font-bold text-sky-600">
-                  ₱{resourceAllocation.totalBudget.toLocaleString()}
+                  {resourceAllocation.totalBudget.toLocaleString()}
                 </p>
                 <p className="text-sm text-gray-600">Total Budget</p>
                 <p className="text-xs text-gray-500">(Amount/Quantity × Participants)</p>
               </div>
               <div className="bg-white p-6 rounded-xl shadow text-center">
                 <p className="text-2xl font-bold text-green-600">
-                  ₱{resourceAllocation.allocatedBudget.toLocaleString()}
+                  {resourceAllocation.allocatedBudget.toLocaleString()}
                 </p>
                 <p className="text-sm text-gray-600">Allocated Budget</p>
                 <p className="text-xs text-gray-500">(Amount/Quantity × Claimed)</p>
@@ -777,6 +822,11 @@ function Dashboard() {
                           <span>Participants: {benefit.participants}</span>
                           <span>Claimed: {benefit.claimed}</span>
                         </div>
+                        {benefit.itemName && (
+                          <div className="text-xs text-gray-500 mb-2">
+                            Item: {benefit.itemName}
+                          </div>
+                        )}
                         <div className="w-full bg-gray-200 rounded-full h-2">
                           <div 
                             className="bg-green-500 h-2 rounded-full transition-all duration-300"
@@ -834,7 +884,12 @@ function Dashboard() {
                   benefitDistribution.map((benefit, index) => (
                     <div key={index} className="border-l-4 border-sky-500 pl-4">
                       <div className="flex justify-between items-center mb-2">
-                        <span className="font-medium text-gray-800">{benefit.name}</span>
+                        <span className="font-medium text-gray-800">
+                          {benefit.name}
+                          {benefit.itemName && (
+                            <span className="text-xs text-gray-500 ml-2">({benefit.itemName})</span>
+                          )}
+                        </span>
                         <span className="text-sm font-semibold text-sky-600">
                           {benefit.completion}%
                         </span>

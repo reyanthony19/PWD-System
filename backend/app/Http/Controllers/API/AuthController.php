@@ -15,11 +15,14 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $request->validate([
-            'email'    => 'required|email',
+            'login'    => 'required|string',
             'password' => 'required',
         ]);
 
-        $user = User::where('email', $request->email)->first();
+        // Determine if login is email or username
+        $loginType = filter_var($request->login, FILTER_VALIDATE_EMAIL) ? 'email' : 'username';
+
+        $user = User::where($loginType, $request->login)->first();
 
         if (!$user || !Hash::check($request->password, $user->password)) {
             return response()->json(['message' => 'Invalid credentials'], 401);
@@ -32,7 +35,6 @@ class AuthController extends Controller
             'token' => $token
         ], 200);
     }
-
     /**
      * Logout
      */
@@ -103,7 +105,71 @@ class AuthController extends Controller
         // Return the documents as a response
         return response()->json($documents);
     }
+    public function updateUser(Request $request, $id)
+    {
+        if ($request->user()->id !== (int)$id && $request->user()->role !== 'admin') {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
 
+        $user = User::findOrFail($id);
+        $role = $user->role;
+
+        $rules = [
+            'username'     => 'required|string|max:255',
+            'email'        => 'required|email|unique:users,email,' . $id,
+            'old_password' => 'nullable|string',
+            'password'     => 'nullable|string|min:3',
+
+            // profile fields
+            'first_name'     => 'nullable|string|max:255',
+            'middle_name'    => 'nullable|string|max:255',
+            'last_name'      => 'nullable|string|max:255',
+            'contact_number' => 'nullable|string|max:50',
+            'birthdate'      => 'nullable|date',
+            'address'        => 'nullable|string|max:500',
+        ];
+
+        $validated = $request->validate($rules);
+
+        // Handle password update
+        if (!empty($validated['password'])) {
+            if (empty($validated['old_password'])) {
+                return response()->json(['message' => 'Old password is required.'], 422);
+            }
+            if (!Hash::check($validated['old_password'], $user->password)) {
+                return response()->json(['message' => 'Old password is incorrect.'], 422);
+            }
+            $user->password = Hash::make($validated['password']);
+        }
+
+        // Update users table
+        $user->username = $validated['username'];
+        $user->email    = $validated['email'];
+        $user->save();
+
+        // Update profile table depending on role
+        $profileData = collect($validated)->only([
+            'first_name',
+            'middle_name',
+            'last_name',
+            'contact_number',
+            'birthdate',
+            'address'
+        ])->toArray();
+
+        if ($role === 'admin' && $user->adminProfile) {
+            $user->adminProfile->update($profileData);
+        } elseif ($role === 'staff' && $user->staffProfile) {
+            $user->staffProfile->update($profileData);
+        } elseif ($role === 'member' && $user->memberProfile) {
+            $user->memberProfile->update($profileData);
+        }
+
+        return response()->json([
+            'message' => 'User and profile updated successfully!',
+            'user'    => $user->load($role . 'Profile')
+        ]);
+    }
     //Hard Copy Checker kung na submit ba o wala 
     public function updateHardCopyStatus(Request $request, $id)
     {

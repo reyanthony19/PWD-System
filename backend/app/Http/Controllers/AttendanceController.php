@@ -6,6 +6,7 @@ use App\Models\Attendance;
 use App\Models\Event;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 
 class AttendanceController extends Controller
 {
@@ -14,10 +15,14 @@ class AttendanceController extends Controller
      */
     public function index(Event $event)
     {
-        $attendances = Attendance::with(['user.memberProfile', 'event', 'scannedBy.staffProfile'])
-            ->where('event_id', $event->id)
-            ->latest()
-            ->paginate(20);
+        $cacheKey = "event_attendances:{$event->id}:page:" . request('page', 1);
+        
+        $attendances = Cache::remember($cacheKey, 1800, function () use ($event) { // 30 minutes
+            return Attendance::with(['user.memberProfile', 'event', 'scannedBy.staffProfile'])
+                ->where('event_id', $event->id)
+                ->latest()
+                ->paginate(20);
+        });
 
         return response()->json($attendances);
     }
@@ -27,9 +32,13 @@ class AttendanceController extends Controller
      */
     public function getEventAttendances($eventId)
     {
-        $attendances = Attendance::with(['user.memberProfile', 'scannedBy.staffProfile'])
-            ->where('event_id', $eventId)
-            ->get();
+        $cacheKey = "event_attendances_all:{$eventId}";
+        
+        $attendances = Cache::remember($cacheKey, 1800, function () use ($eventId) { // 30 minutes
+            return Attendance::with(['user.memberProfile', 'scannedBy.staffProfile'])
+                ->where('event_id', $eventId)
+                ->get();
+        });
 
         return response()->json($attendances);
     }
@@ -56,6 +65,9 @@ class AttendanceController extends Controller
                 'status' => $validated['status'] ?? 'present',
             ]
         );
+
+        // Clear relevant caches
+        $this->clearAttendanceCaches($event->id, $validated['user_id']);
 
         return response()->json([
             'message'    => 'Attendance recorded successfully.',
@@ -94,6 +106,9 @@ class AttendanceController extends Controller
             'status' => $validated['status'],
         ]);
 
+        // Clear relevant caches
+        $this->clearAttendanceCaches($eventId, $validated['user_id']);
+
         return response()->json([
             'message' => 'Attendance created successfully.',
             'attendance' => $attendance->load(['user', 'scannedBy']),
@@ -105,8 +120,13 @@ class AttendanceController extends Controller
      */
     public function show(Attendance $attendance)
     {
-        $attendance->load(['user', 'event', 'scannedBy']);
-        return response()->json($attendance);
+        $cacheKey = "attendance:{$attendance->id}";
+        
+        $attendanceData = Cache::remember($cacheKey, 3600, function () use ($attendance) { // 1 hour
+            return $attendance->load(['user', 'event', 'scannedBy']);
+        });
+
+        return response()->json($attendanceData);
     }
 
     /**
@@ -122,6 +142,9 @@ class AttendanceController extends Controller
 
         $attendance->update($validated);
 
+        // Clear relevant caches
+        $this->clearAttendanceCaches($attendance->event_id, $attendance->user_id);
+
         return response()->json([
             'message'    => 'Attendance updated successfully.',
             'attendance' => $attendance,
@@ -133,7 +156,13 @@ class AttendanceController extends Controller
      */
     public function destroy(Attendance $attendance)
     {
+        $eventId = $attendance->event_id;
+        $userId = $attendance->user_id;
+        
         $attendance->delete();
+
+        // Clear relevant caches
+        $this->clearAttendanceCaches($eventId, $userId);
 
         return response()->json([
             'message' => 'Attendance removed successfully.'
@@ -157,6 +186,9 @@ class AttendanceController extends Controller
 
         $attendance->delete();
 
+        // Clear relevant caches
+        $this->clearAttendanceCaches($eventId, $userId);
+
         return response()->json([
             'message' => 'Attendance removed successfully.'
         ]);
@@ -167,15 +199,21 @@ class AttendanceController extends Controller
      */
     public function checkUserAttendance($eventId, $userId)
     {
-        $attendance = Attendance::where('event_id', $eventId)
-            ->where('user_id', $userId)
-            ->first();
+        $cacheKey = "user_attendance_check:{$eventId}:{$userId}";
+        
+        $result = Cache::remember($cacheKey, 1800, function () use ($eventId, $userId) { // 30 minutes
+            $attendance = Attendance::where('event_id', $eventId)
+                ->where('user_id', $userId)
+                ->first();
 
-        if ($attendance) {
-            return response()->json(['attended' => true, 'attendance' => $attendance]);
-        }
+            if ($attendance) {
+                return ['attended' => true, 'attendance' => $attendance];
+            }
 
-        return response()->json(['attended' => false]);
+            return ['attended' => false];
+        });
+
+        return response()->json($result);
     }
 
     /**
@@ -183,10 +221,14 @@ class AttendanceController extends Controller
      */
     public function getUserAttendances($userId)
     {
-        $attendances = Attendance::with(['event', 'scannedBy.staffProfile'])
-            ->where('user_id', $userId)
-            ->latest('scanned_at')
-            ->get();
+        $cacheKey = "user_attendances_all:{$userId}";
+        
+        $attendances = Cache::remember($cacheKey, 3600, function () use ($userId) { // 1 hour
+            return Attendance::with(['event', 'scannedBy.staffProfile'])
+                ->where('user_id', $userId)
+                ->latest('scanned_at')
+                ->get();
+        });
 
         return response()->json($attendances);
     }
@@ -201,16 +243,65 @@ class AttendanceController extends Controller
             'user_ids.*' => 'exists:users,id',
         ]);
 
-        $attendances = Attendance::where('event_id', $eventId)
-            ->whereIn('user_id', $validated['user_ids'])
-            ->get()
-            ->keyBy('user_id');
+        // FIXED: Sort the array first, then implode
+        $sortedUserIds = $validated['user_ids'];
+        sort($sortedUserIds);
+        $cacheKey = "bulk_attendance_check:{$eventId}:" . md5(implode(',', $sortedUserIds));
+        
+        $result = Cache::remember($cacheKey, 900, function () use ($eventId, $validated) { // 15 minutes
+            $attendances = Attendance::where('event_id', $eventId)
+                ->whereIn('user_id', $validated['user_ids'])
+                ->get()
+                ->keyBy('user_id');
 
-        $result = [];
-        foreach ($validated['user_ids'] as $userId) {
-            $result[$userId] = isset($attendances[$userId]);
-        }
+            $result = [];
+            foreach ($validated['user_ids'] as $userId) {
+                $result[$userId] = isset($attendances[$userId]);
+            }
+
+            return $result;
+        });
 
         return response()->json($result);
+    }
+
+    /**
+     * Clear all relevant attendance caches
+     */
+    private function clearAttendanceCaches($eventId, $userId)
+    {
+        // Clear event-specific caches
+        Cache::forget("event_attendances:{$eventId}:page:1");
+        Cache::forget("event_attendances_all:{$eventId}");
+        
+        // Clear user-specific caches  
+        Cache::forget("user_attendances_all:{$userId}");
+        Cache::forget("user_attendance_check:{$eventId}:{$userId}");
+        
+        // Clear individual attendance cache if we have the ID
+        if (request()->route('attendance')) {
+            Cache::forget("attendance:" . request()->route('attendance')->id);
+        }
+        
+        // Clear bulk check caches for this event
+        $this->clearBulkCheckCaches($eventId);
+    }
+
+    /**
+     * Clear bulk check caches for an event
+     */
+    private function clearBulkCheckCaches($eventId)
+    {
+        // For file cache, we can't easily pattern match, so we'll use a different approach
+        // We'll track bulk cache keys in a separate cache entry
+        $bulkKeysKey = "bulk_attendance_keys:{$eventId}";
+        $bulkKeys = Cache::get($bulkKeysKey, []);
+        
+        foreach ($bulkKeys as $key) {
+            Cache::forget($key);
+        }
+        
+        // Clear the tracking key as well
+        Cache::forget($bulkKeysKey);
     }
 }

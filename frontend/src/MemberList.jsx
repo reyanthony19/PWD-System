@@ -1,30 +1,28 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CheckCircle, XCircle, Clock, Ban, UserX, Search,  MapPin } from "lucide-react";
+import {
+  CheckCircle,
+  XCircle,
+  Clock,
+  Ban,
+  UserX,
+  Search,
+  MapPin,
+  Users,
+  UserCheck,
+  Plus,
+  Filter,
+  ChevronDown
+} from "lucide-react";
 import api from "./api";
 import Layout from "./Layout";
 
-// Barangay options
-const barangayOptions = [
-  "All", "Awang", "Bagocboc", "Barra", "Bonbon", "Cauyonan", "Igpit",
-  "Limonda", "Luyong Bonbon", "Malanang", "Nangcaon", "Patag",
-  "Poblacion", "Taboc", "Tingalan"
-];
 
-// Sky Theme
-const theme = {
-  primary: "from-sky-600 to-sky-400",
-  primaryText: "text-sky-600",
-  secondaryText: "text-sky-400",
-  cardBg: "bg-white",
-  footerBg: "bg-sky-700",
-  chartColors: ["#0ea5e9", "#38bdf8", "#7dd3fc", "#0284c7", "#0369a1"],
-};
 
 function MemberList() {
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState("approved"); // Changed default to "approved" (Active)
+  const [statusFilter, setStatusFilter] = useState("approved");
   const [barangayFilter, setBarangayFilter] = useState("All");
   const [searchTerm, setSearchTerm] = useState("");
   const [sortOption, setSortOption] = useState("name-asc");
@@ -74,12 +72,12 @@ function MemberList() {
           return false;
         }
       }
-      
+
       // Search filter
       const term = searchTerm.toLowerCase();
       const fullName = `${m.member_profile?.first_name || ''} ${m.member_profile?.middle_name || ''} ${m.member_profile?.last_name || ''}`.toLowerCase();
       const barangay = m.member_profile?.barangay?.toLowerCase() || '';
-      
+
       return (
         m.username?.toLowerCase().includes(term) ||
         m.email?.toLowerCase().includes(term) ||
@@ -90,7 +88,7 @@ function MemberList() {
     .sort((a, b) => {
       const profileA = a.member_profile || {};
       const profileB = b.member_profile || {};
-      
+
       if (sortOption === "name-asc") {
         const nameA = `${profileA.first_name || ""} ${profileA.last_name || ""}`.toLowerCase();
         const nameB = `${profileB.first_name || ""} ${profileB.last_name || ""}`.toLowerCase();
@@ -113,37 +111,42 @@ function MemberList() {
       return 0;
     });
 
-  // Status options with "All members" removed and "Active" as first option
+  // Status options
   const statusOptions = [
-    { 
-      key: "approved", 
-      label: "Active", 
-      icon: <CheckCircle size={16} />, 
-      color: "bg-green-100 text-green-700 hover:bg-green-200" 
+    {
+      key: "approved",
+      label: "Active",
+      icon: <CheckCircle size={16} />,
+      color: "bg-green-500 text-white",
+      hoverColor: "hover:bg-green-600"
     },
-    { 
-      key: "pending", 
-      label: "Pending Review", 
-      icon: <Clock size={16} />, 
-      color: "bg-yellow-100 text-yellow-700 hover:bg-yellow-200" 
+    {
+      key: "pending",
+      label: "Pending Review",
+      icon: <Clock size={16} />,
+      color: "bg-yellow-500 text-white",
+      hoverColor: "hover:bg-yellow-600"
     },
-    { 
-      key: "rejected", 
-      label: "Rejected", 
-      icon: <XCircle size={16} />, 
-      color: "bg-red-100 text-red-700 hover:bg-red-200" 
+    {
+      key: "rejected",
+      label: "Rejected",
+      icon: <XCircle size={16} />,
+      color: "bg-red-500 text-white",
+      hoverColor: "hover:bg-red-600"
     },
-    { 
-      key: "inactive", 
-      label: "Inactive", 
-      icon: <Ban size={16} />, 
-      color: "bg-orange-100 text-orange-700 hover:bg-orange-200" 
+    {
+      key: "inactive",
+      label: "Inactive",
+      icon: <Ban size={16} />,
+      color: "bg-orange-500 text-white",
+      hoverColor: "hover:bg-orange-600"
     },
-    { 
-      key: "deceased", 
-      label: "Deceased", 
-      icon: <UserX size={16} />, 
-      color: "bg-gray-200 text-gray-700 hover:bg-gray-300" 
+    {
+      key: "deceased",
+      label: "Deceased",
+      icon: <UserX size={16} />,
+      color: "bg-gray-500 text-white",
+      hoverColor: "hover:bg-gray-600"
     },
   ];
 
@@ -161,15 +164,24 @@ function MemberList() {
     return acc;
   }, {});
 
+  // Get available barangays from members
+  const availableBarangays = [...new Set(
+    members
+      .map(member => member.member_profile?.barangay)
+      .filter(Boolean)
+  )].sort();
+
   if (loading) {
     return (
       <Layout>
-        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
-          <div className="w-20 h-20 border-8 border-sky-200 border-t-sky-600 rounded-full animate-spin"></div>
-          <p className="mt-4 text-xl font-semibold text-sky-600 animate-pulse">
-            Loading Members...
-          </p>
-          <p className="text-gray-600 text-sm">Please wait a moment 👥</p>
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-100 flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-20 h-20 border-8 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto"></div>
+            <p className="mt-4 text-xl font-semibold text-blue-600 animate-pulse">
+              Loading Members...
+            </p>
+            <p className="text-gray-600 text-sm mt-2">Please wait a moment 👥</p>
+          </div>
         </div>
       </Layout>
     );
@@ -177,269 +189,393 @@ function MemberList() {
 
   return (
     <Layout>
-      <div className="p-6 bg-gray-50 min-h-screen">
-        {/* Header */}
-        <div className="mb-6">
-          <h1 className={`text-3xl font-bold ${theme.primaryText} mb-2`}>
-            Member Management
-          </h1>
-          <p className="text-gray-600">
-            Manage and review all registered members in the system
-          </p>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-100 py-8 px-4">
+        {/* Background Decoration */}
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse-slow"></div>
+          <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-indigo-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse-slow delay-1000"></div>
         </div>
 
-        {/* Statistics Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-xl shadow p-4 text-center">
-            <div className="text-2xl font-bold text-sky-600">{members.length}</div>
-            <div className="text-sm text-gray-600">Total Members</div>
-          </div>
-          <div className="bg-white rounded-xl shadow p-4 text-center">
-            <div className="text-2xl font-bold text-green-600">{statusCounts.approved || 0}</div>
-            <div className="text-sm text-gray-600">Active</div>
-          </div>
-          <div className="bg-white rounded-xl shadow p-4 text-center">
-            <div className="text-2xl font-bold text-yellow-600">{statusCounts.pending || 0}</div>
-            <div className="text-sm text-gray-600">Pending Review</div>
-          </div>
-          <div className="bg-white rounded-xl shadow p-4 text-center">
-            <div className="text-2xl font-bold text-blue-600">
-              {Object.keys(barangayCounts).length}
-            </div>
-            <div className="text-sm text-gray-600">Barangay</div>
-          </div>
-        </div>
+        <div className="max-w-7xl mx-auto relative">
+          {/* Header */}
+          <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 p-8 mb-8">
+            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-8">
+              <div className="flex items-start gap-6">
+                <div className="bg-gradient-to-br from-blue-500 to-purple-600 p-4 rounded-2xl shadow-lg">
+                  <Users className="w-8 h-8 text-white" />
+                </div>
+                <div className="flex-1">
+                  <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                    Member Management
+                  </h1>
+                  <div className="mt-4 space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                      <h2 className="text-lg font-semibold text-gray-800">
+                        Manage and review all registered members
+                      </h2>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
+                      <span className="flex items-center gap-2 bg-blue-50 px-3 py-1 rounded-full">
+                        <Users className="w-4 h-4 text-blue-500" />
+                        Total Members: {members.length}
+                      </span>
+                      <span className="flex items-center gap-2 bg-green-50 px-3 py-1 rounded-full">
+                        <UserCheck className="w-4 h-4 text-green-500" />
+                        Active: {statusCounts.approved || 0}
+                      </span>
+                      <span className="flex items-center gap-2 bg-yellow-50 px-3 py-1 rounded-full">
+                        <Clock className="w-4 h-4 text-yellow-500" />
+                        Pending: {statusCounts.pending || 0}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
-        {/* Filters Section */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-6">
-          <div className="flex flex-col lg:flex-row lg:items-end gap-4">
-            {/* Search */}
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-600 mb-2">
-                Search Members
-              </label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search by name, username, email, or barangay..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
-                />
+              {/* Statistics */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 min-w-[400px]">
+                <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white p-5 rounded-2xl shadow-lg text-center">
+                  <Users className="w-7 h-7 mx-auto mb-3 opacity-90" />
+                  <div className="text-2xl font-bold">{members.length}</div>
+                  <div className="text-blue-100 text-xs font-medium">Total asd</div>
+                </div>
+                <div className="bg-gradient-to-br from-green-500 to-green-600 text-white p-5 rounded-2xl shadow-lg text-center">
+                  <UserCheck className="w-7 h-7 mx-auto mb-3 opacity-90" />
+                  <div className="text-2xl font-bold">{statusCounts.approved || 0}</div>
+                  <div className="text-green-100 text-xs font-medium">Active</div>
+                </div>
+                <div className="bg-gradient-to-br from-yellow-500 to-yellow-600 text-white p-5 rounded-2xl shadow-lg text-center">
+                  <Clock className="w-7 h-7 mx-auto mb-3 opacity-90" />
+                  <div className="text-2xl font-bold">{statusCounts.pending || 0}</div>
+                  <div className="text-yellow-100 text-xs font-medium">Pending</div>
+                </div>
+                <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white p-5 rounded-2xl shadow-lg text-center">
+                  <MapPin className="w-7 h-7 mx-auto mb-3 opacity-90" />
+                  <div className="text-2xl font-bold">{Object.keys(barangayCounts).length}</div>
+                  <div className="text-purple-100 text-xs font-medium">Barangays</div>
+                </div>
               </div>
             </div>
+          </div>
 
-            {/* Barangay Filter */}
-            <div className="w-full lg:w-64">
-              <label className="block text-sm font-medium text-gray-600 mb-2">
-                Filter by Barangay
-              </label>
-              <div className="relative">
-                <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+          {/* Search + Filters */}
+          <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-white/20 p-6 mb-8">
+            <div className="flex flex-col lg:flex-row lg:items-end gap-6">
+              {/* Search */}
+              <div className="flex-1">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Search Members
+                </label>
+                <div className="relative">
+                  <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search by name, username, email, or barangay..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-12 pr-4 py-4 border border-gray-200 rounded-2xl 
+                             bg-white/60 backdrop-blur-sm focus:ring-2 focus:ring-blue-500 
+                             focus:border-blue-500 transition-all duration-200 placeholder-gray-400
+                             shadow-sm hover:shadow-md focus:shadow-lg"
+                  />
+                </div>
+              </div>
+
+              {/* Barangay Filter */}
+              <div className="w-full lg:w-64">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Filter by Barangay
+                </label>
+                <div className="relative">
+                  <Filter className="absolute left-4 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <select
+                    value={barangayFilter}
+                    onChange={(e) => setBarangayFilter(e.target.value)}
+                    className="w-full pl-12 pr-10 py-4 border border-gray-200 rounded-2xl 
+                             bg-white/60 backdrop-blur-sm focus:ring-2 focus:ring-blue-500 
+                             focus:border-blue-500 transition-all duration-200 appearance-none
+                             shadow-sm hover:shadow-md focus:shadow-lg"
+                  >
+                    <option value="All">All Barangays</option>
+                    {availableBarangays.map(barangay => (
+                      <option key={barangay} value={barangay}>
+                        {barangay} ({barangayCounts[barangay] || 0})
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-4 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                </div>
+              </div>
+
+              {/* Sort Option */}
+              <div className="w-full lg:w-64">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Sort By
+                </label>
                 <select
-                  value={barangayFilter}
-                  onChange={(e) => setBarangayFilter(e.target.value)}
-                  className="w-full pl-10 pr-8 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 appearance-none"
+                  value={sortOption}
+                  onChange={(e) => setSortOption(e.target.value)}
+                  className="w-full px-4 py-4 border border-gray-200 rounded-2xl 
+                           bg-white/60 backdrop-blur-sm focus:ring-2 focus:ring-blue-500 
+                           focus:border-blue-500 transition-all duration-200 appearance-none
+                           shadow-sm hover:shadow-md focus:shadow-lg"
                 >
-                  {barangayOptions.map((barangay) => (
-                    <option key={barangay} value={barangay}>
-                      {barangay} {barangay !== "All" && `(${barangayCounts[barangay] || 0})`}
-                    </option>
-                  ))}
+                  <option value="name-asc">Name (A-Z)</option>
+                  <option value="name-desc">Name (Z-A)</option>
+                  <option value="date-newest">Newest First</option>
+                  <option value="date-oldest">Oldest First</option>
+                  <option value="barangay-asc">Barangay (A-Z)</option>
                 </select>
               </div>
-            </div>
 
-            {/* Sort Option */}
-            <div className="w-full lg:w-64">
-              <label className="block text-sm font-medium text-gray-600 mb-2">
-                Sort By
-              </label>
-              <select
-                value={sortOption}
-                onChange={(e) => setSortOption(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
-              >
-                <option value="name-asc">Name (A-Z)</option>
-                <option value="name-desc">Name (Z-A)</option>
-                <option value="date-newest">Newest First</option>
-                <option value="date-oldest">Oldest First</option>
-                <option value="barangay-asc">Barangay (A-Z)</option>
-              </select>
-            </div>
-
-            {/* Add Member Button */}
-            <button
-              onClick={() => navigate("/member/register")}
-              className="bg-sky-600 hover:bg-sky-700 text-white px-6 py-3 rounded-xl shadow-lg transition-all duration-200 font-semibold flex items-center gap-2"
-            >
-              <span>+</span>
-              <span>Add Member</span>
-            </button>
-          </div>
-
-          {/* Status Filter Buttons */}
-          <div className="mt-6">
-            <label className="block text-sm font-medium text-gray-600 mb-3">
-              Filter by Status
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {statusOptions.map(({ key, label, icon, color }) => (
-                <button
-                  key={key}
-                  onClick={() => setStatusFilter(key)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
-                    statusFilter === key 
-                      ? "ring-2 ring-sky-500 ring-offset-2 transform scale-105" 
-                      : "hover:scale-105"
-                  } ${color}`}
-                >
-                  {icon}
-                  {label}
-                  <span className="bg-white bg-opacity-50 px-1.5 py-0.5 rounded-full text-xs">
-                    {statusCounts[key] || 0}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Active Filters Display */}
-          {(searchTerm || barangayFilter !== "All" || statusFilter !== "approved") && (
-            <div className="mt-4 flex flex-wrap gap-2 items-center">
-              <span className="text-sm text-gray-600 font-medium">Active filters:</span>
-              
-              {searchTerm && (
-                <span className="bg-blue-100 text-blue-800 text-sm px-3 py-1 rounded-full flex items-center gap-2">
-                  Search: "{searchTerm}"
-                  <button onClick={() => setSearchTerm("")} className="text-blue-600 hover:text-blue-800 font-bold">
-                    ×
-                  </button>
-                </span>
-              )}
-              
-              {barangayFilter !== "All" && (
-                <span className="bg-purple-100 text-purple-800 text-sm px-3 py-1 rounded-full flex items-center gap-2">
-                  Barangay: {barangayFilter}
-                  <button onClick={() => setBarangayFilter("All")} className="text-purple-600 hover:text-purple-800 font-bold">
-                    ×
-                  </button>
-                </span>
-              )}
-
-              {statusFilter !== "approved" && (
-                <span className="bg-green-100 text-green-800 text-sm px-3 py-1 rounded-full flex items-center gap-2">
-                  Status: {statusOptions.find(s => s.key === statusFilter)?.label}
-                  <button onClick={() => setStatusFilter("approved")} className="text-green-600 hover:text-green-800 font-bold">
-                    ×
-                  </button>
-                </span>
-              )}
-
+              {/* Add Member Button */}
               <button
-                onClick={() => {
-                  setSearchTerm("");
-                  setBarangayFilter("All");
-                  setStatusFilter("approved");
-                }}
-                className="text-sm text-gray-600 hover:text-gray-800 font-medium underline"
+                onClick={() => navigate("/member/register")}
+                className="flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-green-500 to-green-600 
+                         hover:from-green-600 hover:to-green-700 text-white rounded-2xl 
+                         transition-all duration-200 font-semibold shadow-lg hover:shadow-xl 
+                         transform hover:-translate-y-0.5"
               >
-                Clear all filters
+                <Plus className="w-5 h-5" />
+                Add Member
               </button>
             </div>
-          )}
-        </div>
 
-        {/* Results Summary */}
-        <div className="mb-4 text-sm text-gray-600">
-          Showing {filteredMembers.length} of {members.length} members
-          {barangayFilter !== "All" && ` from ${barangayFilter}`}
-          {statusFilter !== "approved" && ` with status: ${statusOptions.find(s => s.key === statusFilter)?.label}`}
-          {searchTerm && ` matching "${searchTerm}"`}
-        </div>
+            {/* Status Filter Buttons */}
+            <div className="mt-6">
+              <label className="block text-sm font-semibold text-gray-700 mb-3">
+                Filter by Status
+              </label>
+              <div className="flex flex-wrap gap-3">
+                {statusOptions.map(({ key, label, icon, color, hoverColor }) => (
+                  <button
+                    key={key}
+                    onClick={() => setStatusFilter(key)}
+                    className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-semibold transition-all duration-200 ${statusFilter === key
+                        ? "ring-4 ring-blue-200 ring-offset-2 transform scale-105 shadow-lg"
+                        : `hover:scale-105 hover:shadow-lg ${hoverColor}`
+                      } ${color}`}
+                  >
+                    {icon}
+                    {label}
+                    <span className="bg-white bg-opacity-30 px-2 py-1 rounded-full text-xs font-bold">
+                      {statusCounts[key] || 0}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
 
-        {/* Members Table */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm text-left">
-              <thead className="bg-sky-600 text-white uppercase">
-                <tr>
-                  <th className="px-6 py-4 font-semibold">Member Name</th>
-                  <th className="px-6 py-4 font-semibold">Username</th>
-                  <th className="px-6 py-4 font-semibold">Email</th>
-                  <th className="px-6 py-4 font-semibold">Barangay</th>
-                  <th className="px-6 py-4 font-semibold">Contact Number</th>
-                  <th className="px-6 py-4 font-semibold">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredMembers.length > 0 ? (
-                  filteredMembers.map((member) => {
-                    const profile = member.member_profile || {};
-                    const fullName = `${profile.first_name || ""} ${profile.middle_name || ""} ${profile.last_name || ""}`.trim();
-                    
-                    return (
-                      <tr
-                        key={member.id}
-                        onClick={() => navigate(`/members/${member.id}`)}
-                        className="border-b border-gray-100 hover:bg-sky-50 cursor-pointer transition-colors duration-150"
-                      >
-                        <td className="px-6 py-4 font-medium text-gray-900">
-                          {fullName || "Unnamed Member"}
-                        </td>
-                        <td className="px-6 py-4 text-gray-700">
-                          {member.username}
-                        </td>
-                        <td className="px-6 py-4 text-gray-700">
-                          {member.email || "—"}
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                            {profile.barangay || "—"}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-gray-700">
-                          {profile.contact_number || "—"}
-                        </td>
-                        <td className="px-6 py-4">
-                          <select
-                            value={member.status || "pending"}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={(e) => handleStatusChange(member.id, e.target.value)}
-                            className="border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500 text-sm"
-                          >
-                            <option value="approved">Active</option>
-                            <option value="pending">Pending Review</option>
-                            <option value="inactive">Inactive</option>
-                            <option value="rejected">Rejected</option>
-                            <option value="deceased">Deceased</option>
-                          </select>
-                        </td>
-                      </tr>
-                    );
-                  })
-                ) : (
-                  <tr>
-                    <td colSpan="6" className="px-6 py-12 text-center">
-                      <div className="flex flex-col items-center justify-center text-gray-500">
-                        <UserX className="w-16 h-16 mb-4 text-gray-300" />
-                        <p className="text-lg font-medium mb-2">No members found</p>
-                        <p className="text-sm">
-                          {searchTerm || barangayFilter !== "All" || statusFilter !== "approved"
-                            ? "Try adjusting your search or filter criteria"
-                            : "No members have been registered yet"
-                          }
-                        </p>
-                      </div>
-                    </td>
-                  </tr>
+            {/* Active Filters Display */}
+            {(searchTerm || barangayFilter !== "All" || statusFilter !== "approved") && (
+              <div className="flex flex-wrap items-center gap-3 mt-6 pt-6 border-t border-gray-100">
+                <span className="text-sm font-semibold text-gray-600">Active filters:</span>
+
+                {searchTerm && (
+                  <span className="bg-blue-100 text-blue-800 text-sm px-4 py-2 rounded-full flex items-center gap-2 font-medium">
+                    Search: "{searchTerm}"
+                    <button
+                      onClick={() => setSearchTerm("")}
+                      className="text-blue-600 hover:text-blue-800 font-bold text-lg leading-none"
+                    >
+                      ×
+                    </button>
+                  </span>
                 )}
-              </tbody>
-            </table>
+
+                {barangayFilter !== "All" && (
+                  <span className="bg-purple-100 text-purple-800 text-sm px-4 py-2 rounded-full flex items-center gap-2 font-medium">
+                    Barangay: {barangayFilter}
+                    <button
+                      onClick={() => setBarangayFilter("All")}
+                      className="text-purple-600 hover:text-purple-800 font-bold text-lg leading-none"
+                    >
+                      ×
+                    </button>
+                  </span>
+                )}
+
+                {statusFilter !== "approved" && (
+                  <span className="bg-green-100 text-green-800 text-sm px-4 py-2 rounded-full flex items-center gap-2 font-medium">
+                    Status: {statusOptions.find(s => s.key === statusFilter)?.label}
+                    <button
+                      onClick={() => setStatusFilter("approved")}
+                      className="text-green-600 hover:text-green-800 font-bold text-lg leading-none"
+                    >
+                      ×
+                    </button>
+                  </span>
+                )}
+
+                <button
+                  onClick={() => {
+                    setSearchTerm("");
+                    setBarangayFilter("All");
+                    setStatusFilter("approved");
+                  }}
+                  className="text-sm text-gray-600 hover:text-gray-800 font-semibold underline ml-auto"
+                >
+                  Clear all filters
+                </button>
+              </div>
+            )}
           </div>
+
+          {/* Results Summary */}
+          <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <span className="text-lg font-semibold text-gray-700">
+                {filteredMembers.length} of {members.length} members
+              </span>
+              {barangayFilter !== "All" && (
+                <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+                  From {barangayFilter}
+                </span>
+              )}
+              {statusFilter !== "approved" && (
+                <span className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm font-medium">
+                  Status: {statusOptions.find(s => s.key === statusFilter)?.label}
+                </span>
+              )}
+            </div>
+
+            {filteredMembers.length > 0 && (
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                <span>Active: {statusCounts.approved || 0}</span>
+                <div className="w-2 h-2 bg-yellow-500 rounded-full ml-2"></div>
+                <span>Pending: {statusCounts.pending || 0}</span>
+                <div className="w-2 h-2 bg-red-500 rounded-full ml-2"></div>
+                <span>Rejected: {statusCounts.rejected || 0}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Members Table */}
+          <section className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+                    <th className="px-8 py-5 font-semibold text-left text-sm uppercase tracking-wider">
+                      Member Information
+                    </th>
+                    <th className="px-8 py-5 font-semibold text-left text-sm uppercase tracking-wider">
+                      Username & Email
+                    </th>
+                    <th className="px-8 py-5 font-semibold text-left text-sm uppercase tracking-wider">
+                      Barangay
+                    </th>
+                    <th className="px-8 py-5 font-semibold text-left text-sm uppercase tracking-wider">
+                      Contact
+                    </th>
+                    <th className="px-8 py-5 font-semibold text-left text-sm uppercase tracking-wider">
+                      Status
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filteredMembers.length > 0 ? (
+                    filteredMembers.map((member) => {
+                      const profile = member.member_profile || {};
+                      const fullName = `${profile.first_name || ""} ${profile.middle_name || ""} ${profile.last_name || ""}`.trim();
+
+                      return (
+                        <tr
+                          key={member.id}
+                          onClick={() => navigate(`/members/${member.id}`)}
+                          className="hover:bg-gray-50/80 transition-all duration-150 group cursor-pointer"
+                        >
+                          <td className="px-8 py-5">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-purple-100 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                                <Users className="w-5 h-5 text-blue-600" />
+                              </div>
+                              <div>
+                                <div className="font-semibold text-gray-900">
+                                  {fullName || "Unnamed Member"}
+                                </div>
+                                <div className="text-xs text-gray-500 mt-1">
+                                  ID: {member.id}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-8 py-5">
+                            <div className="flex flex-col">
+                              <div className="font-medium text-gray-900">
+                                @{member.username}
+                              </div>
+                              <div className="text-sm text-gray-500 mt-1">
+                                {member.email || "—"}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-8 py-5">
+                            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+                              {profile.barangay || "—"}
+                            </span>
+                          </td>
+                          <td className="px-8 py-5 text-gray-700">
+                            {profile.contact_number ? (
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium">{profile.contact_number}</span>
+                              </div>
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                          <td className="px-8 py-5">
+                            <select
+                              value={member.status || "pending"}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => handleStatusChange(member.id, e.target.value)}
+                              className="border border-gray-300 rounded-xl px-4 py-2 bg-white/60 backdrop-blur-sm 
+                                       focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium
+                                       transition-all duration-200 hover:shadow-md"
+                            >
+                              <option value="approved">Active</option>
+                              <option value="pending">Pending Review</option>
+                              <option value="inactive">Inactive</option>
+                              <option value="rejected">Rejected</option>
+                              <option value="deceased">Deceased</option>
+                            </select>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan="5" className="px-8 py-16 text-center">
+                        <div className="flex flex-col items-center justify-center text-gray-400">
+                          <UserX className="w-20 h-20 mb-4 opacity-40" />
+                          <p className="text-xl font-semibold text-gray-500 mb-2">No members found</p>
+                          <p className="text-sm max-w-md">
+                            {searchTerm || barangayFilter !== "All" || statusFilter !== "approved"
+                              ? "Try adjusting your search or filter criteria"
+                              : "No members have been registered yet"
+                            }
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
         </div>
       </div>
+
+      {/* Add custom animations */}
+      <style jsx>{`
+        @keyframes pulse-slow {
+          0%, 100% { opacity: 0.3; }
+          50% { opacity: 0.5; }
+        }
+        .animate-pulse-slow { animation: pulse-slow 4s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+      `}</style>
     </Layout>
   );
 }

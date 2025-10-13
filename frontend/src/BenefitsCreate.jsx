@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Gift, CheckCircle, Users, Search,X, MapPin, Stethoscope, Calculator, TrendingUp } from "lucide-react";
+import { Gift, CheckCircle, Users, Search, X, MapPin, Stethoscope, Calculator, TrendingUp } from "lucide-react";
 import api from "./api";
 import Layout from "./Layout";
 
@@ -12,6 +12,9 @@ function BenefitsCreate() {
         per_member_quantity: "",
         unit: "",
         locked_member_count: "0",
+        item_name: "",
+        item_description: "",
+        item_quantity: "",
     });
 
     const [members, setMembers] = useState([]);
@@ -32,14 +35,17 @@ function BenefitsCreate() {
         perMemberAmount: "",
         perMemberQuantity: "",
         unit: "",
-        type: ""
+        type: "",
+        itemName: "",
+        itemQuantity: ""
     });
-    
+
     const navigate = useNavigate();
 
     const typeOptions = [
         { value: "cash", label: "Cash Assistance" },
         { value: "relief", label: "Relief Goods" },
+        { value: "other", label: "Other (Equipment, Services, etc.)" },
     ];
 
     const unitOptions = [
@@ -51,53 +57,53 @@ function BenefitsCreate() {
         { value: "packs", label: "Packs" },
     ];
 
-    // Severity scoring system (higher score = more severe)
-    const severityScores = {
+    // Severity scoring system (higher score = more severe) - wrapped in useMemo
+    const severityScores = useMemo(() => ({
         "mild": 1,
         "moderate": 3,
         "severe": 5,
         "profound": 7
-    };
+    }), []);
 
     // Income brackets scoring (lower income = higher score)
-    const getIncomeScore = (monthlyIncome) => {
+    const getIncomeScore = useCallback((monthlyIncome) => {
         if (!monthlyIncome || monthlyIncome === 0) return 10; // No income - highest priority
         if (monthlyIncome <= 3000) return 8;  // Extreme poverty
         if (monthlyIncome <= 6000) return 6;  // Poverty
         if (monthlyIncome <= 10000) return 4; // Low income
         if (monthlyIncome <= 15000) return 2; // Lower middle
         return 1; // Middle income and above
-    };
+    }, []);
 
     // Dependants scoring (more dependants = higher score)
-    const getDependantsScore = (dependants) => {
+    const getDependantsScore = useCallback((dependants) => {
         if (!dependants || dependants === 0) return 1;
         if (dependants === 1) return 2;
         if (dependants === 2) return 3;
         if (dependants === 3) return 4;
         if (dependants >= 4) return 5;
         return 1;
-    };
+    }, []);
 
     // Calculate priority score for each member and convert to percentage
-    const calculatePriorityScore = (member) => {
+    const calculatePriorityScore = useCallback((member) => {
         const profile = member.member_profile || {};
-        
+
         // Severity score (0-7 points)
         const severityScore = severityScores[profile.severity?.toLowerCase()] || 1;
-        
+
         // Income score (1-10 points)
         const incomeScore = getIncomeScore(parseFloat(profile.monthly_income) || 0);
-        
+
         // Dependants score (1-5 points)
         const dependantsScore = getDependantsScore(parseInt(profile.dependants) || 0);
-        
+
         // Additional factors
         const isSeniorCitizen = profile.age >= 60 ? 2 : 0;
         const isSoloParent = profile.is_solo_parent ? 2 : 0;
-        
+
         // Total priority score (weighted)
-        const totalScore = 
+        const totalScore =
             (severityScore * 3) +        // Severity is most important (weight: 3)
             (incomeScore * 2.5) +        // Income is very important (weight: 2.5)
             (dependantsScore * 2) +      // Dependants are important (weight: 2)
@@ -117,38 +123,29 @@ function BenefitsCreate() {
             isSeniorCitizen: profile.age >= 60,
             isSoloParent: profile.is_solo_parent
         };
-    };
+    }, [severityScores, getIncomeScore, getDependantsScore]);
 
     // Get priority level based on percentage score
-    const getPriorityLevel = (percentage) => {
+    const getPriorityLevel = useCallback((percentage) => {
         if (percentage >= 80) return { level: "Very High", color: "bg-red-100 text-red-800", icon: "🔥" };
         if (percentage >= 60) return { level: "High", color: "bg-orange-100 text-orange-800", icon: "⭐" };
         if (percentage >= 40) return { level: "Medium", color: "bg-yellow-100 text-yellow-800", icon: "📊" };
         return { level: "Standard", color: "bg-blue-100 text-blue-800", icon: "📝" };
-    };
-
-    // Calculate totals based on per-member amounts and selected members
-    const totalBudgetAmount = form.per_member_amount && selectedMembers.length > 0 
-        ? (parseFloat(form.per_member_amount) * selectedMembers.length).toFixed(2)
-        : "0.00";
-
-    const totalBudgetQuantity = form.per_member_quantity && selectedMembers.length > 0
-        ? (parseFloat(form.per_member_quantity) * selectedMembers.length).toFixed(1)
-        : "0.0";
+    }, []);
 
     // Helper function to get full name from member profile
-    const getFullName = (member) => {
+    const getFullName = useCallback((member) => {
         if (!member.member_profile) return "Unnamed Member";
-        
+
         const { first_name, middle_name, last_name } = member.member_profile;
         const nameParts = [first_name, middle_name, last_name].filter(Boolean);
         return nameParts.join(" ").trim() || "Unnamed Member";
-    };
+    }, []);
 
     // Helper function to get member ID (prefer member_profile.id_number, fallback to user id)
-    const getMemberId = (member) => {
+    const getMemberId = useCallback((member) => {
         return member.member_profile?.id_number || member.id;
-    };
+    }, []);
 
     // Fetch members using your existing route
     useEffect(() => {
@@ -157,15 +154,15 @@ function BenefitsCreate() {
                 setLoadingMembers(true);
                 const response = await api.get("/users?role=member");
                 // Filter only approved members for selection
-                const approvedMembers = response.data.data ? 
+                const approvedMembers = response.data.data ?
                     response.data.data.filter(user => user.status === 'approved') :
                     response.data.filter(user => user.status === 'approved');
-                
+
                 // Process members to include full name, member ID, and priority score
                 const processedMembers = approvedMembers.map(member => {
                     const priorityData = calculatePriorityScore(member);
                     const priorityLevel = getPriorityLevel(priorityData.percentageScore);
-                    
+
                     return {
                         ...member,
                         fullName: getFullName(member),
@@ -174,7 +171,7 @@ function BenefitsCreate() {
                         priorityLevel
                     };
                 });
-                
+
                 setMembers(processedMembers);
             } catch (err) {
                 setError("Failed to load members. Please try again.");
@@ -185,7 +182,16 @@ function BenefitsCreate() {
         };
 
         fetchMembers();
-    }, []);
+    }, [calculatePriorityScore, getPriorityLevel, getFullName, getMemberId]);
+
+    // Calculate totals based on per-member amounts and selected members
+    const totalBudgetAmount = form.per_member_amount && selectedMembers.length > 0
+        ? (parseFloat(form.per_member_amount) * selectedMembers.length).toFixed(2)
+        : "0.00";
+
+    const totalBudgetQuantity = form.per_member_quantity && selectedMembers.length > 0
+        ? (parseFloat(form.per_member_quantity) * selectedMembers.length).toFixed(1)
+        : "0.0";
 
     // Get unique barangays and disability types for filters
     const barangays = [...new Set(members.map(member => member.member_profile?.barangay).filter(Boolean))].sort();
@@ -212,7 +218,7 @@ function BenefitsCreate() {
             const contactNumber = member.member_profile?.contact_number?.toLowerCase() || '';
             const severity = member.member_profile?.severity?.toLowerCase() || '';
 
-            const matchesSearch = 
+            const matchesSearch =
                 fullName.includes(searchTerm.toLowerCase()) ||
                 memberId.includes(searchTerm.toLowerCase()) ||
                 barangay.includes(searchTerm.toLowerCase()) ||
@@ -234,14 +240,14 @@ function BenefitsCreate() {
                 case "name-desc":
                     return b.fullName.localeCompare(a.fullName);
                 case "severity":
-                    return (severityScores[b.member_profile?.severity?.toLowerCase()] || 0) - 
-                           (severityScores[a.member_profile?.severity?.toLowerCase()] || 0);
+                    return (severityScores[b.member_profile?.severity?.toLowerCase()] || 0) -
+                        (severityScores[a.member_profile?.severity?.toLowerCase()] || 0);
                 case "income":
-                    return (parseFloat(a.member_profile?.monthly_income) || Infinity) - 
-                           (parseFloat(b.member_profile?.monthly_income) || Infinity);
+                    return (parseFloat(a.member_profile?.monthly_income) || Infinity) -
+                        (parseFloat(b.member_profile?.monthly_income) || Infinity);
                 case "dependants":
-                    return (parseInt(b.member_profile?.dependants) || 0) - 
-                           (parseInt(a.member_profile?.dependants) || 0);
+                    return (parseInt(b.member_profile?.dependants) || 0) -
+                        (parseInt(a.member_profile?.dependants) || 0);
                 case "barangay":
                     return (a.member_profile?.barangay || "").localeCompare(b.member_profile?.barangay || "");
                 default:
@@ -253,19 +259,19 @@ function BenefitsCreate() {
         setSelectedMembers(prev => {
             const isSelected = prev.includes(memberId);
             let newSelection;
-            
+
             if (isSelected) {
                 newSelection = prev.filter(id => id !== memberId);
             } else {
                 newSelection = [...prev, memberId];
             }
-            
+
             // Update locked_member_count based on selection
             setForm(prevForm => ({
                 ...prevForm,
                 locked_member_count: newSelection.length.toString()
             }));
-            
+
             return newSelection;
         });
     };
@@ -280,7 +286,7 @@ function BenefitsCreate() {
     };
 
     const handleDeselectAllOnPage = () => {
-        const newSelection = selectedMembers.filter(id => 
+        const newSelection = selectedMembers.filter(id =>
             !filteredMembers.some(member => member.id === id)
         );
         setSelectedMembers(newSelection);
@@ -298,7 +304,7 @@ function BenefitsCreate() {
     const handleCreate = async (e) => {
         e.preventDefault();
         setError("");
-        
+
         if (selectedMembers.length === 0) {
             setError("Please select at least one member to participate in this benefit.");
             return;
@@ -319,6 +325,11 @@ function BenefitsCreate() {
             return;
         }
 
+        if (form.type === "other" && (!form.item_name || !form.item_quantity)) {
+            setError("Please enter item name and quantity for other benefits.");
+            return;
+        }
+
         setLoading(true);
 
         try {
@@ -330,16 +341,22 @@ function BenefitsCreate() {
                 selected_members: selectedMembers,
             };
 
+            // ✅ CORRECTED: Send per-participant values (not totals)
             if (form.type === "cash") {
-                // Calculate total budget amount from per member amount
-                payload.budget_amount = parseFloat(form.per_member_amount) * selectedMembers.length;
                 payload.per_participant_amount = parseFloat(form.per_member_amount);
+                // Let backend handle the total calculation
             } else if (form.type === "relief") {
-                // Calculate total budget quantity from per member quantity
-                payload.budget_quantity = parseFloat(form.per_member_quantity) * selectedMembers.length;
                 payload.per_participant_quantity = parseFloat(form.per_member_quantity);
                 payload.unit = form.unit;
+                // Let backend handle the total calculation
+            } else if (form.type === "other") {
+                payload.item_name = form.item_name;
+                payload.item_description = form.item_description;
+                payload.item_quantity = parseInt(form.item_quantity);
+                // For other type, we use item_quantity as total available items
             }
+
+            console.log("Sending payload:", payload); // For debugging
 
             await api.post("/benefits", payload);
 
@@ -350,7 +367,9 @@ function BenefitsCreate() {
                 perMemberAmount: form.per_member_amount,
                 perMemberQuantity: form.per_member_quantity,
                 unit: form.unit,
-                type: form.type
+                type: form.type,
+                itemName: form.item_name,
+                itemQuantity: form.item_quantity
             });
 
             // Reset the form
@@ -361,15 +380,19 @@ function BenefitsCreate() {
                 per_member_quantity: "",
                 unit: "",
                 locked_member_count: "0",
+                item_name: "",
+                item_description: "",
+                item_quantity: "",
             });
             setSelectedMembers([]);
-            
+
             setShowModal(true);
         } catch (err) {
+            console.error("Error creating benefit:", err);
             const errors = err.response?.data?.errors;
             const errorMessage = errors
                 ? Object.values(errors).flat().join(", ")
-                : err.response?.data?.message || "Failed to create benefit. Please try again.";
+                : err.response?.data?.message || err.response?.data?.error || "Failed to create benefit. Please try again.";
             setError(errorMessage);
         } finally {
             setLoading(false);
@@ -388,14 +411,13 @@ function BenefitsCreate() {
     };
 
     return (
-        <>
-            <Layout />
+        <Layout>
             <div className="min-h-screen bg-gradient-to-br from-yellow-50 via-orange-50 to-yellow-100 py-8 px-4">
                 {/* SEO Meta Tags */}
                 <title>Create New Benefit - PWD Management System</title>
-                <meta name="description" content="Create a new benefit and select PWD members to participate. Manage cash and relief goods benefits efficiently." />
-                <meta name="keywords" content="PWD benefits, cash assistance, relief goods, member selection, disability support, barangay assistance" />
-                
+                <meta name="description" content="Create a new benefit and select PWD members to participate. Manage cash, relief goods, and other benefits efficiently." />
+                <meta name="keywords" content="PWD benefits, cash assistance, relief goods, equipment, services, member selection, disability support, barangay assistance" />
+
                 <div className="max-w-7xl mx-auto">
                     <div className="text-center mb-8">
                         <div className="inline-flex items-center justify-center w-16 h-16 bg-yellow-600 rounded-full mb-4">
@@ -405,7 +427,7 @@ function BenefitsCreate() {
                             Create New Benefit
                         </h1>
                         <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-                            Create a new benefit and select specific PWD members to participate. 
+                            Create a new benefit and select specific PWD members to participate.
                             Members are prioritized based on severity, income, and dependants.
                         </p>
                     </div>
@@ -432,7 +454,7 @@ function BenefitsCreate() {
                                 <Gift className="w-6 h-6 mr-2" />
                                 Benefit Details
                             </h2>
-                            
+
                             <form onSubmit={handleCreate} className="space-y-6">
                                 <div className="grid grid-cols-1 gap-4">
                                     {/* Benefit Name */}
@@ -447,7 +469,7 @@ function BenefitsCreate() {
                                             onChange={handleChange}
                                             required
                                             className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100 transition-colors"
-                                            placeholder="e.g., Christmas Cash Assistance, Rice Relief Distribution"
+                                            placeholder="e.g., Christmas Cash Assistance, Rice Relief Distribution, Wheelchair Distribution"
                                         />
                                     </div>
 
@@ -521,7 +543,7 @@ function BenefitsCreate() {
                                                     placeholder="Enter amount per member"
                                                 />
                                             </div>
-                                            
+
                                             {/* Total Budget Calculation */}
                                             <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
                                                 <div className="flex items-center justify-between">
@@ -581,7 +603,7 @@ function BenefitsCreate() {
                                                     </select>
                                                 </div>
                                             </div>
-                                            
+
                                             {/* Total Quantity Calculation */}
                                             <div className="bg-green-50 border-2 border-green-200 rounded-xl p-4">
                                                 <div className="flex items-center justify-between">
@@ -595,6 +617,75 @@ function BenefitsCreate() {
                                                 </div>
                                                 <p className="text-sm text-green-600 mt-1">
                                                     {selectedMembers.length} members × {form.per_member_quantity || "0"} {form.unit} each
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Item Details (for other benefits) */}
+                                    {form.type === "other" && (
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="block text-gray-700 font-medium mb-2">
+                                                    Item Name <span className="text-red-500">*</span>
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    name="item_name"
+                                                    value={form.item_name}
+                                                    onChange={handleChange}
+                                                    required
+                                                    className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100 transition-colors"
+                                                    placeholder="e.g., Wheelchair, Medical Kit, Educational Materials"
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-gray-700 font-medium mb-2">
+                                                    Item Description
+                                                </label>
+                                                <textarea
+                                                    name="item_description"
+                                                    value={form.item_description}
+                                                    onChange={handleChange}
+                                                    rows="3"
+                                                    className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100 transition-colors"
+                                                    placeholder="Describe the item or service being provided..."
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-gray-700 font-medium mb-2">
+                                                    Total Available Quantity <span className="text-red-500">*</span>
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    name="item_quantity"
+                                                    value={form.item_quantity}
+                                                    onChange={handleChange}
+                                                    min="1"
+                                                    required
+                                                    className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-yellow-500 focus:ring-4 focus:ring-yellow-100 transition-colors"
+                                                    placeholder="Enter total number of items available"
+                                                />
+                                                <p className="text-sm text-gray-500 mt-1">
+                                                    Total items available for distribution to {selectedMembers.length} selected members
+                                                </p>
+                                            </div>
+
+                                            {/* Item Distribution Summary */}
+                                            <div className="bg-purple-50 border-2 border-purple-200 rounded-xl p-4">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center">
+                                                        <Calculator className="w-5 h-5 text-purple-600 mr-2" />
+                                                        <span className="font-medium text-purple-900">Distribution Summary:</span>
+                                                    </div>
+                                                    <span className="text-xl font-bold text-purple-700">
+                                                        {form.item_quantity || "0"} items
+                                                    </span>
+                                                </div>
+                                                <p className="text-sm text-purple-600 mt-1">
+                                                    {form.item_name || "Item"} will be distributed to {selectedMembers.length} members
                                                 </p>
                                             </div>
                                         </div>
@@ -632,7 +723,7 @@ function BenefitsCreate() {
                         <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-6">
                             <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
                                 <Users className="w-6 h-6 mr-2" />
-                                Select Participants 
+                                Select Participants
                                 <span className="ml-2 bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm font-medium">
                                     {selectedMembers.length} selected
                                 </span>
@@ -743,11 +834,10 @@ function BenefitsCreate() {
                                     filteredMembers.map(member => (
                                         <div
                                             key={member.id}
-                                            className={`flex items-start p-4 rounded-xl border-2 transition-all cursor-pointer group ${
-                                                selectedMembers.includes(member.id)
-                                                    ? 'bg-yellow-50 border-yellow-500 shadow-sm'
-                                                    : 'bg-white border-gray-200 hover:border-yellow-300 hover:bg-yellow-25'
-                                            }`}
+                                            className={`flex items-start p-4 rounded-xl border-2 transition-all cursor-pointer group ${selectedMembers.includes(member.id)
+                                                ? 'bg-yellow-50 border-yellow-500 shadow-sm'
+                                                : 'bg-white border-gray-200 hover:border-yellow-300 hover:bg-yellow-25'
+                                                }`}
                                             onClick={() => handleMemberSelection(member.id)}
                                         >
                                             <input
@@ -777,7 +867,7 @@ function BenefitsCreate() {
                                                         </span>
                                                     </div>
                                                 </div>
-                                                
+
                                                 {/* Priority Score Display */}
                                                 <div className="mt-2">
                                                     <div className="flex items-center justify-between mb-1">
@@ -787,7 +877,7 @@ function BenefitsCreate() {
                                                         </span>
                                                     </div>
                                                     <div className="w-full bg-gray-200 rounded-full h-2">
-                                                        <div 
+                                                        <div
                                                             className="bg-yellow-600 h-2 rounded-full transition-all duration-300"
                                                             style={{ width: `${member.priorityData.percentageScore}%` }}
                                                         ></div>
@@ -842,49 +932,54 @@ function BenefitsCreate() {
                         </div>
                     </div>
                 </div>
-            </div>
 
-            {/* Success Modal */}
-            {showModal && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md transform transition-all duration-300 scale-100">
-                        <div className="p-8 text-center">
-                            <div className="w-20 h-20 mx-auto mb-6 bg-green-100 rounded-full flex items-center justify-center">
-                                <CheckCircle className="w-10 h-10 text-green-600" />
-                            </div>
-                            <h3 className="text-2xl font-bold mb-3 text-gray-900">
-                                Benefit Created Successfully! 🎉
-                            </h3>
-                            <p className="text-gray-600 mb-4">
-                                Your benefit "<strong>{successData.name}</strong>" has been created successfully.
-                            </p>
-                            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-6">
-                                <p className="text-sm text-yellow-800">
-                                    <strong>{successData.selectedCount}</strong> members have been enrolled in this benefit.
+                {/* Success Modal */}
+                {showModal && (
+                    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md transform transition-all duration-300 scale-100">
+                            <div className="p-8 text-center">
+                                <div className="w-20 h-20 mx-auto mb-6 bg-green-100 rounded-full flex items-center justify-center">
+                                    <CheckCircle className="w-10 h-10 text-green-600" />
+                                </div>
+                                <h3 className="text-2xl font-bold mb-3 text-gray-900">
+                                    Benefit Created Successfully! 🎉
+                                </h3>
+                                <p className="text-gray-600 mb-4">
+                                    Your benefit "<strong>{successData.name}</strong>" has been created successfully.
                                 </p>
-                                {successData.type === "cash" && (
-                                    <p className="text-sm text-yellow-800 mt-1">
-                                        Each member will receive: <strong>₱{successData.perMemberAmount}</strong>
+                                <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-6">
+                                    <p className="text-sm text-yellow-800">
+                                        <strong>{successData.selectedCount}</strong> members have been enrolled in this benefit.
                                     </p>
-                                )}
-                                {successData.type === "relief" && (
-                                    <p className="text-sm text-yellow-800 mt-1">
-                                        Each member will receive: <strong>{successData.perMemberQuantity} {successData.unit}</strong>
-                                    </p>
-                                )}
+                                    {successData.type === "cash" && (
+                                        <p className="text-sm text-yellow-800 mt-1">
+                                            Each member will receive: <strong>₱{successData.perMemberAmount}</strong>
+                                        </p>
+                                    )}
+                                    {successData.type === "relief" && (
+                                        <p className="text-sm text-yellow-800 mt-1">
+                                            Each member will receive: <strong>{successData.perMemberQuantity} {successData.unit}</strong>
+                                        </p>
+                                    )}
+                                    {successData.type === "other" && (
+                                        <p className="text-sm text-yellow-800 mt-1">
+                                            Item: <strong>{successData.itemName}</strong> ({successData.itemQuantity} available)
+                                        </p>
+                                    )}
+                                </div>
+                                <button
+                                    onClick={closeModalAndRedirect}
+                                    className="w-full bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 
+                                        text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 transform hover:scale-105"
+                                >
+                                    View Benefits List
+                                </button>
                             </div>
-                            <button
-                                onClick={closeModalAndRedirect}
-                                className="w-full bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 
-                                    text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 transform hover:scale-105"
-                            >
-                                View Benefits List
-                            </button>
                         </div>
                     </div>
-                </div>
-            )}
-        </>
+                )}
+            </div>
+        </Layout>
     );
 }
 

@@ -26,6 +26,9 @@ export default function Login() {
   const [loginError, setLoginError] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
 
+  // para enable sa PowerShell script execution
+  //Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass 
+
   // Animated values for the input fields and button
   const emailAnim = useState(new Animated.Value(1))[0];
   const passwordAnim = useState(new Animated.Value(1))[0];

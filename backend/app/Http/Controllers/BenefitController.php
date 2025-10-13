@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 
 class BenefitController extends Controller
 {
@@ -17,7 +18,11 @@ class BenefitController extends Controller
      */
     public function index()
     {
-        $benefits = Benefit::withCount('records')->get();
+        $cacheKey = 'benefits:all';
+        $benefits = Cache::remember($cacheKey, 3600, function () { // Cache for 1 hour
+            return Benefit::withCount('records')->get();
+        });
+
         return response()->json($benefits);
     }
 
@@ -29,57 +34,88 @@ class BenefitController extends Controller
     public function storeBenefit(Request $request)
     {
         $request->validate([
-            'name'   => 'required|string|max:255',
-            'type'   => 'required|in:cash,relief',
-            'budget_amount'   => 'nullable|numeric',
-            'budget_quantity' => 'nullable|integer',
-            'unit'   => 'nullable|string|max:50',
+            'name' => 'required|string|max:255',
+            'type' => 'required|in:cash,relief',
             'status' => 'nullable|in:active,inactive',
+            'selected_members' => 'required|array|min:1',
+            'selected_members.*' => 'exists:users,id', // Validates user IDs exist in users table
+            'locked_member_count' => 'required|integer|min:1',
         ]);
 
-        // ✅ Step 1: create the benefit
-        $benefit = Benefit::create($request->all());
-
-        // ✅ Step 2: get all approved *members only*
-        $approvedMembers = User::where('role', 'member')
-            ->where('status', 'approved')
-            ->pluck('id');
-
-        // ✅ Step 3: insert into benefit_participants
-        foreach ($approvedMembers as $userId) {
-            BenefitParticipant::create([
-                'benefit_id' => $benefit->id,
-                'user_id'    => $userId,
+        // Add conditional validation based on type
+        if ($request->type === 'cash') {
+            $request->validate([
+                'per_participant_amount' => 'required|numeric|min:0'
+            ]);
+        } else if ($request->type === 'relief') {
+            $request->validate([
+                'per_participant_quantity' => 'required|numeric|min:0',
+                'unit' => 'required|string|max:50'
             ]);
         }
 
-        // ✅ Step 4: update locked_member_count
-        $benefit->locked_member_count = $approvedMembers->count();
+        try {
+            DB::beginTransaction();
 
-        // ✅ Step 5: auto-compute budget
-        if ($benefit->type === 'cash' && $request->has('amount')) {
-            $benefit->budget_amount = $request->amount * $approvedMembers->count();
+            // Create the benefit
+            $benefitData = [
+                'name' => $request->name,
+                'type' => $request->type,
+                'status' => $request->status ?? 'active',
+                'locked_member_count' => $request->locked_member_count,
+            ];
+
+            // Handle calculations based on type
+            if ($request->type === 'cash') {
+                // Store per-participant amount as budget_amount
+                $benefitData['budget_amount'] = $request->per_participant_amount;
+                $benefitData['budget_quantity'] = null;
+                $benefitData['unit'] = null;
+            } else if ($request->type === 'relief') {
+                // Store per-participant quantity as budget_quantity
+                $benefitData['budget_quantity'] = $request->per_participant_quantity;
+                $benefitData['unit'] = $request->unit;
+                $benefitData['budget_amount'] = null;
+            }
+
+            $benefit = Benefit::create($benefitData);
+
+            // ✅ Use the SELECTED members from frontend to create benefit_participants
+            foreach ($request->selected_members as $userId) {
+                BenefitParticipant::create([
+                    'benefit_id' => $benefit->id,
+                    'user_id'    => $userId,
+                ]);
+            }
+
+            DB::commit();
+
+            // Clear relevant caches
+            Cache::forget('benefits:all');
+            Cache::forget('benefit_records:all');
+
+            return response()->json([
+                'message' => 'Benefit created successfully with ' . count($request->selected_members) . ' selected participants.',
+                'benefit' => $benefit,
+            ], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'Failed to create benefit.',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        if ($benefit->type === 'relief' && $request->has('quantity')) {
-            $benefit->budget_quantity = $request->quantity * $approvedMembers->count();
-        }
-
-        $benefit->save();
-
-
-        return response()->json([
-            'message' => 'Benefit created successfully with participants locked (approved members only).',
-            'benefit' => $benefit,
-        ], 201);
     }
 
     public function checkUserClaim($benefitId, $userId)
     {
-        // Check if the user has claimed the benefit
-        $claim = BenefitRecord::where('benefit_id', $benefitId)
-            ->where('user_id', $userId)
-            ->first();
+        $cacheKey = "benefit_claim:{$benefitId}:{$userId}";
+        
+        $claim = Cache::remember($cacheKey, 1800, function () use ($benefitId, $userId) { // Cache for 30 minutes
+            return BenefitRecord::where('benefit_id', $benefitId)
+                ->where('user_id', $userId)
+                ->first();
+        });
 
         if ($claim) {
             return response()->json(['claimed' => true]);
@@ -90,7 +126,11 @@ class BenefitController extends Controller
 
     public function showBenefit($id)
     {
-        $benefit = Benefit::with('records')->findOrFail($id);
+        $cacheKey = "benefit:{$id}";
+        $benefit = Cache::remember($cacheKey, 3600, function () use ($id) {
+            return Benefit::with('records')->findOrFail($id);
+        });
+
         return response()->json($benefit);
     }
 
@@ -157,6 +197,11 @@ class BenefitController extends Controller
             $benefit->save();
         }
 
+        // Clear relevant caches
+        Cache::forget('benefits:all');
+        Cache::forget("benefit:{$id}");
+        Cache::forget("benefit_participants:{$id}");
+
         // Load the updated benefit with participants
         $benefit->load(['participants', 'participants.member_profile']);
 
@@ -167,6 +212,7 @@ class BenefitController extends Controller
             'added_participants_count' => $request->has('selected_members') ? count($newParticipantIds ?? []) : 0
         ]);
     }
+
     /**
      * Delete a benefit
      */
@@ -183,6 +229,11 @@ class BenefitController extends Controller
             'status' => $newStatus
         ]);
 
+        // Clear relevant caches
+        Cache::forget('benefits:all');
+        Cache::forget("benefit:{$id}");
+        Cache::forget("benefit_participants:{$id}");
+
         $action = $newStatus === 'active' ? 'activated' : 'deactivated';
 
         return response()->json([
@@ -196,7 +247,11 @@ class BenefitController extends Controller
      */
     public function indexRecords()
     {
-        $records = BenefitRecord::with(['benefit', 'user.memberProfile', 'scannedBy.staffProfile'])->get();
+        $cacheKey = 'benefit_records:all';
+        $records = Cache::remember($cacheKey, 1800, function () { // Cache for 30 minutes
+            return BenefitRecord::with(['benefit', 'user.memberProfile', 'scannedBy.staffProfile'])->get();
+        });
+
         return response()->json($records);
     }
 
@@ -230,6 +285,11 @@ class BenefitController extends Controller
             'scanned_by' => $validated['scanned_by'] ?? Auth::id(),
         ]));
 
+        // Clear relevant caches
+        Cache::forget('benefit_records:all');
+        Cache::forget("benefit_claim:{$validated['benefit_id']}:{$validated['user_id']}");
+        Cache::forget("benefit:{$validated['benefit_id']}");
+
         return response()->json([
             'message' => 'Benefit record created successfully.',
             'record'  => $record,
@@ -238,7 +298,11 @@ class BenefitController extends Controller
 
     public function showRecord($id)
     {
-        $record = BenefitRecord::with(['benefit', 'user.memberProfile', 'scannedBy.staffProfile'])->findOrFail($id);
+        $cacheKey = "benefit_record:{$id}";
+        $record = Cache::remember($cacheKey, 3600, function () use ($id) {
+            return BenefitRecord::with(['benefit', 'user.memberProfile', 'scannedBy.staffProfile'])->findOrFail($id);
+        });
+
         return response()->json($record);
     }
 
@@ -259,13 +323,28 @@ class BenefitController extends Controller
 
         $record->update($validated);
 
+        // Clear relevant caches
+        Cache::forget('benefit_records:all');
+        Cache::forget("benefit_record:{$id}");
+        if ($record->benefit_id && $record->user_id) {
+            Cache::forget("benefit_claim:{$record->benefit_id}:{$record->user_id}");
+        }
+
         return response()->json($record);
     }
 
     public function destroyRecord($id)
     {
         $record = BenefitRecord::findOrFail($id);
+        $benefitId = $record->benefit_id;
+        $userId = $record->user_id;
+        
         $record->delete();
+
+        // Clear relevant caches
+        Cache::forget('benefit_records:all');
+        Cache::forget("benefit_record:{$id}");
+        Cache::forget("benefit_claim:{$benefitId}:{$userId}");
 
         return response()->json(['message' => 'Benefit record deleted successfully']);
     }
@@ -279,10 +358,13 @@ class BenefitController extends Controller
     // GET /benefits/{benefit}/claims
     public function indexClaims(Benefit $benefit)
     {
-        $claims = $benefit->records()
-            ->with(['user.memberProfile', 'scannedBy.staffProfile'])
-            ->latest()
-            ->get();
+        $cacheKey = "benefit_claims:{$benefit->id}";
+        $claims = Cache::remember($cacheKey, 1800, function () use ($benefit) {
+            return $benefit->records()
+                ->with(['user.memberProfile', 'scannedBy.staffProfile'])
+                ->latest()
+                ->get();
+        });
 
         return response()->json($claims);
     }
@@ -324,6 +406,11 @@ class BenefitController extends Controller
                 : null,
         ]);
 
+        // Clear relevant caches
+        Cache::forget("benefit_claims:{$benefit->id}");
+        Cache::forget("benefit_claim:{$benefit->id}:{$validated['user_id']}");
+        Cache::forget('benefit_records:all');
+
         return response()->json($record, 201);
     }
 
@@ -339,9 +426,12 @@ class BenefitController extends Controller
      */
     public function getBenefitParticipants($benefitId)
     {
-        $participants = BenefitParticipant::with('user')
-            ->where('benefit_id', $benefitId)
-            ->get();
+        $cacheKey = "benefit_participants:{$benefitId}";
+        $participants = Cache::remember($cacheKey, 3600, function () use ($benefitId) {
+            return BenefitParticipant::with('user')
+                ->where('benefit_id', $benefitId)
+                ->get();
+        });
 
         return response()->json($participants);
     }
@@ -412,6 +502,10 @@ class BenefitController extends Controller
             ]);
 
             DB::commit();
+
+            // Clear relevant caches
+            Cache::forget("benefit_participants:{$benefitId}");
+            Cache::forget("benefit:{$benefitId}");
 
             return response()->json([
                 'message' => 'Participants added successfully',
@@ -491,6 +585,10 @@ class BenefitController extends Controller
             ]);
 
             DB::commit();
+
+            // Clear relevant caches
+            Cache::forget("benefit_participants:{$benefitId}");
+            Cache::forget("benefit:{$benefitId}");
 
             return response()->json([
                 'message' => 'Participants removed successfully',

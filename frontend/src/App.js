@@ -27,6 +27,7 @@ import BenefitsList from './BenefitsList';
 import BenefitsCreate from './BenefitsCreate';
 import BenefitsClaimRecord from './BenefitsClaimRecord';
 import PrintBenefitsReport from './PrintBenefitsReport';
+import PrintAttendanceReport from './PrintAttendance';
 
 // Route Guards
 const ProtectedRoute = () => {
@@ -71,6 +72,7 @@ function App() {
           <Route path="/benefits/create" element={<BenefitsCreate />} />
           <Route path="/benefits/:benefitId/participants" element={<BenefitsClaimRecord />} />
           <Route path="/print-benefits/:benefitId" element={<PrintBenefitsReport />} />
+          <Route path="/events/:eventId/attendance/print" element={<PrintAttendanceReport />} />
         </Route>
 
         {/* Default Redirect */}

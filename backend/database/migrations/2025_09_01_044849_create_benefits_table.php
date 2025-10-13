@@ -11,7 +11,7 @@ return new class extends Migration {
         Schema::create('benefits', function (Blueprint $table) {
             $table->id();
             $table->string('name');                           // e.g., "Cash Assistance", "Relief Goods"
-            $table->enum('type', ['cash', 'relief']);         // identifies type of benefit
+            $table->enum('type', ['cash', 'relief', 'other']);   // identifies type of benefit
 
             // Cash-related fields
             $table->decimal('budget_amount', 12, 2)->nullable(); // total budget for cash benefits
@@ -53,7 +53,7 @@ return new class extends Migration {
 
             $table->enum('status', ['pending', 'claimed', 'absent'])->default('pending');
             $table->timestamp('claimed_at')->nullable();
-            $table->text('remarks')->nullable();         
+            $table->text('remarks')->nullable();
             $table->timestamps();
 
             // Prevent duplicate record per member per benefit

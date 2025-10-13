@@ -1,17 +1,22 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, UserPlus, Trash2,  CheckCircle, Clock, XCircle, UserX, Ban } from "lucide-react";
+import { 
+  Search, 
+  UserPlus, 
+  Trash2,  
+  CheckCircle, 
+  Clock, 
+  XCircle, 
+  UserX, 
+  Ban,
+  Users,
+  UserCheck,
+  MapPin,
+  Phone,
+  Mail
+} from "lucide-react";
 import api from "./api";
 import Layout from "./Layout";
-
-const theme = {
-  primary: "from-sky-600 to-sky-400",
-  primaryText: "text-sky-600",
-  secondaryText: "text-sky-400",
-  cardBg: "bg-white",
-  footerBg: "bg-sky-700",
-  chartColors: ["#0ea5e9", "#38bdf8", "#7dd3fc", "#0284c7", "#0369a1"],
-};
 
 function StaffList() {
   const [staffs, setStaffs] = useState([]);
@@ -29,7 +34,7 @@ function StaffList() {
     const fetchStaffs = async () => {
       try {
         const res = await api.get("/users?role=staff");
-        console.log("Staff data:", res.data); // Debug log to see actual data
+        console.log("Staff data:", res.data);
         setStaffs(res.data);
       } catch (err) {
         console.error(err);
@@ -51,7 +56,6 @@ function StaffList() {
       setDeleting(true);
       await api.delete(`/user/${selectedStaff.id}`);
 
-      // Remove from local state
       setStaffs(prev => prev.filter(staff => staff.id !== selectedStaff.id));
       setShowDeleteModal(false);
       setSelectedStaff(null);
@@ -65,40 +69,38 @@ function StaffList() {
     }
   };
 
-
-
-  // Correct status configuration matching your database
+  // Status configuration
   const getStatusConfig = (status) => {
     const statusConfig = {  
       approved: {
-        color: "bg-green-100 text-green-800",
+        color: "bg-green-100 text-green-800 border-green-200",
         text: "Active",
         icon: <CheckCircle size={14} />,
-        countText: "Approved"
+        gradient: "from-green-500 to-green-600"
       },
       pending: {
-        color: "bg-yellow-100 text-yellow-800",
+        color: "bg-yellow-100 text-yellow-800 border-yellow-200",
         text: "Pending",
         icon: <Clock size={14} />,
-        countText: "Pending"
+        gradient: "from-yellow-500 to-yellow-600"
       },
       rejected: {
-        color: "bg-red-100 text-red-800",
+        color: "bg-red-100 text-red-800 border-red-200",
         text: "Rejected",
         icon: <XCircle size={14} />,
-        countText: "Rejected"
+        gradient: "from-red-500 to-red-600"
       },
       inactive: {
-        color: "bg-orange-100 text-orange-800",
+        color: "bg-orange-100 text-orange-800 border-orange-200",
         text: "Inactive",
         icon: <Ban size={14} />,
-        countText: "Inactive"
+        gradient: "from-orange-500 to-orange-600"
       },
       deceased: {
-        color: "bg-gray-100 text-gray-800",
+        color: "bg-gray-100 text-gray-800 border-gray-200",
         text: "Deceased",
         icon: <UserX size={14} />,
-        countText: "Deceased"
+        gradient: "from-gray-500 to-gray-600"
       }
     };
 
@@ -108,7 +110,7 @@ function StaffList() {
   const getStatusBadge = (status) => {
     const config = getStatusConfig(status);
     return (
-      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${config.color}`}>
+      <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold border ${config.color}`}>
         {config.icon}
         {config.text}
       </span>
@@ -173,15 +175,18 @@ function StaffList() {
 
   const statusCounts = getStatusCounts();
 
+
   if (loading) {
     return (
       <Layout>
-        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
-          <div className="w-20 h-20 border-8 border-sky-200 border-t-sky-600 rounded-full animate-spin"></div>
-          <p className="mt-4 text-xl font-semibold text-sky-600 animate-pulse">
-            Loading Staff List...
-          </p>
-          <p className="text-gray-600 text-sm">Please wait a moment 🧑‍💼</p>
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-100 flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-20 h-20 border-8 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto"></div>
+            <p className="mt-4 text-xl font-semibold text-blue-600 animate-pulse">
+              Loading Staff List...
+            </p>
+            <p className="text-gray-600 text-sm mt-2">Please wait a moment 🧑‍💼</p>
+          </div>
         </div>
       </Layout>
     );
@@ -190,13 +195,16 @@ function StaffList() {
   if (error) {
     return (
       <Layout>
-        <div className="flex items-center justify-center min-h-screen bg-gray-50">
-          <div className="text-center">
-            <div className="text-red-500 text-6xl mb-4">⚠️</div>
-            <p className="text-red-600 text-xl font-semibold mb-2">{error}</p>
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-100 flex items-center justify-center">
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-8 max-w-md text-center">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <XCircle className="w-8 h-8 text-red-600" />
+            </div>
+            <h2 className="text-xl font-bold text-red-600 mb-2">Error</h2>
+            <p className="text-gray-600">{error}</p>
             <button
               onClick={() => window.location.reload()}
-              className="text-sky-600 hover:underline"
+              className="mt-4 inline-flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors"
             >
               Try Again
             </button>
@@ -208,248 +216,350 @@ function StaffList() {
 
   return (
     <Layout>
-      <div className="p-6 bg-gray-50 min-h-screen">
-        {/* Header with Add Staff Button on Right */}
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className={`text-3xl font-bold ${theme.primaryText} mb-2`}>
-              Staff Management
-            </h1>
-            <p className="text-gray-600">
-              Manage and oversee all staff members in the system
-            </p>
-          </div>
-
-          <button
-            onClick={() => navigate("/register")}
-            className="bg-sky-600 hover:bg-sky-700 text-white px-6 py-3 rounded-xl shadow-lg transition-all duration-200 font-semibold flex items-center gap-2"
-          >
-            <UserPlus size={20} />
-            <span>Add Staff</span>
-          </button>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-100 py-8 px-4">
+        {/* Background Decoration */}
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse-slow"></div>
+          <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-indigo-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse-slow delay-1000"></div>
         </div>
 
-        {/* Statistics Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-          <div className="bg-white rounded-xl shadow p-4 text-center">
-            <div className="text-2xl font-bold text-sky-600">{staffs.length}</div>
-            <div className="text-sm text-gray-600">Total Staff</div>
-          </div>
-          <div className="bg-white rounded-xl shadow p-4 text-center">
-            <div className="text-2xl font-bold text-green-600">{statusCounts.approved}</div>
-            <div className="text-sm text-gray-600">Approved</div>
-          </div>
-          <div className="bg-white rounded-xl shadow p-4 text-center">
-            <div className="text-2xl font-bold text-yellow-600">{statusCounts.pending}</div>
-            <div className="text-sm text-gray-600">Pending</div>
-          </div>
-          <div className="bg-white rounded-xl shadow p-4 text-center">
-            <div className="text-2xl font-bold text-purple-600">
-              {new Set(staffs.map(s => s.staff_profile?.assigned_barangay).filter(Boolean)).size}
-            </div>
-            <div className="text-sm text-gray-600">Barangays</div>
-          </div>
-          <div className="bg-white rounded-xl shadow p-4 text-center">
-            <div className="text-2xl font-bold text-blue-600">
-              {staffs.filter(staff => staff.staff_profile?.contact_number).length}
-            </div>
-            <div className="text-sm text-gray-600">With Contact</div>
-          </div>
-        </div>
+        <div className="max-w-7xl mx-auto relative">
+          {/* Header */}
+          <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 p-8 mb-8">
+            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-8">
+              <div className="flex items-start gap-6">
+                <div className="bg-gradient-to-br from-blue-500 to-purple-600 p-4 rounded-2xl shadow-lg">
+                  <Users className="w-8 h-8 text-white" />
+                </div>
+                <div className="flex-1">
+                  <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                    Staff Management
+                  </h1>
+                  <div className="mt-4 space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                      <h2 className="text-lg font-semibold text-gray-800">
+                        Manage and oversee all staff members
+                      </h2>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
+                      <span className="flex items-center gap-2 bg-blue-50 px-3 py-1 rounded-full">
+                        <Users className="w-4 h-4 text-blue-500" />
+                        Total Staff: {staffs.length}
+                      </span>
+                      <span className="flex items-center gap-2 bg-green-50 px-3 py-1 rounded-full">
+                        <UserCheck className="w-4 h-4 text-green-500" />
+                        Active: {statusCounts.approved}
+                      </span>
+                      <span className="flex items-center gap-2 bg-yellow-50 px-3 py-1 rounded-full">
+                        <Clock className="w-4 h-4 text-yellow-500" />
+                        Pending: {statusCounts.pending}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
-        {/* Search & Sort Controls */}
-        <section className={`${theme.cardBg} rounded-xl shadow p-6 mb-6`}>
-          <div className="flex flex-col lg:flex-row lg:items-end gap-4">
-            {/* Search */}
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-600 mb-2">
-                Search Staff
-              </label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search by name, email, ID, barangay, or contact..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
-                />
+              {/* Statistics */}
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 min-w-[500px]">
+                <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white p-4 rounded-2xl shadow-lg text-center">
+                  <Users className="w-6 h-6 mx-auto mb-2 opacity-90" />
+                  <div className="text-xl font-bold">{staffs.length}</div>
+                  <div className="text-blue-100 text-xs font-medium">Total Staff</div>
+                </div>
+                <div className="bg-gradient-to-br from-green-500 to-green-600 text-white p-4 rounded-2xl shadow-lg text-center">
+                  <UserCheck className="w-6 h-6 mx-auto mb-2 opacity-90" />
+                  <div className="text-xl font-bold">{statusCounts.approved}</div>
+                  <div className="text-green-100 text-xs font-medium">Active</div>
+                </div>
+                <div className="bg-gradient-to-br from-yellow-500 to-yellow-600 text-white p-4 rounded-2xl shadow-lg text-center">
+                  <Clock className="w-6 h-6 mx-auto mb-2 opacity-90" />
+                  <div className="text-xl font-bold">{statusCounts.pending}</div>
+                  <div className="text-yellow-100 text-xs font-medium">Pending</div>
+                </div>
+                <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white p-4 rounded-2xl shadow-lg text-center">
+                  <MapPin className="w-6 h-6 mx-auto mb-2 opacity-90" />
+                  <div className="text-xl font-bold">
+                    {new Set(staffs.map(s => s.staff_profile?.assigned_barangay).filter(Boolean)).size}
+                  </div>
+                  <div className="text-purple-100 text-xs font-medium">Barangays</div>
+                </div>
+                <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white p-4 rounded-2xl shadow-lg text-center">
+                  <Phone className="w-6 h-6 mx-auto mb-2 opacity-90" />
+                  <div className="text-xl font-bold">
+                    {staffs.filter(staff => staff.staff_profile?.contact_number).length}
+                  </div>
+                  <div className="text-orange-100 text-xs font-medium">With Contact</div>
+                </div>
               </div>
             </div>
-
-            {/* Sort Option */}
-            <div className="w-full lg:w-64">
-              <label className="block text-sm font-medium text-gray-600 mb-2">
-                Sort By
-              </label>
-              <select
-                value={sortOption}
-                onChange={(e) => setSortOption(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
-              >
-                <option value="name-asc">Name (A-Z)</option>
-                <option value="name-desc">Name (Z-A)</option>
-                <option value="date-newest">Newest First</option>
-                <option value="date-oldest">Oldest First</option>
-                <option value="status">Status</option>
-              </select>
-            </div>
           </div>
-        </section>
 
-        {/* Results Summary */}
-        <div className="mb-4 text-sm text-gray-600">
-          Showing {filteredStaffs.length} of {staffs.length} staff members
-          {searchTerm && ` matching "${searchTerm}"`}
-        </div>
+          {/* Search + Filters */}
+          <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-white/20 p-6 mb-8">
+            <div className="flex flex-col lg:flex-row lg:items-end gap-6">
+              {/* Search */}
+              <div className="flex-1">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Search Staff
+                </label>
+                <div className="relative">
+                  <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search by name, email, ID, barangay, or contact..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-12 pr-4 py-4 border border-gray-200 rounded-2xl 
+                             bg-white/60 backdrop-blur-sm focus:ring-2 focus:ring-blue-500 
+                             focus:border-blue-500 transition-all duration-200 placeholder-gray-400
+                             shadow-sm hover:shadow-md focus:shadow-lg"
+                  />
+                </div>
+              </div>
 
-        {/* Staff Table */}
-        <section className={`${theme.cardBg} rounded-xl shadow p-6`}>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm text-left">
-              <thead className="bg-sky-600 text-white uppercase">
-                <tr>
-                  <th className="px-6 py-4 font-semibold">Staff ID</th>
-                  <th className="px-6 py-4 font-semibold">Full Name</th>
-                  <th className="px-6 py-4 font-semibold">Email</th>
-                  <th className="px-6 py-4 font-semibold">Assigned Barangay</th>
-                  <th className="px-6 py-4 font-semibold">Contact Number</th>
-                  <th className="px-6 py-4 font-semibold">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredStaffs.length > 0 ? (
-                  filteredStaffs.map((staff) => {
-                    const profile = staff.staff_profile || {};
-                    const fullName = `${profile.first_name || ""} ${profile.middle_name || ""} ${profile.last_name || ""}`.trim();
+              {/* Sort Option */}
+              <div className="w-full lg:w-64">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Sort By
+                </label>
+                <select
+                  value={sortOption}
+                  onChange={(e) => setSortOption(e.target.value)}
+                  className="w-full px-4 py-4 border border-gray-200 rounded-2xl 
+                           bg-white/60 backdrop-blur-sm focus:ring-2 focus:ring-blue-500 
+                           focus:border-blue-500 transition-all duration-200 appearance-none
+                           shadow-sm hover:shadow-md focus:shadow-lg"
+                >
+                  <option value="name-asc">Name (A-Z)</option>
+                  <option value="name-desc">Name (Z-A)</option>
+                  <option value="date-newest">Newest First</option>
+                  <option value="date-oldest">Oldest First</option>
+                  <option value="status">Status</option>
+                </select>
+              </div>
 
-                    return (
-                      <tr
-                        key={staff.id}
-                        className="border-b border-gray-100 hover:bg-sky-50 transition-colors duration-150 group"
-                      >
-                        <td
-                          className="px-6 py-4 cursor-pointer"
+              {/* Add Staff Button */}
+              <button
+                onClick={() => navigate("/register")}
+                className="flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-green-500 to-green-600 
+                         hover:from-green-600 hover:to-green-700 text-white rounded-2xl 
+                         transition-all duration-200 font-semibold shadow-lg hover:shadow-xl 
+                         transform hover:-translate-y-0.5"
+              >
+                <UserPlus className="w-5 h-5" />
+                Add Staff
+              </button>
+            </div>
+
+            {/* Active Filters Display */}
+            {searchTerm && (
+              <div className="flex flex-wrap items-center gap-3 mt-6 pt-6 border-t border-gray-100">
+                <span className="text-sm font-semibold text-gray-600">Active filters:</span>
+                
+                {searchTerm && (
+                  <span className="bg-blue-100 text-blue-800 text-sm px-4 py-2 rounded-full flex items-center gap-2 font-medium">
+                    Search: "{searchTerm}"
+                    <button 
+                      onClick={() => setSearchTerm("")} 
+                      className="text-blue-600 hover:text-blue-800 font-bold text-lg leading-none"
+                    >
+                      ×
+                    </button>
+                  </span>
+                )}
+
+                <button
+                  onClick={() => setSearchTerm("")}
+                  className="text-sm text-gray-600 hover:text-gray-800 font-semibold underline ml-auto"
+                >
+                  Clear all filters
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Results Summary */}
+          <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <span className="text-lg font-semibold text-gray-700">
+                {filteredStaffs.length} of {staffs.length} staff members
+              </span>
+              {searchTerm && (
+                <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+                  Matching: "{searchTerm}"
+                </span>
+              )}
+            </div>
+            
+            {filteredStaffs.length > 0 && (
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                <span>Active: {statusCounts.approved}</span>
+                <div className="w-2 h-2 bg-yellow-500 rounded-full ml-2"></div>
+                <span>Pending: {statusCounts.pending}</span>
+                <div className="w-2 h-2 bg-red-500 rounded-full ml-2"></div>
+                <span>Rejected: {statusCounts.rejected}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Staff Table */}
+          <section className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+                    <th className="px-8 py-5 font-semibold text-left text-sm uppercase tracking-wider">
+                      Staff Information
+                    </th>
+                    <th className="px-8 py-5 font-semibold text-left text-sm uppercase tracking-wider">
+                      Contact Details
+                    </th>
+                    <th className="px-8 py-5 font-semibold text-left text-sm uppercase tracking-wider">
+                      Assignment
+                    </th>
+                    <th className="px-8 py-5 font-semibold text-left text-sm uppercase tracking-wider">
+                      Status
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filteredStaffs.length > 0 ? (
+                    filteredStaffs.map((staff) => {
+                      const profile = staff.staff_profile || {};
+                      const fullName = `${profile.first_name || ""} ${profile.middle_name || ""} ${profile.last_name || ""}`.trim();
+
+                      return (
+                        <tr
+                          key={staff.id}
                           onClick={() => navigate(`/staff/${staff.id}`)}
+                          className="hover:bg-gray-50/80 transition-all duration-150 group cursor-pointer"
                         >
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                            #{staff.id}
-                          </span>
-                        </td>
-                        <td
-                          className="px-6 py-4 cursor-pointer"
-                          onClick={() => navigate(`/staff/${staff.id}`)}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-sky-100 rounded-full flex items-center justify-center text-sky-600 font-semibold text-sm">
-                              {fullName.charAt(0).toUpperCase()}
-                            </div>
-                            <div>
-                              <div className="font-medium text-gray-900 group-hover:text-sky-700">
-                                {fullName || "Unnamed Staff"}
+                          <td className="px-8 py-5">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-purple-100 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                                <Users className="w-5 h-5 text-blue-600" />
                               </div>
-                              {profile.position && (
-                                <div className="text-xs text-gray-500">{profile.position}</div>
+                              <div>
+                                <div className="font-semibold text-gray-900">
+                                  {fullName || "Unnamed Staff"}
+                                </div>
+                                <div className="text-xs text-gray-500 mt-1">
+                                  ID: {staff.id}
+                                </div>
+                                {profile.position && (
+                                  <div className="text-xs text-purple-600 font-medium mt-1">
+                                    {profile.position}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-8 py-5">
+                            <div className="flex flex-col gap-2">
+                              {staff.email && (
+                                <div className="flex items-center gap-2 text-gray-700">
+                                  <Mail className="w-4 h-4 text-gray-400" />
+                                  <span className="text-sm">{staff.email}</span>
+                                </div>
+                              )}
+                              {profile.contact_number && (
+                                <div className="flex items-center gap-2 text-gray-700">
+                                  <Phone className="w-4 h-4 text-gray-400" />
+                                  <span className="text-sm font-medium">{profile.contact_number}</span>
+                                </div>
                               )}
                             </div>
-                          </div>
-                        </td>
-                        <td
-                          className="px-6 py-4 cursor-pointer"
-                          onClick={() => navigate(`/staff/${staff.id}`)}
-                        >
-                          {staff.email || "—"}
-                        </td>
-                        <td
-                          className="px-6 py-4 cursor-pointer"
-                          onClick={() => navigate(`/staff/${staff.id}`)}
-                        >
-                          {profile.assigned_barangay ? (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                              {profile.assigned_barangay}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400">—</span>
-                          )}
-                        </td>
-                        <td
-                          className="px-6 py-4 cursor-pointer"
-                          onClick={() => navigate(`/staff/${staff.id}`)}
-                        >
-                          {profile.contact_number || "—"}
-                        </td>
-                        <td
-                          className="px-6 py-4 cursor-pointer"
-                          onClick={() => navigate(`/staff/${staff.id}`)}
-                        >
-                          {getStatusBadge(staff.status)}
-                        </td>
-
-                      </tr>
-                    );
-                  })
-                ) : (
-                  <tr>
-                    <td colSpan="7" className="px-6 py-12 text-center">
-                      <div className="flex flex-col items-center justify-center text-gray-500">
-                        <UserPlus className="w-16 h-16 mb-4 text-gray-300" />
-                        <p className="text-lg font-medium mb-2">No staff members found</p>
-                        <p className="text-sm">
-                          {searchTerm
-                            ? "Try adjusting your search criteria"
-                            : "No staff members have been registered yet"
-                          }
-                        </p>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
+                          </td>
+                          <td className="px-8 py-5">
+                            {profile.assigned_barangay ? (
+                              <div className="flex items-center gap-2">
+                                <MapPin className="w-4 h-4 text-purple-500" />
+                                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-800">
+                                  {profile.assigned_barangay}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 text-sm">— Not assigned —</span>
+                            )}
+                          </td>
+                          <td className="px-8 py-5">
+                            {getStatusBadge(staff.status)}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan="4" className="px-8 py-16 text-center">
+                        <div className="flex flex-col items-center justify-center text-gray-400">
+                          <UserPlus className="w-20 h-20 mb-4 opacity-40" />
+                          <p className="text-xl font-semibold text-gray-500 mb-2">No staff members found</p>
+                          <p className="text-sm max-w-md">
+                            {searchTerm
+                              ? "Try adjusting your search criteria"
+                              : "No staff members have been registered yet"
+                            }
+                          </p>
+                          <button
+                            onClick={() => navigate("/register")}
+                            className="mt-4 inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors"
+                          >
+                            <UserPlus className="w-4 h-4" />
+                            Add First Staff Member
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
 
         {/* Delete Confirmation Modal */}
         {showDeleteModal && selectedStaff && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md text-center">
-              <div className="flex justify-center mb-4">
-                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
-                  <Trash2 className="w-8 h-8 text-red-600" />
+            <div className="bg-white/90 backdrop-blur-sm p-8 rounded-3xl shadow-2xl border border-white/20 w-full max-w-md text-center">
+              <div className="flex justify-center mb-6">
+                <div className="w-20 h-20 bg-red-100 rounded-2xl flex items-center justify-center">
+                  <Trash2 className="w-10 h-10 text-red-600" />
                 </div>
               </div>
 
-              <h3 className="text-xl font-bold text-gray-900 mb-2">
+              <h3 className="text-2xl font-bold text-gray-900 mb-3">
                 Delete Staff Member
               </h3>
 
-              <p className="text-gray-600 mb-6">
+              <p className="text-gray-600 mb-8 text-lg">
                 Are you sure you want to delete{" "}
-                <span className="font-semibold">
+                <span className="font-semibold text-red-600">
                   {selectedStaff.staff_profile?.first_name} {selectedStaff.staff_profile?.last_name}
                 </span>
-                ? This action cannot be undone and all associated data will be permanently removed.
+                ? This action cannot be undone.
               </p>
 
-              <div className="flex gap-3">
+              <div className="flex gap-4">
                 <button
                   onClick={() => {
                     setShowDeleteModal(false);
                     setSelectedStaff(null);
                   }}
                   disabled={deleting}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium disabled:opacity-50"
+                  className="flex-1 px-6 py-4 border border-gray-300 text-gray-700 rounded-2xl hover:bg-gray-50 transition-all duration-200 font-semibold disabled:opacity-50 hover:shadow-lg"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleDelete}
                   disabled={deleting}
-                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="flex-1 px-6 py-4 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-2xl hover:from-red-600 hover:to-red-700 transition-all duration-200 font-semibold disabled:opacity-50 flex items-center justify-center gap-2 hover:shadow-lg"
                 >
                   {deleting ? (
                     <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                       Deleting...
                     </>
                   ) : (
@@ -464,6 +574,15 @@ function StaffList() {
           </div>
         )}
       </div>
+
+      {/* Add custom animations */}
+      <style jsx>{`
+        @keyframes pulse-slow {
+          0%, 100% { opacity: 0.3; }
+          50% { opacity: 0.5; }
+        }
+        .animate-pulse-slow { animation: pulse-slow 4s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+      `}</style>
     </Layout>
   );
 }
