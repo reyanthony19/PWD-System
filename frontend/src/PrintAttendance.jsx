@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import api from "./api";
 
@@ -6,12 +6,9 @@ function PrintAttendanceReport() {
   const { eventId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const [event, setEvent] = useState(null);
-  const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const hasPrintedRef = useRef(false);
 
-  // Get data from location state
+  // Get data from location state (primary data source)
   const { 
     event: eventFromState, 
     members: membersFromState,
@@ -20,60 +17,51 @@ function PrintAttendanceReport() {
   } = location.state || {};
 
   useEffect(() => {
-    const fetchData = async () => {
+    const initPrint = async () => {
       try {
-        console.log("Location state:", location.state);
-
         if (eventFromState && membersFromState) {
-          // Use data passed from state
-          console.log("Using data from state");
-          setEvent(eventFromState);
-          setMembers(membersFromState);
+          // Use data passed from state - this should be the primary case
+          console.log("Using data from location state");
           setLoading(false);
+          
+          // Set page title
+          document.title = `${eventFromState?.title || 'Event'} Attendance Report - PDAO`;
+          
+          // Trigger print after a short delay to ensure rendering is complete
+          setTimeout(() => {
+            window.print();
+          }, 800);
         } else {
-          console.log("Fetching fresh data from API");
-          // Fetch fresh data
+          // Fallback: fetch data if no state provided
+          console.log("No location state data, fetching from API");
           const eventResponse = await api.get(`/events/${eventId}`);
           const membersResponse = await api.get(`/events/${eventId}/attendances`);
           
-          setEvent(eventResponse.data);
-          setMembers(membersResponse.data);
           setLoading(false);
-        }
-
-        // Set Page Title dynamically
-        document.title = `${eventFromState?.title || 'Event'} Attendance Report - PDAO`;
-
-        // Only trigger print ONCE
-        if (!hasPrintedRef.current) {
-          hasPrintedRef.current = true;
+          
+          document.title = `${eventResponse.data?.title || 'Event'} Attendance Report - PDAO`;
+          
           setTimeout(() => {
             window.print();
-          }, 500);
-
-          const handleAfterPrint = () => {
-            navigate(`/events/${eventId}/attendances`, { replace: true });
-          };
-
-          window.addEventListener("afterprint", handleAfterPrint);
-
-          return () => {
-            window.removeEventListener("afterprint", handleAfterPrint);
-          };
+          }, 800);
         }
-        
       } catch (error) {
         console.error("Error loading print data:", error);
         setLoading(false);
       }
     };
 
-    fetchData();
-  }, [eventId, eventFromState, membersFromState, location.state, navigate]);
+    initPrint();
+  }, [eventId, eventFromState, membersFromState]);
 
-  // Add manual cancel button handler
+  // Handle manual back navigation
   const handleCancel = () => {
     navigate(`/events/${eventId}/attendances`, { replace: true });
+  };
+
+  // Handle manual print
+  const handleManualPrint = () => {
+    window.print();
   };
 
   const formatBirthdate = (birthdate) => {
@@ -117,10 +105,11 @@ function PrintAttendanceReport() {
     );
   }
 
-  const displayMembers = membersFromState || members;
-  const displayEvent = eventFromState || event;
+  // Use state data as primary, with fallbacks
+  const displayMembers = membersFromState || [];
+  const displayEvent = eventFromState || {};
 
-  // Calculate statistics if not provided
+  // Calculate statistics
   const presentCount = statistics.presentCount || displayMembers.filter(m => m.isPresent).length;
   const expectedOrAbsentCount = statistics.expectedOrAbsentCount || displayMembers.filter(m => !m.isPresent).length;
   const totalMembers = statistics.totalMembers || displayMembers.length;
@@ -166,12 +155,6 @@ function PrintAttendanceReport() {
             .bg-purple-600 {
               background-color: #7c3aed !important;
             }
-            .bg-orange-600 {
-              background-color: #ea580c !important;
-            }
-            .bg-indigo-600 {
-              background-color: #4f46e5 !important;
-            }
             .text-blue-100 {
               color: #dbeafe !important;
             }
@@ -197,14 +180,28 @@ function PrintAttendanceReport() {
         `}
       </style>
 
-      {/* Cancel Button - Only visible when not printing */}
-      <div className="no-print mb-4">
+      {/* Action Buttons - Only visible when not printing */}
+      <div className="no-print mb-4 flex gap-2">
         <button
           onClick={handleCancel}
           className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
         >
           ← Back to Attendance
         </button>
+        <button
+          onClick={handleManualPrint}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+        >
+          🖨️ Print Report
+        </button>
+      </div>
+
+      {/* Print Instructions */}
+      <div className="no-print bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+        <p className="text-blue-800 text-sm">
+          <strong>Note:</strong> Use the browser's print dialog to print this report. 
+          The print will automatically optimize for paper format.
+        </p>
       </div>
 
       {/* Header */}
