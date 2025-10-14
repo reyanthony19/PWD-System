@@ -20,6 +20,9 @@ const barangayOptions = [
   "Poblacion", "Taboc", "Tingalan"
 ];
 
+// Cache implementation
+const staffCache = new Map();
+
 function StaffProfile() {
   const { id } = useParams();
   const [staff, setStaff] = useState(null);
@@ -105,8 +108,20 @@ function StaffProfile() {
 
   useEffect(() => {
     const fetchStaff = async () => {
+      // Check cache first
+      if (staffCache.has(id)) {
+        console.log('📦 Using cached staff data');
+        const cachedStaff = staffCache.get(id);
+        setStaff(cachedStaff);
+        setAssignedBarangay(cachedStaff.staff_profile?.assigned_barangay || "");
+        setLoading(false);
+        return;
+      }
+
       try {
         const res = await api.get(`/user/${id}`);
+        // Store in cache
+        staffCache.set(id, res.data);
         setStaff(res.data);
         setAssignedBarangay(res.data.staff_profile?.assigned_barangay || "");
       } catch (err) {
@@ -131,7 +146,14 @@ function StaffProfile() {
       await api.patch(`/user/${id}/status`, { status: newStatus });
       
       // Update local state
-      setStaff(prev => prev ? { ...prev, status: newStatus } : null);
+      const updatedStaff = staff ? { ...staff, status: newStatus } : null;
+      setStaff(updatedStaff);
+      
+      // Update cache
+      if (updatedStaff) {
+        staffCache.set(id, updatedStaff);
+      }
+      
       setShowStatusModal(false);
       
       // Show success message
@@ -172,13 +194,20 @@ function StaffProfile() {
       await api.put(`/user/${id}`, updateData);
       
       // Update local state
-      setStaff(prev => prev ? {
-        ...prev,
+      const updatedStaff = staff ? {
+        ...staff,
         staff_profile: {
-          ...prev.staff_profile,
+          ...staff.staff_profile,
           assigned_barangay: assignedBarangay
         }
-      } : null);
+      } : null;
+      
+      setStaff(updatedStaff);
+      
+      // Update cache
+      if (updatedStaff) {
+        staffCache.set(id, updatedStaff);
+      }
       
       setEditingBarangay(false);
       showSuccessMessage("Assigned barangay updated successfully!");
@@ -225,6 +254,9 @@ function StaffProfile() {
         confirmPassword: ""
       });
       setShowPasswordModal(false);
+      
+      // Clear cache when password is updated
+      staffCache.delete(id);
       
       showSuccessMessage("Password updated successfully!");
       

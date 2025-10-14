@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
-import { ArrowLeft, FileText, DollarSign, Clock, Users, Check, X, Calendar, Heart, Search, Plus, UserPlus, MapPin, Stethoscope, TrendingUp, AlertTriangle } from "lucide-react";
+import { ArrowLeft, FileText, DollarSign, Clock, Users, Check, X, Calendar, Heart, Search, Plus, UserPlus, MapPin, Stethoscope, TrendingUp, AlertTriangle, Scan } from "lucide-react";
 import Layout from "./Layout";
 import api from "./api";
 
@@ -10,6 +10,60 @@ const barangayOptions = [
   "Limonda", "Luyong Bonbon", "Malanang", "Nangcaon", "Patag",
   "Poblacion", "Taboc", "Tingalan"
 ];
+
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+// Cache utility functions
+const cacheUtils = {
+  set: (key, data) => {
+    try {
+      const cacheData = {
+        data,
+        timestamp: Date.now()
+      };
+      localStorage.setItem(key, JSON.stringify(cacheData));
+    } catch (error) {
+      console.warn('Cache set failed:', error);
+    }
+  },
+
+  get: (key) => {
+    try {
+      const cached = localStorage.getItem(key);
+      if (!cached) return null;
+
+      const { data, timestamp } = JSON.parse(cached);
+
+      // Check if cache is still valid
+      if (Date.now() - timestamp > CACHE_DURATION) {
+        localStorage.removeItem(key);
+        return null;
+      }
+
+      return data;
+    } catch (error) {
+      console.warn('Cache get failed:', error);
+      return null;
+    }
+  },
+
+  remove: (key) => {
+    try {
+      localStorage.removeItem(key);
+    } catch (error) {
+      console.warn('Cache remove failed:', error);
+    }
+  },
+
+  clearBenefitCache: (benefitId) => {
+    const prefix = `benefit_${benefitId}_`;
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith(prefix)) {
+        localStorage.removeItem(key);
+      }
+    });
+  }
+};
 
 // Custom toast hook for better alert management
 const useToast = () => {
@@ -93,6 +147,14 @@ function BenefitsClaimRecord() {
   const navigate = useNavigate();
   const showToast = useToast();
 
+  // Cache keys with actual benefitId - now inside component
+  const cacheKeys = useMemo(() => ({
+    BENEFIT_DATA: `benefit_${benefitId}_data`,
+    PARTICIPANTS_LIST: `benefit_${benefitId}_participants`,
+    AVAILABLE_MEMBERS: `benefit_${benefitId}_available_members`,
+    BENEFIT_CLAIMS: `benefit_${benefitId}_claims`
+  }), [benefitId]);
+
   // Severity scoring system (higher score = more severe) - wrapped in useMemo
   const severityScores = useMemo(() => ({
     "mild": 1,
@@ -175,18 +237,59 @@ function BenefitsClaimRecord() {
     return member.member_profile?.id_number || member.id;
   }, []);
 
+  // Format date for display
+  const formatDate = useCallback((dateString) => {
+    if (!dateString) return "—";
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }, []);
+
   const fetchBenefitData = useCallback(async () => {
+    if (!benefitId) {
+      setError("Benefit ID is missing");
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
 
-      // Fetch benefit details
-      const benefitResponse = await api.get(`/benefits/${benefitId}`);
-      const benefitData = benefitResponse.data;
-      setBenefit(benefitData);
+      // Check cache for benefit data first
+      const cachedBenefitData = cacheUtils.get(cacheKeys.BENEFIT_DATA);
+      if (cachedBenefitData) {
+        setBenefit(cachedBenefitData);
 
-      // Set barangay filter based on benefit target barangay
-      if (benefitData.target_barangay && benefitData.target_barangay !== "All") {
-        setBarangayFilter(benefitData.target_barangay);
+        // Set barangay filter based on cached benefit target barangay
+        if (cachedBenefitData.target_barangay && cachedBenefitData.target_barangay !== "All") {
+          setBarangayFilter(cachedBenefitData.target_barangay);
+        }
+      } else {
+        // Fetch benefit details
+        const benefitResponse = await api.get(`/benefits/${benefitId}`);
+        const benefitData = benefitResponse.data;
+        setBenefit(benefitData);
+        cacheUtils.set(cacheKeys.BENEFIT_DATA, benefitData);
+
+        // Set barangay filter based on benefit target barangay
+        if (benefitData.target_barangay && benefitData.target_barangay !== "All") {
+          setBarangayFilter(benefitData.target_barangay);
+        }
+      }
+
+      // Check cache for combined data
+      const cachedCombinedData = cacheUtils.get(cacheKeys.PARTICIPANTS_LIST);
+      const cachedAvailableMembers = cacheUtils.get(cacheKeys.AVAILABLE_MEMBERS);
+
+      if (cachedCombinedData && cachedAvailableMembers) {
+        setCombinedList(cachedCombinedData);
+        setAvailableMembers(cachedAvailableMembers);
+        setLoading(false);
+        return;
       }
 
       // Fetch ALL members with member profiles
@@ -228,6 +331,7 @@ function BenefitsClaimRecord() {
         });
 
       setAvailableMembers(nonParticipants);
+      cacheUtils.set(cacheKeys.AVAILABLE_MEMBERS, nonParticipants);
 
       // Combine participants with their claim status
       const combined = benefitParticipants.map(member => {
@@ -244,14 +348,33 @@ function BenefitsClaimRecord() {
       });
 
       setCombinedList(combined);
+      cacheUtils.set(cacheKeys.PARTICIPANTS_LIST, combined);
 
     } catch (err) {
       console.error(err);
       setError("Failed to load data.");
+
+      // Clear cache on error
+      cacheUtils.clearBenefitCache(benefitId);
     } finally {
       setLoading(false);
     }
-  }, [benefitId, calculatePriorityScore, getPriorityLevel, getFullName, getMemberId]);
+  }, [
+    benefitId,
+    calculatePriorityScore,
+    getPriorityLevel,
+    getFullName,
+    getMemberId,
+    cacheKeys
+  ]);
+
+  // Clear cache when component unmounts or benefitId changes
+  useEffect(() => {
+    return () => {
+      // Optionally clear cache when component unmounts
+      // cacheUtils.clearBenefitCache(benefitId);
+    };
+  }, [benefitId]);
 
   useEffect(() => {
     fetchBenefitData();
@@ -270,6 +393,10 @@ function BenefitsClaimRecord() {
       await api.post(`/benefits/${benefitId}/participants`, {
         user_ids: selectedNewParticipants
       });
+
+      // Clear relevant cache
+      cacheUtils.remove(cacheKeys.PARTICIPANTS_LIST);
+      cacheUtils.remove(cacheKeys.AVAILABLE_MEMBERS);
 
       // Refresh the data
       await fetchBenefitData();
@@ -317,6 +444,10 @@ function BenefitsClaimRecord() {
           user_ids: [memberToRemove.id] // Send as array as expected by your backend
         }
       });
+
+      // Clear relevant cache
+      cacheUtils.remove(cacheKeys.PARTICIPANTS_LIST);
+      cacheUtils.remove(cacheKeys.AVAILABLE_MEMBERS);
 
       // Refresh the data
       await fetchBenefitData();
@@ -670,6 +801,7 @@ function BenefitsClaimRecord() {
                     <th className="px-6 py-4">Status</th>
                     <th className="px-6 py-4">Claim Date</th>
                     <th className="px-6 py-4">Amount</th>
+                    <th className="px-6 py-4">Scanned By</th>
                     <th className="px-6 py-4 rounded-tr-2xl">Actions</th>
                   </tr>
                 </thead>
@@ -712,7 +844,6 @@ function BenefitsClaimRecord() {
                             {member.member_profile?.guardian_full_name || "—"}
                           </div>
                         </td>
-
 
                         {/* Disability Type */}
                         <td className="px-6 py-4">
@@ -764,6 +895,20 @@ function BenefitsClaimRecord() {
                           )}
                         </td>
 
+                        {/* Scanned By */}
+                        <td className="px-6 py-4">
+                          {member.hasClaimed && member.claimDetails?.scanned_by ? (
+                            <div className="flex items-center gap-1 text-sm text-gray-700">
+                              <Scan className="w-4 h-4 text-blue-500" />
+                              {member.claimDetails.scanned_by}
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 text-sm">—</span>
+                          )}
+                        </td>
+
+
+
                         {/* Actions */}
                         <td className="px-6 py-4">
                           {!member.hasClaimed && (
@@ -780,7 +925,7 @@ function BenefitsClaimRecord() {
                   ) : (
                     <tr>
                       <td
-                        colSpan="10"
+                        colSpan="12"
                         className="px-6 py-8 text-center text-gray-500"
                       >
                         <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -842,7 +987,7 @@ function BenefitsClaimRecord() {
                 {benefit?.target_barangay && benefit.target_barangay !== "All" && (
                   <div className="mt-2 bg-orange-50 border border-orange-200 rounded-lg p-3">
                     <p className="text-sm text-orange-800 font-medium">
-                      💡 This benefit is targeted for {benefit.target_barangay} barangay. 
+                      💡 This benefit is targeted for {benefit.target_barangay} barangay.
                       Consider filtering by this barangay to see relevant members.
                     </p>
                   </div>
@@ -961,8 +1106,8 @@ function BenefitsClaimRecord() {
                       <div
                         key={member.id}
                         className={`flex items-start p-4 rounded-xl border-2 transition-all cursor-pointer group ${selectedNewParticipants.includes(member.id)
-                            ? 'bg-blue-50 border-blue-500 shadow-sm'
-                            : 'bg-white border-gray-200 hover:border-blue-300 hover:bg-blue-25'
+                          ? 'bg-blue-50 border-blue-500 shadow-sm'
+                          : 'bg-white border-gray-200 hover:border-blue-300 hover:bg-blue-25'
                           }`}
                         onClick={() => {
                           setSelectedNewParticipants(prev =>
@@ -1019,11 +1164,10 @@ function BenefitsClaimRecord() {
                           {/* Member Details */}
                           <div className="flex flex-wrap gap-2 mt-2">
                             {member.member_profile?.barangay && (
-                              <span className={`inline-flex items-center text-xs px-2 py-1 rounded-full font-medium ${
-                                member.member_profile.barangay === benefit?.target_barangay 
-                                  ? 'bg-orange-100 text-orange-800 border border-orange-300' 
+                              <span className={`inline-flex items-center text-xs px-2 py-1 rounded-full font-medium ${member.member_profile.barangay === benefit?.target_barangay
+                                  ? 'bg-orange-100 text-orange-800 border border-orange-300'
                                   : 'bg-green-100 text-green-800'
-                              }`}>
+                                }`}>
                                 <MapPin className="w-3 h-3 mr-1" />
                                 {member.member_profile.barangay}
                                 {member.member_profile.barangay === benefit?.target_barangay && " 🎯"}
@@ -1129,12 +1273,12 @@ function BenefitsClaimRecord() {
                     <AlertTriangle className="w-8 h-8 text-red-600" />
                   </div>
                 </div>
-                
+
                 {/* Title */}
                 <h3 className="text-xl font-bold text-gray-900 text-center mb-2">
                   Remove Participant
                 </h3>
-                
+
                 {/* Message */}
                 <div className="text-gray-600 text-center mb-6 space-y-3">
                   <p>
@@ -1142,7 +1286,7 @@ function BenefitsClaimRecord() {
                       {`${memberToRemove.member_profile?.first_name || ''} ${memberToRemove.member_profile?.last_name || ''}`.trim() || memberToRemove.username}
                     </span> from this benefit?
                   </p>
-                  
+
                   {/* Member Details */}
                   <div className="bg-gray-50 rounded-lg p-3 text-sm text-left">
                     <div className="grid grid-cols-2 gap-2">
@@ -1165,17 +1309,17 @@ function BenefitsClaimRecord() {
                     ⚠️ This action cannot be undone. The member will need to be added again if needed.
                   </p>
                 </div>
-                
+
                 {/* Buttons */}
                 <div className="flex gap-3">
-                  <button 
+                  <button
                     onClick={closeRemoveModal}
                     disabled={removingParticipant}
                     className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition font-medium focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 disabled:opacity-50"
                   >
                     Cancel
                   </button>
-                  <button 
+                  <button
                     onClick={handleRemoveParticipant}
                     disabled={removingParticipant}
                     className="flex-1 px-4 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition font-medium focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"

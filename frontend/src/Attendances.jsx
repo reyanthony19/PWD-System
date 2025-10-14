@@ -20,10 +20,17 @@ import {
   Target,
   CalendarClock,
   Printer,
-  Ban
+  Ban,
+  User,
+  Scan
 } from "lucide-react";
 import api from "./api";
 import Layout from "./Layout";
+
+// Cache implementation
+const eventCache = new Map();
+const membersCache = new Map();
+const attendancesCache = new Map();
 
 function Attendances() {
   const [members, setMembers] = useState([]);
@@ -78,24 +85,88 @@ function Attendances() {
     return isEventToday(event?.event_date) || isEventUpcoming(event?.event_date);
   };
 
+  // Format staff name
+  const formatStaffName = (scannedBy) => {
+    if (!scannedBy) return "—";
+    
+    if (scannedBy.staff_profile) {
+      const profile = scannedBy.staff_profile;
+      return `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || scannedBy.username || "—";
+    }
+    
+    return scannedBy.username || "—";
+  };
+
+  // Format scanned at timestamp
+  const formatScannedAt = (scannedAt) => {
+    if (!scannedAt) return "—";
+    
+    const date = new Date(scannedAt);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
+
+  // Format time only for scanned at
+  const formatScannedTime = (scannedAt) => {
+    if (!scannedAt) return "—";
+    
+    const date = new Date(scannedAt);
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
+
   useEffect(() => {
     const fetchAllData = async () => {
       try {
         setLoading(true);
         setDataLoaded(false);
 
-        // Fetch event details first
-        const eventRes = await api.get(`/events/${eventId}`);
-        setEvent(eventRes.data);
+        // Check cache for event
+        const eventCacheKey = `event-${eventId}`;
+        if (eventCache.has(eventCacheKey)) {
+          console.log('📦 Using cached event data');
+          setEvent(eventCache.get(eventCacheKey));
+        } else {
+          // Fetch event details
+          const eventRes = await api.get(`/events/${eventId}`);
+          eventCache.set(eventCacheKey, eventRes.data);
+          setEvent(eventRes.data);
+        }
 
-        // Fetch members and attendances in parallel
-        const [membersRes, attendancesRes] = await Promise.all([
-          api.get("/users?role=member"),
-          api.get(`/events/${eventId}/attendances`)
-        ]);
+        // Check cache for members and attendances
+        const membersCacheKey = 'members-all';
+        const attendancesCacheKey = `attendances-${eventId}`;
 
-        const membersData = membersRes.data.data || membersRes.data;
-        const attendanceData = attendancesRes.data.data || attendancesRes.data;
+        let membersData, attendanceData;
+
+        // Fetch members from cache or API
+        if (membersCache.has(membersCacheKey)) {
+          console.log('📦 Using cached members data');
+          membersData = membersCache.get(membersCacheKey);
+        } else {
+          const membersRes = await api.get("/users?role=member");
+          membersData = membersRes.data.data || membersRes.data;
+          membersCache.set(membersCacheKey, membersData);
+        }
+
+        // Fetch attendances from cache or API
+        if (attendancesCache.has(attendancesCacheKey)) {
+          console.log('📦 Using cached attendances data');
+          attendanceData = attendancesCache.get(attendancesCacheKey);
+        } else {
+          const attendancesRes = await api.get(`/events/${eventId}/attendances`);
+          attendanceData = attendancesRes.data.data || attendancesRes.data;
+          attendancesCache.set(attendancesCacheKey, attendanceData);
+        }
 
         setMembers(membersData);
         setAttendances(attendanceData);
@@ -114,8 +185,12 @@ function Attendances() {
       // Set up refresh interval only after initial load
       const interval = setInterval(async () => {
         try {
+          const attendancesCacheKey = `attendances-${eventId}`;
           const attRes = await api.get(`/events/${eventId}/attendances`);
           const attendanceData = attRes.data.data || attRes.data;
+          
+          // Update cache and state
+          attendancesCache.set(attendancesCacheKey, attendanceData);
           setAttendances(attendanceData);
         } catch (err) {
           console.error("Failed to refresh attendances:", err);
@@ -168,7 +243,9 @@ function Attendances() {
       isPresent,
       attendanceRecord,
       status,
-      statusVariant
+      statusVariant,
+      scannedBy: attendanceRecord?.scanned_by_user || attendanceRecord?.scanned_by,
+      scannedAt: attendanceRecord?.scanned_at || attendanceRecord?.created_at
     };
   }) : [];
 
@@ -180,11 +257,13 @@ function Attendances() {
     const barangay = member.member_profile?.barangay?.toLowerCase() || '';
     const username = member.username?.toLowerCase() || '';
     const guardianName = member.member_profile?.guardian_full_name?.toLowerCase() || '';
+    const scannedByName = formatStaffName(member.scannedBy).toLowerCase();
 
     return fullName.includes(search.toLowerCase()) ||
       barangay.includes(search.toLowerCase()) ||
       username.includes(search.toLowerCase()) ||
-      guardianName.includes(search.toLowerCase());
+      guardianName.includes(search.toLowerCase()) ||
+      scannedByName.includes(search.toLowerCase());
   }) : [];
 
   // Apply barangay filter
@@ -431,7 +510,7 @@ function Attendances() {
                   <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <input
                     type="text"
-                    placeholder="Search by name, username, or guardian name..."
+                    placeholder="Search by name, username, guardian name, or scanned by..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     className="w-full pl-12 pr-4 py-4 border border-gray-200 rounded-2xl 
@@ -610,6 +689,12 @@ function Attendances() {
                       Disability
                     </th>
                     <th className="px-8 py-5 font-semibold text-left text-sm uppercase tracking-wider">
+                      Scanned By
+                    </th>
+                    <th className="px-8 py-5 font-semibold text-left text-sm uppercase tracking-wider">
+                      Scanned At
+                    </th>
+                    <th className="px-8 py-5 font-semibold text-left text-sm uppercase tracking-wider">
                       Status
                     </th>
                   </tr>
@@ -678,6 +763,41 @@ function Attendances() {
                           )}
                         </td>
                         <td className="px-8 py-5">
+                          {member.isPresent ? (
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                                <User className="w-4 h-4 text-green-600" />
+                              </div>
+                              <div>
+                                <div className="font-medium text-gray-900 text-sm">
+                                  {formatStaffName(member.scannedBy)}
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-8 py-5">
+                          {member.isPresent ? (
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                                <Scan className="w-4 h-4 text-blue-600" />
+                              </div>
+                              <div>
+                                <div className="font-medium text-gray-900 text-sm">
+                                  {formatScannedAt(member.scannedAt)}
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  {formatScannedTime(member.scannedAt)}
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-8 py-5">
                           {member.statusVariant === "present" ? (
                             <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold bg-green-100 text-green-800 border border-green-200">
                               <CheckCircle className="w-4 h-4" />
@@ -699,7 +819,7 @@ function Attendances() {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan="7" className="px-8 py-16 text-center">
+                      <td colSpan="9" className="px-8 py-16 text-center">
                         <div className="flex flex-col items-center justify-center text-gray-400">
                           <Users className="w-20 h-20 mb-4 opacity-40" />
                           <p className="text-xl font-semibold text-gray-500 mb-2">No members found</p>

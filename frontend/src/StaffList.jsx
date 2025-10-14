@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
   Search, 
@@ -13,41 +13,153 @@ import {
   UserCheck,
   MapPin,
   Phone,
-  Mail
+  Mail,
+  RefreshCw,
+  Filter
 } from "lucide-react";
 import api from "./api";
 import Layout from "./Layout";
+
+// Cache configuration
+const CACHE_KEYS = {
+  STAFFS: 'stafflist_staffs',
+  TIMESTAMP: 'stafflist_cache_timestamp'
+};
+
+const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes in milliseconds
+
+// Cache utility functions
+const cache = {
+  // Get data from cache
+  get: (key) => {
+    try {
+      const item = localStorage.getItem(key);
+      if (!item) return null;
+      
+      const { data, timestamp } = JSON.parse(item);
+      
+      // Check if cache is still valid
+      if (Date.now() - timestamp > CACHE_DURATION) {
+        cache.clear(key);
+        return null;
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Error reading from cache:', error);
+      return null;
+    }
+  },
+  
+  // Set data in cache
+  set: (key, data) => {
+    try {
+      const item = {
+        data,
+        timestamp: Date.now()
+      };
+      localStorage.setItem(key, JSON.stringify(item));
+    } catch (error) {
+      console.error('Error writing to cache:', error);
+    }
+  },
+  
+  // Clear specific cache
+  clear: (key) => {
+    try {
+      localStorage.removeItem(key);
+    } catch (error) {
+      console.error('Error clearing cache:', error);
+    }
+  },
+  
+  // Clear all staff cache
+  clearAll: () => {
+    Object.values(CACHE_KEYS).forEach(key => {
+      cache.clear(key);
+    });
+  },
+  
+  // Check if cache is valid
+  isValid: (key) => {
+    const data = cache.get(key);
+    return data !== null;
+  }
+};
 
 function StaffList() {
   const [staffs, setStaffs] = useState([]);
   const [error, setError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [barangayFilter, setBarangayFilter] = useState("All");
   const [sortOption, setSortOption] = useState("name-asc");
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedStaff, setSelectedStaff] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(null);
 
   const navigate = useNavigate();
 
+  // Load initial data from cache
   useEffect(() => {
-    const fetchStaffs = async () => {
-      try {
-        const res = await api.get("/users?role=staff");
-        console.log("Staff data:", res.data);
-        setStaffs(res.data);
-      } catch (err) {
-        console.error(err);
-        setError("Failed to load staff list.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchStaffs();
-    const interval = setInterval(fetchStaffs, 5000);
-    return () => clearInterval(interval);
+    const cachedStaffs = cache.get(CACHE_KEYS.STAFFS);
+    if (cachedStaffs) {
+      setStaffs(cachedStaffs);
+      setLoading(false);
+    }
   }, []);
+
+  const fetchStaffs = useCallback(async (forceRefresh = false) => {
+    try {
+      if (forceRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+
+      // Check cache first unless force refresh
+      const cachedStaffs = !forceRefresh && cache.get(CACHE_KEYS.STAFFS);
+      if (cachedStaffs && !forceRefresh) {
+        setStaffs(cachedStaffs);
+        setLastUpdated(new Date());
+        return;
+      }
+
+      const res = await api.get("/users?role=staff");
+      console.log("Staff data:", res.data);
+      setStaffs(res.data);
+      cache.set(CACHE_KEYS.STAFFS, res.data);
+      setLastUpdated(new Date());
+      setError("");
+    } catch (err) {
+      console.error(err);
+      setError("Failed to load staff list.");
+      
+      // If API fails, try to use cached data as fallback
+      const cachedStaffs = cache.get(CACHE_KEYS.STAFFS);
+      if (cachedStaffs) {
+        setStaffs(cachedStaffs);
+      }
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchStaffs();
+    // Increase interval since we have caching now
+    const interval = setInterval(() => fetchStaffs(), 300000); // 5 minutes
+    return () => clearInterval(interval);
+  }, [fetchStaffs]);
+
+  // Manual refresh function
+  const handleRefresh = () => {
+    cache.clear(CACHE_KEYS.STAFFS);
+    fetchStaffs(true);
+  };
 
   const handleDelete = async () => {
     if (!selectedStaff) return;
@@ -56,7 +168,12 @@ function StaffList() {
       setDeleting(true);
       await api.delete(`/user/${selectedStaff.id}`);
 
-      setStaffs(prev => prev.filter(staff => staff.id !== selectedStaff.id));
+      const updatedStaffs = staffs.filter(staff => staff.id !== selectedStaff.id);
+      setStaffs(updatedStaffs);
+      
+      // Update cache after successful deletion
+      cache.set(CACHE_KEYS.STAFFS, updatedStaffs);
+      
       setShowDeleteModal(false);
       setSelectedStaff(null);
 
@@ -117,8 +234,30 @@ function StaffList() {
     );
   };
 
-  // Count staff by status for statistics
-  const getStatusCounts = () => {
+  // Memoized unique barangays
+  const uniqueBarangays = useMemo(() => {
+    const barangays = new Set();
+    staffs.forEach(staff => {
+      const barangay = staff.staff_profile?.assigned_barangay;
+      if (barangay) {
+        barangays.add(barangay);
+      }
+    });
+    return Array.from(barangays).sort();
+  }, [staffs]);
+
+  // Memoized barangay counts
+  const barangayCounts = useMemo(() => {
+    const counts = {};
+    staffs.forEach(staff => {
+      const barangay = staff.staff_profile?.assigned_barangay || "Unassigned";
+      counts[barangay] = (counts[barangay] || 0) + 1;
+    });
+    return counts;
+  }, [staffs]);
+
+  // Memoized status counts
+  const statusCounts = useMemo(() => {
     const counts = {
       approved: 0,
       pending: 0,
@@ -135,46 +274,67 @@ function StaffList() {
     });
 
     return counts;
+  }, [staffs]);
+
+  // Memoized filtered staffs
+  const filteredStaffs = useMemo(() => {
+    return staffs
+      .filter((s) => {
+        const term = searchTerm.toLowerCase();
+        const profile = s.staff_profile || {};
+        const fullName = `${profile.first_name || ""} ${profile.middle_name || ""} ${profile.last_name || ""}`.trim();
+        const assignedBarangay = profile.assigned_barangay?.toLowerCase() || '';
+
+        // Apply search filter
+        const matchesSearch = term === '' || 
+          fullName.toLowerCase().includes(term) ||
+          s.id.toString().includes(term) ||
+          s.email?.toLowerCase().includes(term) ||
+          assignedBarangay.includes(term) ||
+          profile.contact_number?.includes(term);
+
+        // Apply barangay filter
+        const matchesBarangay = barangayFilter === "All" || 
+          profile.assigned_barangay === barangayFilter;
+
+        return matchesSearch && matchesBarangay;
+      })
+      .sort((a, b) => {
+        const profileA = a.staff_profile || {};
+        const profileB = b.staff_profile || {};
+        const nameA = `${profileA.first_name || ""} ${profileA.middle_name || ""} ${profileA.last_name || ""}`.trim();
+        const nameB = `${profileB.first_name || ""} ${profileB.middle_name || ""} ${profileB.last_name || ""}`.trim();
+
+        if (sortOption === "name-asc") {
+          return nameA.localeCompare(nameB);
+        }
+        if (sortOption === "name-desc") {
+          return nameB.localeCompare(nameA);
+        }
+        if (sortOption === "date-newest") {
+          return new Date(b.created_at) - new Date(a.created_at);
+        }
+        if (sortOption === "date-oldest") {
+          return new Date(a.created_at) - new Date(b.created_at);
+        }
+        return 0;
+      });
+  }, [staffs, searchTerm, barangayFilter, sortOption]);
+
+  // Memoized statistics
+  const uniqueBarangaysCount = useMemo(() => {
+    return new Set(staffs.map(s => s.staff_profile?.assigned_barangay).filter(Boolean)).size;
+  }, [staffs]);
+
+  const staffsWithContactCount = useMemo(() => {
+    return staffs.filter(staff => staff.staff_profile?.contact_number).length;
+  }, [staffs]);
+
+  // Clear all filters
+  const clearAllFilters = () => {
+    setSearchTerm("");
+    setBarangayFilter("All");
   };
-
-  const filteredStaffs = staffs
-    .filter((s) => {
-      const term = searchTerm.toLowerCase();
-      const profile = s.staff_profile || {};
-      const fullName = `${profile.first_name || ""} ${profile.middle_name || ""} ${profile.last_name || ""}`.trim();
-      const assignedBarangay = profile.assigned_barangay?.toLowerCase() || '';
-
-      return (
-        fullName.toLowerCase().includes(term) ||
-        s.id.toString().includes(term) ||
-        s.email?.toLowerCase().includes(term) ||
-        assignedBarangay.includes(term) ||
-        profile.contact_number?.includes(term)
-      );
-    })
-    .sort((a, b) => {
-      const profileA = a.staff_profile || {};
-      const profileB = b.staff_profile || {};
-      const nameA = `${profileA.first_name || ""} ${profileA.middle_name || ""} ${profileA.last_name || ""}`.trim();
-      const nameB = `${profileB.first_name || ""} ${profileB.middle_name || ""} ${profileB.last_name || ""}`.trim();
-
-      if (sortOption === "name-asc") {
-        return nameA.localeCompare(nameB);
-      }
-      if (sortOption === "name-desc") {
-        return nameB.localeCompare(nameA);
-      }
-      if (sortOption === "date-newest") {
-        return new Date(b.created_at) - new Date(a.created_at);
-      }
-      if (sortOption === "date-oldest") {
-        return new Date(a.created_at) - new Date(b.created_at);
-      }
-      return 0;
-    });
-
-  const statusCounts = getStatusCounts();
-
 
   if (loading) {
     return (
@@ -192,7 +352,7 @@ function StaffList() {
     );
   }
 
-  if (error) {
+  if (error && staffs.length === 0) {
     return (
       <Layout>
         <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-100 flex items-center justify-center">
@@ -203,7 +363,7 @@ function StaffList() {
             <h2 className="text-xl font-bold text-red-600 mb-2">Error</h2>
             <p className="text-gray-600">{error}</p>
             <button
-              onClick={() => window.location.reload()}
+              onClick={handleRefresh}
               className="mt-4 inline-flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors"
             >
               Try Again
@@ -224,6 +384,40 @@ function StaffList() {
         </div>
 
         <div className="max-w-7xl mx-auto relative">
+          {/* Cache Status Indicator */}
+          <div className="mb-4 flex justify-between items-center">
+            <div className="text-sm text-gray-600">
+              {cache.isValid(CACHE_KEYS.STAFFS) ? (
+                <span className="text-green-600 flex items-center gap-2">
+                  <CheckCircle size={16} />
+                  Using cached data
+                </span>
+              ) : (
+                <span className="text-yellow-600 flex items-center gap-2">
+                  <RefreshCw size={16} />
+                  Fetching fresh data
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-4">
+              {lastUpdated && (
+                <span className="text-xs text-gray-500">
+                  Last updated: {lastUpdated.toLocaleTimeString()}
+                </span>
+              )}
+              <button
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-700 
+                         rounded-lg text-sm font-medium hover:bg-blue-200 
+                         transition-colors disabled:opacity-50"
+              >
+                <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
+                {refreshing ? "Refreshing..." : "Refresh"}
+              </button>
+            </div>
+          </div>
+
           {/* Header */}
           <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 p-8 mb-8">
             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-8">
@@ -279,16 +473,12 @@ function StaffList() {
                 </div>
                 <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white p-4 rounded-2xl shadow-lg text-center">
                   <MapPin className="w-6 h-6 mx-auto mb-2 opacity-90" />
-                  <div className="text-xl font-bold">
-                    {new Set(staffs.map(s => s.staff_profile?.assigned_barangay).filter(Boolean)).size}
-                  </div>
+                  <div className="text-xl font-bold">{uniqueBarangaysCount}</div>
                   <div className="text-purple-100 text-xs font-medium">Barangays</div>
                 </div>
                 <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white p-4 rounded-2xl shadow-lg text-center">
                   <Phone className="w-6 h-6 mx-auto mb-2 opacity-90" />
-                  <div className="text-xl font-bold">
-                    {staffs.filter(staff => staff.staff_profile?.contact_number).length}
-                  </div>
+                  <div className="text-xl font-bold">{staffsWithContactCount}</div>
                   <div className="text-orange-100 text-xs font-medium">With Contact</div>
                 </div>
               </div>
@@ -315,6 +505,31 @@ function StaffList() {
                              focus:border-blue-500 transition-all duration-200 placeholder-gray-400
                              shadow-sm hover:shadow-md focus:shadow-lg"
                   />
+                </div>
+              </div>
+
+              {/* Barangay Filter */}
+              <div className="w-full lg:w-64">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Filter by Barangay
+                </label>
+                <div className="relative">
+                  <Filter className="absolute left-4 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <select
+                    value={barangayFilter}
+                    onChange={(e) => setBarangayFilter(e.target.value)}
+                    className="w-full pl-12 pr-10 py-4 border border-gray-200 rounded-2xl 
+                             bg-white/60 backdrop-blur-sm focus:ring-2 focus:ring-blue-500 
+                             focus:border-blue-500 transition-all duration-200 appearance-none
+                             shadow-sm hover:shadow-md focus:shadow-lg"
+                  >
+                    <option value="All">All Barangays</option>
+                    {uniqueBarangays.map(barangay => (
+                      <option key={barangay} value={barangay}>
+                        {barangay} ({barangayCounts[barangay] || 0})
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -353,7 +568,7 @@ function StaffList() {
             </div>
 
             {/* Active Filters Display */}
-            {searchTerm && (
+            {(searchTerm || barangayFilter !== "All") && (
               <div className="flex flex-wrap items-center gap-3 mt-6 pt-6 border-t border-gray-100">
                 <span className="text-sm font-semibold text-gray-600">Active filters:</span>
                 
@@ -369,8 +584,20 @@ function StaffList() {
                   </span>
                 )}
 
+                {barangayFilter !== "All" && (
+                  <span className="bg-purple-100 text-purple-800 text-sm px-4 py-2 rounded-full flex items-center gap-2 font-medium">
+                    Barangay: {barangayFilter}
+                    <button 
+                      onClick={() => setBarangayFilter("All")} 
+                      className="text-purple-600 hover:text-purple-800 font-bold text-lg leading-none"
+                    >
+                      ×
+                    </button>
+                  </span>
+                )}
+
                 <button
-                  onClick={() => setSearchTerm("")}
+                  onClick={clearAllFilters}
                   className="text-sm text-gray-600 hover:text-gray-800 font-semibold underline ml-auto"
                 >
                   Clear all filters
@@ -388,6 +615,11 @@ function StaffList() {
               {searchTerm && (
                 <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
                   Matching: "{searchTerm}"
+                </span>
+              )}
+              {barangayFilter !== "All" && (
+                <span className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm font-medium">
+                  Barangay: {barangayFilter}
                 </span>
               )}
             </div>
@@ -497,8 +729,8 @@ function StaffList() {
                           <UserPlus className="w-20 h-20 mb-4 opacity-40" />
                           <p className="text-xl font-semibold text-gray-500 mb-2">No staff members found</p>
                           <p className="text-sm max-w-md">
-                            {searchTerm
-                              ? "Try adjusting your search criteria"
+                            {searchTerm || barangayFilter !== "All"
+                              ? "Try adjusting your search or filter criteria"
                               : "No staff members have been registered yet"
                             }
                           </p>
@@ -574,15 +806,6 @@ function StaffList() {
           </div>
         )}
       </div>
-
-      {/* Add custom animations */}
-      <style jsx>{`
-        @keyframes pulse-slow {
-          0%, 100% { opacity: 0.3; }
-          50% { opacity: 0.5; }
-        }
-        .animate-pulse-slow { animation: pulse-slow 4s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
-      `}</style>
     </Layout>
   );
 }

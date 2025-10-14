@@ -107,10 +107,23 @@ class BenefitController extends Controller
         }
     }
 
+    //Specific Benefit Records for a User
+    public function getUserBenefits($userId)
+    {
+        $cacheKey = "user_benefits:{$userId}";
+        $benefits = Cache::remember($cacheKey, 1800, function () use ($userId) { // Cache for 30 minutes
+            return BenefitRecord::with(['benefit', 'scannedBy.staffProfile'])
+                ->where('user_id', $userId)
+                ->latest('claimed_at')
+                ->get();
+        });
+
+        return response()->json($benefits);
+    }
     public function checkUserClaim($benefitId, $userId)
     {
         $cacheKey = "benefit_claim:{$benefitId}:{$userId}";
-        
+
         $claim = Cache::remember($cacheKey, 1800, function () use ($benefitId, $userId) { // Cache for 30 minutes
             return BenefitRecord::where('benefit_id', $benefitId)
                 ->where('user_id', $userId)
@@ -338,7 +351,7 @@ class BenefitController extends Controller
         $record = BenefitRecord::findOrFail($id);
         $benefitId = $record->benefit_id;
         $userId = $record->user_id;
-        
+
         $record->delete();
 
         // Clear relevant caches

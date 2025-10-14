@@ -4,6 +4,11 @@ import api from "./api";
 import Layout from "./Layout";
 import { Key, Eye, EyeOff, Save, X, Check, Edit, AlertCircle } from "lucide-react";
 
+// Cache implementation
+const memberCache = new Map();
+const eventsCache = new Map();
+const benefitsCache = new Map();
+
 // Enhanced Hard Copy Status Manager Component
 function HardCopyStatusManager({ member, onUpdate }) {
   const [editing, setEditing] = useState(false);
@@ -514,6 +519,8 @@ function MemberProfile() {
           setUpdatingStatus(true);
           await api.patch(`/user/${id}/status`, { status: "approved" });
           setMember(prev => prev ? { ...prev, status: "approved" } : null);
+          // Clear cache when status changes
+          memberCache.delete(id);
           cleanup();
           resolve(true);
           showApproveSuccessMessage();
@@ -609,6 +616,8 @@ function MemberProfile() {
           setUpdatingStatus(true);
           await api.patch(`/user/${id}/status`, { status: "rejected" });
           setMember(prev => prev ? { ...prev, status: "rejected" } : null);
+          // Clear cache when status changes
+          memberCache.delete(id);
           cleanup();
           resolve(true);
           showRejectSuccessMessage();
@@ -854,11 +863,22 @@ function MemberProfile() {
     return "ongoing";
   };
 
+  // Cache-enabled member fetch
   useEffect(() => {
     const fetchMember = async () => {
+      // Check cache first
+      if (memberCache.has(id)) {
+        console.log('📦 Using cached member data');
+        setMember(memberCache.get(id));
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
         const res = await api.get(`/user/${id}`);
+        // Store in cache
+        memberCache.set(id, res.data);
         setMember(res.data);
       } catch (err) {
         console.error("❌ Error fetching member:", err);
@@ -926,7 +946,16 @@ function MemberProfile() {
     }
   }, [id]);
 
+  // Cache-enabled events fetch
   const fetchEvents = useCallback(async () => {
+    // Check cache first
+    const cacheKey = `events-${id}`;
+    if (eventsCache.has(cacheKey)) {
+      console.log('📦 Using cached events data');
+      setAllEvents(eventsCache.get(cacheKey));
+      return;
+    }
+
     try {
       setLoadingEvents(true);
       console.log("🔄 Fetching events...");
@@ -961,6 +990,8 @@ function MemberProfile() {
       });
 
       console.log("✅ Processed events:", processedEvents);
+      // Store in cache
+      eventsCache.set(cacheKey, processedEvents);
       setAllEvents(processedEvents);
       await fetchAttendanceData(processedEvents);
 
@@ -970,14 +1001,25 @@ function MemberProfile() {
     } finally {
       setLoadingEvents(false);
     }
-  }, [fetchAttendanceData]);
+  }, [fetchAttendanceData, id]);
 
+  // Cache-enabled benefits fetch
   const fetchBenefits = useCallback(async () => {
+    // Check cache first
+    const cacheKey = `benefits-${id}`;
+    if (benefitsCache.has(cacheKey)) {
+      console.log('📦 Using cached benefits data');
+      setBenefits(benefitsCache.get(cacheKey));
+      return;
+    }
+
     try {
       setLoadingBenefits(true);
       const res = await api.get(`/users/${id}/benefits`);
       const benefitsData = res.data.data || res.data || [];
       const claimedBenefits = benefitsData.filter(benefit => benefit.status === 'claimed');
+      // Store in cache
+      benefitsCache.set(cacheKey, claimedBenefits);
       setBenefits(claimedBenefits);
     } catch (err) {
       console.error("Error fetching benefits:", err);
@@ -1326,6 +1368,8 @@ function MemberProfile() {
                           }
                         }
                       }));
+                      // Clear cache when data is updated
+                      memberCache.delete(id);
                     }}
                   />
                 </div>
@@ -1425,10 +1469,101 @@ function MemberProfile() {
         </div>
       </div>
 
-      {/* ✅ Password Update Modal - Remains the same */}
+      {/* ✅ Fixed Password Update Modal */}
       {showPasswordModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          {/* ... (Password modal content remains exactly the same) ... */}
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full transform transition-all">
+            <div className="p-6">
+              <div className="flex justify-center mb-4">
+                <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center">
+                  <Key size={32} className="text-amber-600" />
+                </div>
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 text-center mb-2">Reset Password</h3>
+              <p className="text-gray-600 text-center mb-6">
+                Set a new password for <span className="font-semibold">{fullName}</span>
+              </p>
+              
+              {/* New Password Field */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  New Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword.newPassword ? "text" : "password"}
+                    value={passwordData.newPassword}
+                    onChange={(e) => setPasswordData(prev => ({
+                      ...prev,
+                      newPassword: e.target.value
+                    }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent pr-10"
+                    placeholder="Enter new password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => togglePasswordVisibility('newPassword')}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                  >
+                    {showPassword.newPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Confirm Password Field */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Confirm Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword.confirmPassword ? "text" : "password"}
+                    value={passwordData.confirmPassword}
+                    onChange={(e) => setPasswordData(prev => ({
+                      ...prev,
+                      confirmPassword: e.target.value
+                    }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent pr-10"
+                    placeholder="Confirm new password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => togglePasswordVisibility('confirmPassword')}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                  >
+                    {showPassword.confirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={cancelPasswordUpdate}
+                  disabled={updatingPassword}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handlePasswordUpdate}
+                  disabled={updatingPassword}
+                  className="flex-1 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition font-medium focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {updatingPassword ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    <>
+                      <Check size={16} />
+                      Update Password
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </Layout>

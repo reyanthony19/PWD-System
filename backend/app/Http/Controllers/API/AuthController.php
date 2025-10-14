@@ -131,14 +131,19 @@ class AuthController extends Controller
 
         $validated = $request->validate($rules);
 
-        // Handle password update
+        // Handle password update - ADMIN BYPASS
         if (!empty($validated['password'])) {
-            if (empty($validated['old_password'])) {
-                return response()->json(['message' => 'Old password is required.'], 422);
+            // If admin is making the request, skip old password validation
+            if ($request->user()->role !== 'admin') {
+                // For non-admin users (users updating their own password), require old password
+                if (empty($validated['old_password'])) {
+                    return response()->json(['message' => 'Old password is required.'], 422);
+                }
+                if (!Hash::check($validated['old_password'], $user->password)) {
+                    return response()->json(['message' => 'Old password is incorrect.'], 422);
+                }
             }
-            if (!Hash::check($validated['old_password'], $user->password)) {
-                return response()->json(['message' => 'Old password is incorrect.'], 422);
-            }
+            // Admin can set password without old password verification
             $user->password = Hash::make($validated['password']);
         }
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import api from "./api";
 
@@ -7,6 +7,7 @@ function PrintAttendanceReport() {
   const location = useLocation();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const hasPrintedRef = useRef(false);
 
   // Get data from location state (primary data source)
   const { 
@@ -16,52 +17,74 @@ function PrintAttendanceReport() {
     statistics = {}
   } = location.state || {};
 
+  // Function to update event status to inactive
+  const updateEventStatusToInactive = async () => {
+    try {
+      console.log("Updating event status to inactive...");
+      await api.patch(`/events/${eventId}`, {
+        status: "inactive"
+      });
+      console.log("Event status updated to inactive successfully");
+    } catch (error) {
+      console.error("Error updating event status:", error);
+    }
+  };
+
   useEffect(() => {
-    const initPrint = async () => {
+    const fetchData = async () => {
       try {
+        console.log("Location state:", location.state);
+
         if (eventFromState && membersFromState) {
-          // Use data passed from state - this should be the primary case
-          console.log("Using data from location state");
+          // Use data passed from state
+          console.log("Using data from state");
           setLoading(false);
-          
-          // Set page title
-          document.title = `${eventFromState?.title || 'Event'} Attendance Report - PDAO`;
-          
-          // Trigger print after a short delay to ensure rendering is complete
-          setTimeout(() => {
-            window.print();
-          }, 800);
         } else {
           // Fallback: fetch data if no state provided
-          console.log("No location state data, fetching from API");
+          console.log("Fetching fresh data from API");
           const eventResponse = await api.get(`/events/${eventId}`);
           const membersResponse = await api.get(`/events/${eventId}/attendances`);
-          
           setLoading(false);
-          
-          document.title = `${eventResponse.data?.title || 'Event'} Attendance Report - PDAO`;
-          
+        }
+
+        // Set page title dynamically
+        document.title = `${eventFromState?.title || 'Event'} Attendance Report - PDAO`;
+
+        // Only trigger print ONCE
+        if (!hasPrintedRef.current) {
+          hasPrintedRef.current = true;
           setTimeout(() => {
             window.print();
-          }, 800);
+          }, 500);
+
+          const handleAfterPrint = () => {
+            updateEventStatusToInactive();
+            // Navigate back after a short delay to ensure status is updated
+            setTimeout(() => {
+              navigate(`/attendances?event_id=${eventId}`, { replace: true });
+            }, 300);
+          };
+
+          window.addEventListener("afterprint", handleAfterPrint);
+
+          return () => {
+            window.removeEventListener("afterprint", handleAfterPrint);
+          };
         }
+        
       } catch (error) {
         console.error("Error loading print data:", error);
         setLoading(false);
       }
     };
 
-    initPrint();
-  }, [eventId, eventFromState, membersFromState]);
+    fetchData();
+  }, [eventId, eventFromState, membersFromState, location.state, navigate]);
 
-  // Handle manual back navigation
+  // Handle manual cancel
   const handleCancel = () => {
-    navigate(`/events/${eventId}/attendances`, { replace: true });
-  };
-
-  // Handle manual print
-  const handleManualPrint = () => {
-    window.print();
+    updateEventStatusToInactive();
+    navigate(`/attendances?event_id=${eventId}`, { replace: true });
   };
 
   const formatBirthdate = (birthdate) => {
@@ -115,6 +138,20 @@ function PrintAttendanceReport() {
   const totalMembers = statistics.totalMembers || displayMembers.length;
   const attendanceRate = statistics.attendanceRate || (totalMembers > 0 ? (presentCount / totalMembers * 100).toFixed(1) : 0);
 
+  // Determine status label for third stat card
+  const getThirdStatLabel = () => {
+    if (!displayEvent?.event_date) return 'Expected/Absent';
+    
+    const today = new Date();
+    const eventDate = new Date(displayEvent.event_date);
+    today.setHours(0, 0, 0, 0);
+    eventDate.setHours(0, 0, 0, 0);
+    
+    if (eventDate < today) return 'Absent';
+    if (eventDate.getTime() === today.getTime()) return 'Expected Today';
+    return 'Expected';
+  };
+
   return (
     <div className="p-8 bg-white print:p-0 print:bg-white">
       {/* Print-specific styles */}
@@ -155,6 +192,9 @@ function PrintAttendanceReport() {
             .bg-purple-600 {
               background-color: #7c3aed !important;
             }
+            .bg-orange-600 {
+              background-color: #ea580c !important;
+            }
             .text-blue-100 {
               color: #dbeafe !important;
             }
@@ -180,28 +220,14 @@ function PrintAttendanceReport() {
         `}
       </style>
 
-      {/* Action Buttons - Only visible when not printing */}
-      <div className="no-print mb-4 flex gap-2">
+      {/* Cancel Button - Only visible when not printing */}
+      <div className="no-print mb-4">
         <button
           onClick={handleCancel}
           className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
         >
           ← Back to Attendance
         </button>
-        <button
-          onClick={handleManualPrint}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-        >
-          🖨️ Print Report
-        </button>
-      </div>
-
-      {/* Print Instructions */}
-      <div className="no-print bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-        <p className="text-blue-800 text-sm">
-          <strong>Note:</strong> Use the browser's print dialog to print this report. 
-          The print will automatically optimize for paper format.
-        </p>
       </div>
 
       {/* Header */}
@@ -225,7 +251,7 @@ function PrintAttendanceReport() {
           </div>
           <div className="bg-red-50 p-4 rounded-lg border-l-4 border-red-500 print-shadow">
             <div className="text-2xl font-bold text-red-600">{expectedOrAbsentCount}</div>
-            <div className="text-sm text-red-800">{statistics.thirdStatLabel || 'Expected/Absent'}</div>
+            <div className="text-sm text-red-800">{getThirdStatLabel()}</div>
           </div>
           <div className="bg-purple-50 p-4 rounded-lg border-l-4 border-purple-500 print-shadow">
             <div className="text-2xl font-bold text-purple-600">{attendanceRate}%</div>
@@ -241,7 +267,16 @@ function PrintAttendanceReport() {
             <div><strong>Time:</strong> {displayEvent?.event_time || 'N/A'}</div>
             <div><strong>Location:</strong> {displayEvent?.location || 'N/A'}</div>
             <div><strong>Target Barangay:</strong> {displayEvent?.target_barangay || 'All Barangays'}</div>
-            <div><strong>Status:</strong> {displayEvent?.status || 'N/A'}</div>
+            <div><strong>Status:</strong> 
+              <span className={`ml-1 font-medium ${
+                displayEvent?.status === 'active' ? 'text-green-600' : 
+                displayEvent?.status === 'inactive' ? 'text-red-600' : 
+                'text-gray-600'
+              }`}>
+                {displayEvent?.status || 'N/A'}
+                {displayEvent?.status === 'active' && ' (will be inactive after printing)'}
+              </span>
+            </div>
           </div>
           {(filters.search || filters.barangayFilter !== "All") && (
             <div className="mt-3 pt-3 border-t border-gray-300">

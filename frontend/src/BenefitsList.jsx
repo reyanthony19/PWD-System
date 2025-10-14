@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
   Search, 
@@ -12,43 +12,152 @@ import {
   XCircle,
   Users,
   TrendingUp,
-  Archive
+  Archive,
+  RefreshCw
 } from "lucide-react";
 import api from "./api";
 import Layout from "./Layout";
 
+// Cache configuration
+const CACHE_KEYS = {
+  BENEFITS: 'benefitslist_benefits',
+  TIMESTAMP: 'benefitslist_cache_timestamp'
+};
+
+const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes in milliseconds
+
+// Cache utility functions
+const cache = {
+  // Get data from cache
+  get: (key) => {
+    try {
+      const item = localStorage.getItem(key);
+      if (!item) return null;
+      
+      const { data, timestamp } = JSON.parse(item);
+      
+      // Check if cache is still valid
+      if (Date.now() - timestamp > CACHE_DURATION) {
+        cache.clear(key);
+        return null;
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Error reading from cache:', error);
+      return null;
+    }
+  },
+  
+  // Set data in cache
+  set: (key, data) => {
+    try {
+      const item = {
+        data,
+        timestamp: Date.now()
+      };
+      localStorage.setItem(key, JSON.stringify(item));
+    } catch (error) {
+      console.error('Error writing to cache:', error);
+    }
+  },
+  
+  // Clear specific cache
+  clear: (key) => {
+    try {
+      localStorage.removeItem(key);
+    } catch (error) {
+      console.error('Error clearing cache:', error);
+    }
+  },
+  
+  // Clear all benefits cache
+  clearAll: () => {
+    Object.values(CACHE_KEYS).forEach(key => {
+      cache.clear(key);
+    });
+  },
+  
+  // Check if cache is valid
+  isValid: (key) => {
+    const data = cache.get(key);
+    return data !== null;
+  }
+};
+
 function BenefitsList() {
   const [benefits, setBenefits] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("active");
   const [searchTerm, setSearchTerm] = useState("");
   const [sortOption, setSortOption] = useState("name-asc");
   const [updatingStatus, setUpdatingStatus] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState(null);
   const navigate = useNavigate();
+
+  // Load initial data from cache
+  useEffect(() => {
+    const cachedBenefits = cache.get(CACHE_KEYS.BENEFITS);
+    if (cachedBenefits) {
+      setBenefits(cachedBenefits);
+      setLoading(false);
+    }
+  }, []);
+
+  const fetchBenefits = useCallback(async (forceRefresh = false) => {
+    try {
+      if (forceRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+
+      // Check cache first unless force refresh
+      const cachedBenefits = !forceRefresh && cache.get(CACHE_KEYS.BENEFITS);
+      if (cachedBenefits && !forceRefresh) {
+        setBenefits(cachedBenefits);
+        setLastUpdated(new Date());
+        return;
+      }
+
+      const response = await api.get("/benefits-lists");
+      setBenefits(response.data);
+      cache.set(CACHE_KEYS.BENEFITS, response.data);
+      setLastUpdated(new Date());
+      setError("");
+    } catch (err) {
+      console.error(err);
+      setError("Failed to load benefits.");
+      
+      // If API fails, try to use cached data as fallback
+      const cachedBenefits = cache.get(CACHE_KEYS.BENEFITS);
+      if (cachedBenefits) {
+        setBenefits(cachedBenefits);
+      }
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
 
   // Fetch benefits
   useEffect(() => {
-    const fetchBenefits = async () => {
-      try {
-        setLoading(true);
-        const response = await api.get("/benefits-lists");
-        setBenefits(response.data);
-        setError("");
-      } catch (err) {
-        console.error(err);
-        setError("Failed to load benefits.");
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchBenefits();
-    const interval = setInterval(fetchBenefits, 100000);
+    // Increase interval since we have caching now
+    const interval = setInterval(() => fetchBenefits(), 300000); // 5 minutes
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchBenefits]);
 
-  // Filter + sort
+  // Manual refresh function
+  const handleRefresh = () => {
+    cache.clear(CACHE_KEYS.BENEFITS);
+    fetchBenefits(true);
+  };
+
+  // Filter + sort - Memoized
   const filteredBenefits = useMemo(() => {
     return benefits
       .filter((b) => (typeFilter === "all" ? true : b.type === typeFilter))
@@ -68,6 +177,23 @@ function BenefitsList() {
       });
   }, [benefits, typeFilter, statusFilter, searchTerm, sortOption]);
 
+  // Memoized counts
+  const typeCounts = useMemo(() => {
+    return benefits.reduce((acc, benefit) => {
+      const type = benefit.type || "other";
+      acc[type] = (acc[type] || 0) + 1;
+      return acc;
+    }, {});
+  }, [benefits]);
+
+  const statusCounts = useMemo(() => {
+    return benefits.reduce((acc, benefit) => {
+      const status = benefit.status || "active";
+      acc[status] = (acc[status] || 0) + 1;
+      return acc;
+    }, {});
+  }, [benefits]);
+
   // Handle status change
   const handleStatusChange = async (benefitId, newStatus, e) => {
     e.stopPropagation();
@@ -84,6 +210,14 @@ function BenefitsList() {
       );
 
       await api.delete(`/benefits/${benefitId}`);
+      
+      // Update cache after successful status change
+      const updatedBenefits = benefits.map(benefit => 
+        benefit.id === benefitId 
+          ? { ...benefit, status: newStatus }
+          : benefit
+      );
+      cache.set(CACHE_KEYS.BENEFITS, updatedBenefits);
       
     } catch (err) {
       console.error("Failed to update benefit status", err);
@@ -116,19 +250,6 @@ function BenefitsList() {
       icon: <Archive size={16} />
     },
   ];
-
-  // Count benefits by type and status
-  const typeCounts = benefits.reduce((acc, benefit) => {
-    const type = benefit.type || "other";
-    acc[type] = (acc[type] || 0) + 1;
-    return acc;
-  }, {});
-
-  const statusCounts = benefits.reduce((acc, benefit) => {
-    const status = benefit.status || "active";
-    acc[status] = (acc[status] || 0) + 1;
-    return acc;
-  }, {});
 
   // Get type display info
   const getTypeInfo = (type) => {
@@ -170,7 +291,7 @@ function BenefitsList() {
     );
   }
 
-  if (error) {
+  if (error && benefits.length === 0) {
     return (
       <Layout>
         <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-100 flex items-center justify-center">
@@ -181,7 +302,7 @@ function BenefitsList() {
             <h2 className="text-xl font-bold text-red-600 mb-2">Error</h2>
             <p className="text-gray-600">{error}</p>
             <button
-              onClick={() => window.location.reload()}
+              onClick={handleRefresh}
               className="mt-4 inline-flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors"
             >
               Try Again
@@ -202,6 +323,40 @@ function BenefitsList() {
         </div>
 
         <div className="max-w-7xl mx-auto relative">
+          {/* Cache Status Indicator */}
+          <div className="mb-4 flex justify-between items-center">
+            <div className="text-sm text-gray-600">
+              {cache.isValid(CACHE_KEYS.BENEFITS) ? (
+                <span className="text-green-600 flex items-center gap-2">
+                  <CheckCircle size={16} />
+                  Using cached data
+                </span>
+              ) : (
+                <span className="text-yellow-600 flex items-center gap-2">
+                  <RefreshCw size={16} />
+                  Fetching fresh data
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-4">
+              {lastUpdated && (
+                <span className="text-xs text-gray-500">
+                  Last updated: {lastUpdated.toLocaleTimeString()}
+                </span>
+              )}
+              <button
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-700 
+                         rounded-lg text-sm font-medium hover:bg-blue-200 
+                         transition-colors disabled:opacity-50"
+              >
+                <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
+                {refreshing ? "Refreshing..." : "Refresh"}
+              </button>
+            </div>
+          </div>
+
           {/* Header */}
           <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 p-8 mb-8">
             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-8">
@@ -610,15 +765,6 @@ function BenefitsList() {
             </div>
           </section>
         </div>
-
-        {/* Add custom animations */}
-        <style jsx>{`
-          @keyframes pulse-slow {
-            0%, 100% { opacity: 0.3; }
-            50% { opacity: 0.5; }
-          }
-          .animate-pulse-slow { animation: pulse-slow 4s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
-        `}</style>
       </div>
     </Layout>
   );

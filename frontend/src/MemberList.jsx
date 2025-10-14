@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   CheckCircle,
@@ -12,38 +12,140 @@ import {
   UserCheck,
   Plus,
   Filter,
-  ChevronDown
+  ChevronDown,
+  RefreshCw
 } from "lucide-react";
 import api from "./api";
 import Layout from "./Layout";
 
+// Cache configuration
+const CACHE_KEYS = {
+  MEMBERS: 'memberlist_members',
+  TIMESTAMP: 'memberlist_cache_timestamp'
+};
 
+const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes in milliseconds
+
+// Cache utility functions
+const cache = {
+  // Get data from cache
+  get: (key) => {
+    try {
+      const item = localStorage.getItem(key);
+      if (!item) return null;
+      
+      const { data, timestamp } = JSON.parse(item);
+      
+      // Check if cache is still valid
+      if (Date.now() - timestamp > CACHE_DURATION) {
+        cache.clear(key);
+        return null;
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Error reading from cache:', error);
+      return null;
+    }
+  },
+  
+  // Set data in cache
+  set: (key, data) => {
+    try {
+      const item = {
+        data,
+        timestamp: Date.now()
+      };
+      localStorage.setItem(key, JSON.stringify(item));
+    } catch (error) {
+      console.error('Error writing to cache:', error);
+    }
+  },
+  
+  // Clear specific cache
+  clear: (key) => {
+    try {
+      localStorage.removeItem(key);
+    } catch (error) {
+      console.error('Error clearing cache:', error);
+    }
+  },
+  
+  // Clear all member list cache
+  clearAll: () => {
+    Object.values(CACHE_KEYS).forEach(key => {
+      cache.clear(key);
+    });
+  },
+  
+  // Check if cache is valid
+  isValid: (key) => {
+    const data = cache.get(key);
+    return data !== null;
+  }
+};
 
 function MemberList() {
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [statusFilter, setStatusFilter] = useState("approved");
   const [barangayFilter, setBarangayFilter] = useState("All");
   const [searchTerm, setSearchTerm] = useState("");
   const [sortOption, setSortOption] = useState("name-asc");
+  const [lastUpdated, setLastUpdated] = useState(null);
   const navigate = useNavigate();
 
+  // Load initial data from cache
   useEffect(() => {
-    const fetchMembers = async () => {
-      try {
-        setLoading(true);
-        const response = await api.get("/users?role=member");
-        setMembers(response.data.data || response.data);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchMembers();
-    const interval = setInterval(fetchMembers, 100000);
-    return () => clearInterval(interval);
+    const cachedMembers = cache.get(CACHE_KEYS.MEMBERS);
+    if (cachedMembers) {
+      setMembers(cachedMembers);
+      setLoading(false);
+    }
   }, []);
+
+  const fetchMembers = useCallback(async (forceRefresh = false) => {
+    try {
+      if (forceRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+
+      // Check cache first unless force refresh
+      const cachedMembers = !forceRefresh && cache.get(CACHE_KEYS.MEMBERS);
+      if (cachedMembers && !forceRefresh) {
+        setMembers(cachedMembers);
+        setLastUpdated(new Date());
+        return;
+      }
+
+      const response = await api.get("/users?role=member");
+      const membersData = response.data.data || response.data;
+      
+      setMembers(membersData);
+      cache.set(CACHE_KEYS.MEMBERS, membersData);
+      setLastUpdated(new Date());
+    } catch (err) {
+      console.error(err);
+      // If API fails, try to use cached data as fallback
+      const cachedMembers = cache.get(CACHE_KEYS.MEMBERS);
+      if (cachedMembers) {
+        setMembers(cachedMembers);
+      }
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchMembers();
+    // Increase interval since we have caching now
+    const interval = setInterval(() => fetchMembers(), 300000); // 5 minutes
+    return () => clearInterval(interval);
+  }, [fetchMembers]);
 
   const handleStatusChange = async (id, newStatus) => {
     const oldMembers = [...members];
@@ -52,64 +154,105 @@ function MemberList() {
         prev.map((m) => (m.id === id ? { ...m, status: newStatus } : m))
       );
       await api.patch(`/user/${id}/status`, { status: newStatus });
+      
+      // Update cache after successful status change
+      const updatedMembers = members.map((m) => 
+        m.id === id ? { ...m, status: newStatus } : m
+      );
+      cache.set(CACHE_KEYS.MEMBERS, updatedMembers);
     } catch (err) {
       console.error("Failed to update status", err);
       setMembers(oldMembers);
     }
   };
 
-  // Filter members based on status, barangay, and search
-  const filteredMembers = members
-    .filter((m) =>
-      statusFilter === "all"
-        ? true
-        : m.status?.toLowerCase() === statusFilter.toLowerCase()
-    )
-    .filter((m) => {
-      // Barangay filter
-      if (barangayFilter !== "All") {
-        if (m.member_profile?.barangay !== barangayFilter) {
-          return false;
+  // Manual refresh function
+  const handleRefresh = () => {
+    cache.clear(CACHE_KEYS.MEMBERS);
+    fetchMembers(true);
+  };
+
+  // Memoized filtered members to prevent unnecessary recalculations
+  const filteredMembers = useMemo(() => {
+    return members
+      .filter((m) =>
+        statusFilter === "all"
+          ? true
+          : m.status?.toLowerCase() === statusFilter.toLowerCase()
+      )
+      .filter((m) => {
+        // Barangay filter
+        if (barangayFilter !== "All") {
+          if (m.member_profile?.barangay !== barangayFilter) {
+            return false;
+          }
         }
-      }
 
-      // Search filter
-      const term = searchTerm.toLowerCase();
-      const fullName = `${m.member_profile?.first_name || ''} ${m.member_profile?.middle_name || ''} ${m.member_profile?.last_name || ''}`.toLowerCase();
-      const barangay = m.member_profile?.barangay?.toLowerCase() || '';
+        // Search filter
+        const term = searchTerm.toLowerCase();
+        const fullName = `${m.member_profile?.first_name || ''} ${m.member_profile?.middle_name || ''} ${m.member_profile?.last_name || ''}`.toLowerCase();
+        const barangay = m.member_profile?.barangay?.toLowerCase() || '';
 
-      return (
-        m.username?.toLowerCase().includes(term) ||
-        m.email?.toLowerCase().includes(term) ||
-        fullName.includes(term) ||
-        barangay.includes(term)
-      );
-    })
-    .sort((a, b) => {
-      const profileA = a.member_profile || {};
-      const profileB = b.member_profile || {};
+        return (
+          m.username?.toLowerCase().includes(term) ||
+          m.email?.toLowerCase().includes(term) ||
+          fullName.includes(term) ||
+          barangay.includes(term)
+        );
+      })
+      .sort((a, b) => {
+        const profileA = a.member_profile || {};
+        const profileB = b.member_profile || {};
 
-      if (sortOption === "name-asc") {
-        const nameA = `${profileA.first_name || ""} ${profileA.last_name || ""}`.toLowerCase();
-        const nameB = `${profileB.first_name || ""} ${profileB.last_name || ""}`.toLowerCase();
-        return nameA.localeCompare(nameB);
-      }
-      if (sortOption === "name-desc") {
-        const nameA = `${profileA.first_name || ""} ${profileA.last_name || ""}`.toLowerCase();
-        const nameB = `${profileB.first_name || ""} ${profileB.last_name || ""}`.toLowerCase();
-        return nameB.localeCompare(nameA);
-      }
-      if (sortOption === "date-newest") {
-        return new Date(b.created_at) - new Date(a.created_at);
-      }
-      if (sortOption === "date-oldest") {
-        return new Date(a.created_at) - new Date(b.created_at);
-      }
-      if (sortOption === "barangay-asc") {
-        return (profileA.barangay || "").localeCompare(profileB.barangay || "");
-      }
-      return 0;
-    });
+        if (sortOption === "name-asc") {
+          const nameA = `${profileA.first_name || ""} ${profileA.last_name || ""}`.toLowerCase();
+          const nameB = `${profileB.first_name || ""} ${profileB.last_name || ""}`.toLowerCase();
+          return nameA.localeCompare(nameB);
+        }
+        if (sortOption === "name-desc") {
+          const nameA = `${profileA.first_name || ""} ${profileA.last_name || ""}`.toLowerCase();
+          const nameB = `${profileB.first_name || ""} ${profileB.last_name || ""}`.toLowerCase();
+          return nameB.localeCompare(nameA);
+        }
+        if (sortOption === "date-newest") {
+          return new Date(b.created_at) - new Date(a.created_at);
+        }
+        if (sortOption === "date-oldest") {
+          return new Date(a.created_at) - new Date(b.created_at);
+        }
+        if (sortOption === "barangay-asc") {
+          return (profileA.barangay || "").localeCompare(profileB.barangay || "");
+        }
+        return 0;
+      });
+  }, [members, statusFilter, barangayFilter, searchTerm, sortOption]);
+
+  // Memoized status counts
+  const statusCounts = useMemo(() => {
+    return members.reduce((acc, member) => {
+      const status = member.status || "pending";
+      acc[status] = (acc[status] || 0) + 1;
+      return acc;
+    }, {});
+  }, [members]);
+
+  // Memoized barangay counts
+  const barangayCounts = useMemo(() => {
+    return members.reduce((acc, member) => {
+      const barangay = member.member_profile?.barangay || "Unspecified";
+      acc[barangay] = (acc[barangay] || 0) + 1;
+      return acc;
+    }, {});
+  }, [members]);
+
+  // Memoized available barangays
+  const availableBarangays = useMemo(() => {
+    return [...new Set(
+      members
+        .map(member => member.member_profile?.barangay)
+        .filter(Boolean)
+    )].sort();
+  }, [members]);
 
   // Status options
   const statusOptions = [
@@ -150,27 +293,6 @@ function MemberList() {
     },
   ];
 
-  // Count members per barangay
-  const barangayCounts = members.reduce((acc, member) => {
-    const barangay = member.member_profile?.barangay || "Unspecified";
-    acc[barangay] = (acc[barangay] || 0) + 1;
-    return acc;
-  }, {});
-
-  // Count members per status
-  const statusCounts = members.reduce((acc, member) => {
-    const status = member.status || "pending";
-    acc[status] = (acc[status] || 0) + 1;
-    return acc;
-  }, {});
-
-  // Get available barangays from members
-  const availableBarangays = [...new Set(
-    members
-      .map(member => member.member_profile?.barangay)
-      .filter(Boolean)
-  )].sort();
-
   if (loading) {
     return (
       <Layout>
@@ -197,6 +319,40 @@ function MemberList() {
         </div>
 
         <div className="max-w-7xl mx-auto relative">
+          {/* Cache Status Indicator */}
+          <div className="mb-4 flex justify-between items-center">
+            <div className="text-sm text-gray-600">
+              {cache.isValid(CACHE_KEYS.MEMBERS) ? (
+                <span className="text-green-600 flex items-center gap-2">
+                  <CheckCircle size={16} />
+                  Using cached data
+                </span>
+              ) : (
+                <span className="text-yellow-600 flex items-center gap-2">
+                  <RefreshCw size={16} />
+                  Fetching fresh data
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-4">
+              {lastUpdated && (
+                <span className="text-xs text-gray-500">
+                  Last updated: {lastUpdated.toLocaleTimeString()}
+                </span>
+              )}
+              <button
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-700 
+                         rounded-lg text-sm font-medium hover:bg-blue-200 
+                         transition-colors disabled:opacity-50"
+              >
+                <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
+                {refreshing ? "Refreshing..." : "Refresh"}
+              </button>
+            </div>
+          </div>
+
           {/* Header */}
           <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 p-8 mb-8">
             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-8">
@@ -238,7 +394,7 @@ function MemberList() {
                 <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white p-5 rounded-2xl shadow-lg text-center">
                   <Users className="w-7 h-7 mx-auto mb-3 opacity-90" />
                   <div className="text-2xl font-bold">{members.length}</div>
-                  <div className="text-blue-100 text-xs font-medium">Total asd</div>
+                  <div className="text-blue-100 text-xs font-medium">Total Members</div>
                 </div>
                 <div className="bg-gradient-to-br from-green-500 to-green-600 text-white p-5 rounded-2xl shadow-lg text-center">
                   <UserCheck className="w-7 h-7 mx-auto mb-3 opacity-90" />
@@ -567,15 +723,6 @@ function MemberList() {
           </section>
         </div>
       </div>
-
-      {/* Add custom animations */}
-      <style jsx>{`
-        @keyframes pulse-slow {
-          0%, 100% { opacity: 0.3; }
-          50% { opacity: 0.5; }
-        }
-        .animate-pulse-slow { animation: pulse-slow 4s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
-      `}</style>
     </Layout>
   );
 }

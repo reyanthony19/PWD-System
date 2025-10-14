@@ -46,7 +46,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     //mobile app profile update sa member
     Route::put('/user/{id}', [AuthController::class, 'updateUser']);
-    
+
     Route::patch('/user/{id}/status', [AuthController::class, 'updateStatus']);
     Route::delete('/user/{id}', [AuthController::class, 'deleteUser']);
     Route::post('/logout', [AuthController::class, 'logout']);
@@ -80,7 +80,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/benefit-records/{record}', [BenefitController::class, 'showRecord']);
     Route::put('/benefit-records/{record}', [BenefitController::class, 'updateRecord']);
     Route::delete('/benefit-records/{record}', [BenefitController::class, 'destroyRecord']);
-
+    Route::get('/users/{id}/benefits', [BenefitController::class, 'getUserBenefits']);
     // Scanner + claims for benefits
     Route::get('/benefits/{benefit}/claims', [BenefitController::class, 'indexClaims']);
     Route::post('/benefits/{benefit}/claims', [BenefitController::class, 'storeClaim']);

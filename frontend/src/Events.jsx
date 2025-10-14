@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
   Search, 
@@ -9,12 +9,78 @@ import {
   Clock,
   CalendarCheck,
   AlertCircle,
-  Archive
+  Archive,
+  RefreshCw
 } from "lucide-react";
 import api from "./api";
 import Layout from "./Layout";
 
+// Cache configuration
+const CACHE_KEYS = {
+  EVENTS: 'eventslist_events',
+  TIMESTAMP: 'eventslist_cache_timestamp'
+};
 
+const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes in milliseconds
+
+// Cache utility functions
+const cache = {
+  // Get data from cache
+  get: (key) => {
+    try {
+      const item = localStorage.getItem(key);
+      if (!item) return null;
+      
+      const { data, timestamp } = JSON.parse(item);
+      
+      // Check if cache is still valid
+      if (Date.now() - timestamp > CACHE_DURATION) {
+        cache.clear(key);
+        return null;
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Error reading from cache:', error);
+      return null;
+    }
+  },
+  
+  // Set data in cache
+  set: (key, data) => {
+    try {
+      const item = {
+        data,
+        timestamp: Date.now()
+      };
+      localStorage.setItem(key, JSON.stringify(item));
+    } catch (error) {
+      console.error('Error writing to cache:', error);
+    }
+  },
+  
+  // Clear specific cache
+  clear: (key) => {
+    try {
+      localStorage.removeItem(key);
+    } catch (error) {
+      console.error('Error clearing cache:', error);
+    }
+  },
+  
+  // Clear all events cache
+  clearAll: () => {
+    Object.values(CACHE_KEYS).forEach(key => {
+      cache.clear(key);
+    });
+  },
+  
+  // Check if cache is valid
+  isValid: (key) => {
+    const data = cache.get(key);
+    return data !== null;
+  }
+};
 
 function Events() {
   const [events, setEvents] = useState([]);
@@ -23,11 +89,72 @@ function Events() {
   const [sortOption, setSortOption] = useState("date-upcoming");
   const [barangayFilter, setBarangayFilter] = useState("All");
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(null);
 
   const navigate = useNavigate();
 
+  // Load initial data from cache
+  useEffect(() => {
+    const cachedEvents = cache.get(CACHE_KEYS.EVENTS);
+    if (cachedEvents) {
+      setEvents(cachedEvents);
+      setLoading(false);
+    }
+  }, []);
+
+  const fetchEvents = useCallback(async (forceRefresh = false) => {
+    try {
+      if (forceRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+
+      // Check cache first unless force refresh
+      const cachedEvents = !forceRefresh && cache.get(CACHE_KEYS.EVENTS);
+      if (cachedEvents && !forceRefresh) {
+        setEvents(cachedEvents);
+        setLastUpdated(new Date());
+        return;
+      }
+
+      const res = await api.get("/events");
+      const eventsData = res.data.data || res.data;
+      setEvents(eventsData);
+      cache.set(CACHE_KEYS.EVENTS, eventsData);
+      setLastUpdated(new Date());
+      setError("");
+    } catch (err) {
+      console.error(err);
+      setError("Failed to load events.");
+      
+      // If API fails, try to use cached data as fallback
+      const cachedEvents = cache.get(CACHE_KEYS.EVENTS);
+      if (cachedEvents) {
+        setEvents(cachedEvents);
+      }
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchEvents();
+    // Increase interval since we have caching now
+    const interval = setInterval(() => fetchEvents(), 300000); // 5 minutes
+    return () => clearInterval(interval);
+  }, [fetchEvents]);
+
+  // Manual refresh function
+  const handleRefresh = () => {
+    cache.clear(CACHE_KEYS.EVENTS);
+    fetchEvents(true);
+  };
+
   // Calculate event status based on current date
-  const calculateEventStatus = (event) => {
+  const calculateEventStatus = useCallback((event) => {
     const today = new Date();
     const eventDate = new Date(event.event_date);
     
@@ -41,10 +168,10 @@ function Events() {
     } else {
       return "upcoming";
     }
-  };
+  }, []);
 
   // Get status color and display text
-  const getStatusInfo = (event) => {
+  const getStatusInfo = useCallback((event) => {
     const status = calculateEventStatus(event);
     
     switch (status) {
@@ -77,78 +204,68 @@ function Events() {
           icon: <AlertCircle className="w-4 h-4" />
         };
     }
-  };
+  }, [calculateEventStatus]);
 
-  useEffect(() => {
-    const fetchEvents = async () => {
-      try {
-        const res = await api.get("/events");
-        setEvents(res.data.data || res.data);
-      } catch (err) {
-        console.error(err);
-        setError("Failed to load events.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchEvents();
-    const interval = setInterval(fetchEvents, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const filteredEvents = events
-    .filter((e) => {
-      const term = searchTerm.toLowerCase();
-      
-      // Barangay filter
-      if (barangayFilter !== "All") {
-        if (e.target_barangay !== barangayFilter) {
-          return false;
+  // Memoized filtered events
+  const filteredEvents = useMemo(() => {
+    return events
+      .filter((e) => {
+        const term = searchTerm.toLowerCase();
+        
+        // Barangay filter
+        if (barangayFilter !== "All") {
+          if (e.target_barangay !== barangayFilter) {
+            return false;
+          }
         }
-      }
-      
-      // Search filter
-      return (
-        e.title?.toLowerCase().includes(term) ||
-        e.location?.toLowerCase().includes(term) ||
-        e.target_barangay?.toLowerCase().includes(term) ||
-        e.id.toString().includes(term)
-      );
-    })
-    .sort((a, b) => {
-      if (sortOption === "date-upcoming") {
-        return new Date(a.event_date) - new Date(b.event_date);
-      }
-      if (sortOption === "date-latest") {
-        return new Date(b.created_at) - new Date(a.created_at);
-      }
-      if (sortOption === "date-oldest") {
-        return new Date(a.created_at) - new Date(b.created_at);
-      }
-      return 0;
-    });
+        
+        // Search filter
+        return (
+          e.title?.toLowerCase().includes(term) ||
+          e.location?.toLowerCase().includes(term) ||
+          e.target_barangay?.toLowerCase().includes(term) ||
+          e.id.toString().includes(term)
+        );
+      })
+      .sort((a, b) => {
+        if (sortOption === "date-upcoming") {
+          return new Date(a.event_date) - new Date(b.event_date);
+        }
+        if (sortOption === "date-latest") {
+          return new Date(b.created_at) - new Date(a.created_at);
+        }
+        if (sortOption === "date-oldest") {
+          return new Date(a.created_at) - new Date(b.created_at);
+        }
+        return 0;
+      });
+  }, [events, searchTerm, barangayFilter, sortOption]);
 
-  // Count events per barangay for the filter badge
-  const barangayCounts = events.reduce((acc, event) => {
-    const barangay = event.target_barangay || "Unspecified";
-    acc[barangay] = (acc[barangay] || 0) + 1;
-    return acc;
-  }, {});
+  // Memoized counts
+  const barangayCounts = useMemo(() => {
+    return events.reduce((acc, event) => {
+      const barangay = event.target_barangay || "Unspecified";
+      acc[barangay] = (acc[barangay] || 0) + 1;
+      return acc;
+    }, {});
+  }, [events]);
 
-  // Count events by status
-  const statusCounts = events.reduce((acc, event) => {
-    const status = calculateEventStatus(event);
-    acc[status] = (acc[status] || 0) + 1;
-    return acc;
-  }, {});
+  const statusCounts = useMemo(() => {
+    return events.reduce((acc, event) => {
+      const status = calculateEventStatus(event);
+      acc[status] = (acc[status] || 0) + 1;
+      return acc;
+    }, {});
+  }, [events, calculateEventStatus]);
 
-  // Get available barangays from events
-  const availableBarangays = [...new Set(
-    events
-      .map(event => event.target_barangay)
-      .filter(Boolean)
-  )].sort();
+  // Memoized available barangays
+  const availableBarangays = useMemo(() => {
+    return [...new Set(
+      events
+        .map(event => event.target_barangay)
+        .filter(Boolean)
+    )].sort();
+  }, [events]);
 
   if (loading) {
     return (
@@ -166,7 +283,7 @@ function Events() {
     );
   }
 
-  if (error) {
+  if (error && events.length === 0) {
     return (
       <Layout>
         <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-100 flex items-center justify-center">
@@ -177,7 +294,7 @@ function Events() {
             <h2 className="text-xl font-bold text-red-600 mb-2">Error</h2>
             <p className="text-gray-600">{error}</p>
             <button
-              onClick={() => window.location.reload()}
+              onClick={handleRefresh}
               className="mt-4 inline-flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors"
             >
               Try Again
@@ -198,6 +315,40 @@ function Events() {
         </div>
 
         <div className="max-w-7xl mx-auto relative">
+          {/* Cache Status Indicator */}
+          <div className="mb-4 flex justify-between items-center">
+            <div className="text-sm text-gray-600">
+              {cache.isValid(CACHE_KEYS.EVENTS) ? (
+                <span className="text-green-600 flex items-center gap-2">
+                  <CalendarCheck size={16} />
+                  Using cached data
+                </span>
+              ) : (
+                <span className="text-yellow-600 flex items-center gap-2">
+                  <RefreshCw size={16} />
+                  Fetching fresh data
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-4">
+              {lastUpdated && (
+                <span className="text-xs text-gray-500">
+                  Last updated: {lastUpdated.toLocaleTimeString()}
+                </span>
+              )}
+              <button
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-700 
+                         rounded-lg text-sm font-medium hover:bg-blue-200 
+                         transition-colors disabled:opacity-50"
+              >
+                <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
+                {refreshing ? "Refreshing..." : "Refresh"}
+              </button>
+            </div>
+          </div>
+
           {/* Header */}
           <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 p-8 mb-8">
             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-8">
@@ -543,15 +694,6 @@ function Events() {
             </div>
           </section>
         </div>
-
-        {/* Add custom animations */}
-        <style jsx>{`
-          @keyframes pulse-slow {
-            0%, 100% { opacity: 0.3; }
-            50% { opacity: 0.5; }
-          }
-          .animate-pulse-slow { animation: pulse-slow 4s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
-        `}</style>
       </div>
     </Layout>
   );
