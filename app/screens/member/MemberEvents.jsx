@@ -8,17 +8,31 @@ import {
   ScrollView,
   RefreshControl,
   TouchableOpacity,
-  Dimensions
+  Dimensions,
+  Alert
 } from "react-native";
 import { Card, Avatar, Badge } from "react-native-paper";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import api from "@/services/api";
 import { LinearGradient } from "expo-linear-gradient";
+import NetInfo from '@react-native-community/netinfo';
 
 const { width } = Dimensions.get("window");
+
+// Cache keys
+const CACHE_KEYS = {
+  EVENTS: 'cached_events',
+  USER_DATA: 'cached_user_data',
+  ATTENDANCE: 'cached_attendance',
+  STATS: 'cached_stats',
+  LAST_UPDATED: 'cache_last_updated'
+};
+
+// Cache expiration time (5 minutes)
+const CACHE_EXPIRY_TIME = 5 * 60 * 1000;
 
 export default function MemberEvents() {
   const navigation = useNavigation();
@@ -28,6 +42,8 @@ export default function MemberEvents() {
   const [error, setError] = useState("");
   const [currentUserId, setCurrentUserId] = useState(null);
   const [attendanceStatus, setAttendanceStatus] = useState({});
+  const [isOnline, setIsOnline] = useState(true);
+  const [usingCachedData, setUsingCachedData] = useState(false);
   const [stats, setStats] = useState({
     totalEvents: 0,
     attended: 0,
@@ -38,82 +54,230 @@ export default function MemberEvents() {
   const fetchedRef = useRef(false);
 
   useEffect(() => {
+    // Subscribe to network state updates
+    const unsubscribeNetInfo = NetInfo.addEventListener(state => {
+      setIsOnline(state.isConnected);
+    });
+
+    return () => unsubscribeNetInfo();
+  }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchEvents();
+    }, [])
+  );
+
+  useEffect(() => {
     if (fetchedRef.current) return;
     fetchedRef.current = true;
 
     fetchEvents();
 
     const intervalId = setInterval(() => {
-      fetchEvents();
+      if (isOnline) {
+        fetchEvents();
+      }
     }, 30000); // 30 seconds
 
     return () => clearInterval(intervalId);
-  }, [navigation]);
+  }, [isOnline]);
 
-  const fetchEvents = async () => {
+  // Cache management functions
+  const saveToCache = async (key, data) => {
+    try {
+      const cacheData = {
+        data: data,
+        timestamp: Date.now()
+      };
+      await AsyncStorage.setItem(key, JSON.stringify(cacheData));
+    } catch (error) {
+      console.log('Error saving to cache:', error);
+    }
+  };
+
+  const getFromCache = async (key) => {
+    try {
+      const cached = await AsyncStorage.getItem(key);
+      if (cached) {
+        const cacheData = JSON.parse(cached);
+        // Check if cache is still valid
+        if (Date.now() - cacheData.timestamp < CACHE_EXPIRY_TIME) {
+          return cacheData.data;
+        } else {
+          // Clear expired cache
+          await AsyncStorage.removeItem(key);
+        }
+      }
+      return null;
+    } catch (error) {
+      console.log('Error reading from cache:', error);
+      return null;
+    }
+  };
+
+  const clearCache = async () => {
+    try {
+      await AsyncStorage.multiRemove(Object.values(CACHE_KEYS));
+    } catch (error) {
+      console.log('Error clearing cache:', error);
+    }
+  };
+
+  const loadCachedData = async () => {
+    try {
+      const [cachedEvents, cachedStats, cachedAttendance, cachedUser] = await Promise.all([
+        getFromCache(CACHE_KEYS.EVENTS),
+        getFromCache(CACHE_KEYS.STATS),
+        getFromCache(CACHE_KEYS.ATTENDANCE),
+        getFromCache(CACHE_KEYS.USER_DATA)
+      ]);
+
+      if (cachedEvents && cachedStats && cachedAttendance) {
+        setEvents(cachedEvents);
+        setStats(cachedStats);
+        setAttendanceStatus(cachedAttendance);
+        setUsingCachedData(true);
+        
+        if (cachedUser) {
+          setCurrentUserId(cachedUser.id);
+        }
+        
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.log('Error loading cached data:', error);
+      return false;
+    }
+  };
+
+  // Optimized event fetching with caching
+  const fetchEvents = async (forceRefresh = false) => {
     try {
       setRefreshing(true);
+      setError("");
+      
       const token = await AsyncStorage.getItem("token");
-
       if (!token) {
         navigation.replace("Login");
         return;
       }
 
-      const res = await api.get("/events", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      // Try to load from cache first if not forcing refresh and offline
+      if (!forceRefresh && !isOnline) {
+        const hasCachedData = await loadCachedData();
+        if (hasCachedData) {
+          setLoading(false);
+          setRefreshing(false);
+          return;
+        } else {
+          setError("No internet connection and no cached data available.");
+          setLoading(false);
+          setRefreshing(false);
+          return;
+        }
+      }
 
-      const eventsData = res.data.data || res.data || [];
-      setEvents(eventsData);
-
-      // Get current user info
-      const userRes = await api.get("/user", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setCurrentUserId(userRes.data.id);
-
-      // Check attendance status for each event
-      const attendanceStatuses = {};
-      let attendedCount = 0;
-      let upcomingCount = 0;
-      let completedCount = 0;
-      const currentDate = new Date();
-
-      for (const event of eventsData) {
+      // If online or force refresh, fetch fresh data
+      if (isOnline) {
+        // Get user info first
+        let userId;
         try {
-          const attendanceRes = await api.get(`/events/${event.id}/${userRes.data.id}`);
-          attendanceStatuses[event.id] = attendanceRes.data.attended ? "Present" : "Absent";
-          
-          if (attendanceRes.data.attended) {
-            attendedCount++;
+          const userRes = await api.get("/user", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          userId = userRes.data.id;
+          setCurrentUserId(userId);
+          await saveToCache(CACHE_KEYS.USER_DATA, userRes.data);
+        } catch (userError) {
+          console.error("User fetch error:", userError);
+          if (userError.response?.status === 401) {
+            await AsyncStorage.removeItem("token");
+            navigation.replace("Login");
+            return;
+          }
+        }
+
+        // Fetch events
+        const res = await api.get("/events", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        const eventsData = res.data.data || res.data || [];
+        setEvents(eventsData);
+        await saveToCache(CACHE_KEYS.EVENTS, eventsData);
+
+        // Batch process attendance and stats
+        const attendanceStatuses = {};
+        let attendedCount = 0;
+        let upcomingCount = 0;
+        let completedCount = 0;
+        const currentDate = new Date();
+
+        // Process events without individual API calls
+        for (const event of eventsData) {
+          // Check if event has attendance data embedded
+          if (event.attendance && Array.isArray(event.attendance)) {
+            const userAttendance = event.attendance.find(
+              att => att.user_id === userId
+            );
+            attendanceStatuses[event.id] = userAttendance?.attended ? "Present" : "Absent";
+            
+            if (userAttendance?.attended) {
+              attendedCount++;
+            }
+          } else {
+            // If no embedded attendance data, mark as unknown
+            attendanceStatuses[event.id] = "Unknown";
           }
 
+          // Calculate event status
           const eventDate = new Date(event.event_date);
           if (eventDate > currentDate) {
             upcomingCount++;
           } else {
             completedCount++;
           }
-        } catch (err) {
-          console.error(`Error fetching attendance for event ${event.id}:`, err);
-          attendanceStatuses[event.id] = "Unknown";
         }
-      }
 
-      setAttendanceStatus(attendanceStatuses);
-      
-      // Update stats
-      setStats({
-        totalEvents: eventsData.length,
-        attended: attendedCount,
-        upcoming: upcomingCount,
-        completed: completedCount
-      });
+        setAttendanceStatus(attendanceStatuses);
+        await saveToCache(CACHE_KEYS.ATTENDANCE, attendanceStatuses);
+        
+        // Update stats
+        const newStats = {
+          totalEvents: eventsData.length,
+          attended: attendedCount,
+          upcoming: upcomingCount,
+          completed: completedCount
+        };
+        
+        setStats(newStats);
+        await saveToCache(CACHE_KEYS.STATS, newStats);
+        setUsingCachedData(false);
+
+      } else {
+        // Offline but force refresh requested
+        Alert.alert(
+          "Offline",
+          "Cannot refresh while offline. Using cached data.",
+          [{ text: "OK" }]
+        );
+        await loadCachedData();
+      }
 
     } catch (err) {
       console.error("Events fetch error:", err.response?.data || err.message);
-      setError("Failed to load events.");
+      
+      // If online fetch fails, try to load cached data
+      if (isOnline) {
+        const hasCachedData = await loadCachedData();
+        if (!hasCachedData) {
+          setError("Failed to load events. Please check your connection.");
+        }
+      } else {
+        setError("No internet connection. Please connect to refresh data.");
+      }
 
       if (err.response?.status === 401) {
         await AsyncStorage.removeItem("token");
@@ -125,16 +289,23 @@ export default function MemberEvents() {
     }
   };
 
+  const handleManualRefresh = () => {
+    fetchEvents(true); // Force refresh
+  };
+
+  // Improved status calculation
   const getEventStatus = (eventDate, isPresent) => {
     const currentDate = new Date();
     const eventDateObj = new Date(eventDate);
     
     if (eventDateObj > currentDate) {
       return { status: "Upcoming", color: "#3b82f6", icon: "calendar-clock" };
-    } else if (isPresent) {
+    } else if (isPresent === "Present") {
       return { status: "Attended", color: "#10b981", icon: "check-circle" };
-    } else {
+    } else if (isPresent === "Absent") {
       return { status: "Missed", color: "#ef4444", icon: "close-circle" };
+    } else {
+      return { status: "Unknown", color: "#6b7280", icon: "help-circle" };
     }
   };
 
@@ -190,8 +361,9 @@ export default function MemberEvents() {
   );
 
   const renderEventItem = ({ item, index }) => {
-    const isPresent = attendanceStatus[item.id] === "Present";
-    const eventStatus = getEventStatus(item.event_date, isPresent);
+    const attendance = attendanceStatus[item.id];
+    const isPresent = attendance === "Present";
+    const eventStatus = getEventStatus(item.event_date, attendance);
     const eventTypeIcon = getEventTypeIcon(item.type);
     
     return (
@@ -225,7 +397,9 @@ export default function MemberEvents() {
             <View style={styles.eventMeta}>
               <View style={styles.location}>
                 <Ionicons name="location" size={14} color="#6b7280" />
-                <Text style={styles.locationText}>{item.location}</Text>
+                <Text style={styles.locationText}>
+                  {item.location || "Location not specified"}
+                </Text>
               </View>
             </View>
           </View>
@@ -274,9 +448,13 @@ export default function MemberEvents() {
               <Text style={styles.attendanceLabel}>Your Attendance:</Text>
               <Text style={[
                 styles.attendanceValue,
-                { color: isPresent ? '#10b981' : '#ef4444' }
+                { 
+                  color: attendance === "Present" ? '#10b981' : 
+                         attendance === "Absent" ? '#ef4444' : '#6b7280'
+                }
               ]}>
-                {isPresent ? 'Present' : 'Absent'}
+                {attendance === "Present" ? 'Present' : 
+                 attendance === "Absent" ? 'Absent' : 'Not Recorded'}
               </Text>
             </View>
             
@@ -302,7 +480,7 @@ export default function MemberEvents() {
     );
   }
 
-  if (error) {
+  if (error && !usingCachedData) {
     return (
       <LinearGradient colors={["#667eea", "#764ba2"]} style={styles.container}>
         <SafeAreaView style={styles.center}>
@@ -310,7 +488,7 @@ export default function MemberEvents() {
           <Text style={styles.errorText}>{error}</Text>
           <TouchableOpacity 
             style={styles.retryButton}
-            onPress={fetchEvents}
+            onPress={handleManualRefresh}
           >
             <Text style={styles.retryText}>Try Again</Text>
           </TouchableOpacity>
@@ -327,26 +505,44 @@ export default function MemberEvents() {
           refreshControl={
             <RefreshControl 
               refreshing={refreshing} 
-              onRefresh={fetchEvents}
+              onRefresh={handleManualRefresh}
               colors={["#fff"]}
               tintColor="#fff"
+              enabled={isOnline}
             />
           }
         >
-          {/* Header */}
+          {/* Header with connection status */}
           <View style={styles.header}>
             <View>
               <Text style={styles.headerTitle}>Events</Text>
               <Text style={styles.headerSubtitle}>
                 Your event schedule and attendance
+                {!isOnline && " • Offline"}
+                {usingCachedData && " • Using Cached Data"}
               </Text>
             </View>
-            <Avatar.Icon 
-              size={50} 
-              icon="calendar-month" 
-              style={styles.headerIcon} 
-            />
+            <View style={styles.headerRight}>
+              {!isOnline && (
+                <Ionicons name="cloud-offline" size={20} color="#f59e0b" style={styles.offlineIcon} />
+              )}
+              <Avatar.Icon 
+                size={50} 
+                icon="calendar-month" 
+                style={styles.headerIcon} 
+              />
+            </View>
           </View>
+
+          {/* Connection Status Banner */}
+          {!isOnline && (
+            <View style={styles.offlineBanner}>
+              <Ionicons name="cloud-offline" size={16} color="#fff" />
+              <Text style={styles.offlineText}>
+                You're offline. Showing cached data.
+              </Text>
+            </View>
+          )}
 
           {/* Statistics */}
           {renderStatsCard()}
@@ -359,16 +555,30 @@ export default function MemberEvents() {
               </Text>
               <Text style={styles.sectionSubtitle}>
                 {stats.upcoming} upcoming events
+                {usingCachedData && " • Cached"}
               </Text>
             </View>
 
             {events.length === 0 ? (
               <View style={styles.emptyState}>
                 <Ionicons name="calendar-outline" size={64} color="#9ca3af" />
-                <Text style={styles.emptyTitle}>No Events Available</Text>
-                <Text style={styles.emptyText}>
-                  Check back later for upcoming events and activities
+                <Text style={styles.emptyTitle}>
+                  {isOnline ? 'No Events Available' : 'No Cached Data'}
                 </Text>
+                <Text style={styles.emptyText}>
+                  {isOnline 
+                    ? 'Check back later for upcoming events and activities'
+                    : 'Connect to internet to load events'
+                  }
+                </Text>
+                {!isOnline && (
+                  <TouchableOpacity 
+                    style={styles.retryButton}
+                    onPress={handleManualRefresh}
+                  >
+                    <Text style={styles.retryText}>Try Again</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             ) : (
               <FlatList
@@ -416,14 +626,39 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 20
   },
+  errorText: {
+    color: '#fff',
+    fontSize: 16,
+    textAlign: 'center',
+    marginTop: 16,
+    marginBottom: 24
+  },
+  retryButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12
+  },
+  retryText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600'
+  },
 
   // Header
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 16,
     marginTop: 10
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  offlineIcon: {
+    marginRight: 8,
   },
   headerTitle: {
     fontSize: 28,
@@ -431,12 +666,28 @@ const styles = StyleSheet.create({
     color: '#fff'
   },
   headerSubtitle: {
-    fontSize: 16,
+    fontSize: 14,
     color: 'rgba(255, 255, 255, 0.8)',
     marginTop: 4
   },
   headerIcon: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)'
+  },
+
+  // Offline Banner
+  offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(245, 158, 11, 0.9)',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  offlineText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 8,
   },
 
   // Statistics
@@ -453,7 +704,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '48%',
     marginBottom: 12,
-    backdropFilter: 'blur(10px)'
   },
   statIcon: {
     width: 48,
@@ -622,26 +872,6 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     textAlign: 'center',
     lineHeight: 20
-  },
-
-  // Error State
-  errorText: {
-    color: '#fff',
-    fontSize: 16,
-    textAlign: 'center',
-    marginTop: 16,
-    marginBottom: 24
-  },
-  retryButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12
-  },
-  retryText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600'
   },
 
   bottomSpacing: {

@@ -10,6 +10,7 @@ import {
   Animated,
   Dimensions,
   StatusBar,
+  Alert,
 } from "react-native";
 import { Text, TextInput } from "react-native-paper";
 import { LinearGradient } from "expo-linear-gradient";
@@ -22,38 +23,66 @@ const { width, height } = Dimensions.get("window");
 
 export default function Login() {
   const navigation = useNavigation();
-  const [email, setEmail] = useState("");
+  const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [emailError, setEmailError] = useState(false);
+  const [loginError, setLoginError] = useState(false);
   const [passwordError, setPasswordError] = useState(false);
-  const [loginError, setLoginError] = useState("");
-  const [rememberMe, setRememberMe] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [rememberMe, setRememberMe] = useState(false); // Default to false
   const [showPassword, setShowPassword] = useState(false);
 
   // Animated values
   const fadeAnim = useState(new Animated.Value(0))[0];
   const slideAnim = useState(new Animated.Value(50))[0];
-  const emailAnim = useState(new Animated.Value(1))[0];
+  const loginAnim = useState(new Animated.Value(1))[0];
   const passwordAnim = useState(new Animated.Value(1))[0];
   const buttonAnim = useState(new Animated.Value(1))[0];
 
   useEffect(() => {
     const init = async () => {
       try {
-        const storedRemember = await AsyncStorage.getItem("rememberMe");
-        const storedEmail = await AsyncStorage.getItem("email");
-        const storedPassword = await AsyncStorage.getItem("password");
+        // Check if someone is already logged in
+        const existingToken = await AsyncStorage.getItem("token");
+        if (existingToken) {
+          Alert.alert(
+            "Already Logged In",
+            "Someone is already logged in. Please log out first.",
+            [{ text: "OK" }]
+          );
+          return;
+        }
 
+        // Load remember me preference - FIXED: Check if it exists and is true
+        const storedRemember = await AsyncStorage.getItem("rememberMe");
+
+        // Only set to true if explicitly "true", otherwise false
         if (storedRemember === "true") {
-          setEmail(storedEmail || "");
-          setPassword(storedPassword || "");
           setRememberMe(true);
+
+          // Load credentials securely
+          try {
+            const storedLogin = await AsyncStorage.getItem("rememberedLogin");
+            if (storedLogin) {
+              setLogin(storedLogin);
+            }
+
+            const storedPassword = await AsyncStorage.getItem("rememberedPassword");
+            if (storedPassword) {
+              setPassword(storedPassword);
+            }
+          } catch (storageError) {
+            console.log("Error loading stored credentials:", storageError);
+            await clearStoredCredentials();
+          }
         } else {
+          // FIXED: Explicitly set to false and clear any stored data
           setRememberMe(false);
+          await clearStoredCredentials();
         }
       } catch (e) {
-        console.log("Error reading AsyncStorage:", e);
+        console.log("Error reading storage:", e);
+        await clearStoredCredentials();
       }
     };
     init();
@@ -73,73 +102,164 @@ export default function Login() {
     ]).start();
   }, []);
 
+  // Function to clear stored credentials
+  const clearStoredCredentials = async () => {
+    try {
+      await AsyncStorage.multiRemove([
+        "rememberedLogin",
+        "rememberedPassword",
+        "rememberMe"
+      ]);
+    } catch (error) {
+      console.log("Error clearing stored credentials:", error);
+    }
+  };
+
+  // Function to securely store credentials
+  const storeCredentials = async (login, password) => {
+    try {
+      // Store remember me preference
+      await AsyncStorage.setItem("rememberMe", "true");
+
+      // Store login (email only)
+      await AsyncStorage.setItem("rememberedLogin", login);
+
+      // Store password
+      await AsyncStorage.setItem("rememberedPassword", password);
+
+      console.log("Credentials stored securely");
+    } catch (error) {
+      console.log("Error storing credentials:", error);
+      throw error;
+    }
+  };
+
+  // FIXED: Only validate email format
   const validateEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
   };
 
   const handleLogin = async () => {
-    setEmailError(false);
+    setLoginError(false);
     setPasswordError(false);
-    setLoginError("");
+    setErrorMessage("");
 
-    if (!email || !password) {
-      if (!email) {
-        setEmailError(true);
-        animateError(emailAnim);
+    // Validation
+    if (!login || !password) {
+      if (!login) {
+        setLoginError(true);
+        animateError(loginAnim);
       }
       if (!password) {
         setPasswordError(true);
         animateError(passwordAnim);
       }
-      setLoginError("Please fill in all required fields.");
+      setErrorMessage("Please fill in all required fields.");
       return;
     }
 
-    if (!validateEmail(email)) {
-      setEmailError(true);
-      animateError(emailAnim);
-      setLoginError("Please enter a valid email.");
+    // FIXED: Only validate email format
+    if (!validateEmail(login)) {
+      setLoginError(true);
+      animateError(loginAnim);
+      setErrorMessage("Please enter a valid email address.");
       return;
     }
 
     try {
       setLoading(true);
-      const res = await api.post("/login", { email, password });
-      const user = res.data.user;
 
-      if (!user?.role) {
-        setLoginError("Invalid user role.");
+      // Check if someone is already logged in
+      const existingToken = await AsyncStorage.getItem("token");
+      if (existingToken) {
+        Alert.alert(
+          "Already Logged In",
+          "Someone is already logged in. Please log out first.",
+          [{ text: "OK" }]
+        );
+        setLoading(false);
         return;
       }
 
+      // FIXED: Use the correct endpoint and field names
+      const res = await api.post("/loginMobile", {
+        email: login, // Changed from 'login' to 'email'
+        password: password
+      });
+
+      const user = res.data.user;
+
+      // Validate user data
+      if (!user) {
+        setErrorMessage("Invalid response from server.");
+        return;
+      }
+
+      // Check if user has authorized role (staff or member)
+      const allowedRoles = ["staff", "member"];
+      if (!allowedRoles.includes(user.role)) {
+        setErrorMessage("Access denied. You must be a staff/member to login.");
+        await AsyncStorage.clear();
+        return;
+      }
+
+      // Store authentication data
       await AsyncStorage.setItem("token", res.data.token);
       await AsyncStorage.setItem("user", JSON.stringify(user));
 
+      // Handle Remember Me - IMPROVED
       if (rememberMe) {
-        await AsyncStorage.setItem("email", email);
-        await AsyncStorage.setItem("password", password);
-        await AsyncStorage.setItem("rememberMe", "true");
+        // Store credentials for future auto-login
+        await storeCredentials(login, password);
       } else {
-        await AsyncStorage.multiRemove(["email", "password", "rememberMe"]);
+        // User doesn't want to be remembered - clear all stored credentials
+        await clearStoredCredentials();
       }
 
+      // Redirect based on role
       if (user.role === "staff") {
         navigation.replace("StaffFlow");
       } else if (user.role === "member") {
         navigation.replace("MemberFlow");
       } else {
-        setLoginError("Unauthorized role. Contact admin.");
+        setErrorMessage("Unauthorized role. Contact admin.");
         await AsyncStorage.clear();
       }
-    } catch (err) {
-      setLoginError("Invalid email or password.");
-      setEmailError(true);
+
+      // Handle specific error cases
+      if (err.response?.status === 401) {
+        setErrorMessage("Invalid login credentials.");
+      } else if (err.response?.status === 403) {
+        setErrorMessage("Access denied. You must be a staff/admin to login.");
+      } else if (err.message === "Network Error") {
+        setErrorMessage("Network error. Please check your connection.");
+      } else if (err.response?.status >= 500) {
+        setErrorMessage("Server error. Please try again later.");
+      } else {
+        setErrorMessage("Login failed. Please try again.");
+      }
+
+      setLoginError(true);
       setPasswordError(true);
-      animateError(emailAnim);
+      animateError(loginAnim);
       animateError(passwordAnim);
+
+      // On login failure, clear the password field for security
+      setPassword("");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Handle "Remember Me" toggle - FIXED
+  const handleRememberMeToggle = async () => {
+    const newRememberMe = !rememberMe;
+    setRememberMe(newRememberMe);
+
+    if (!newRememberMe) {
+      // User is turning off remember me - clear stored credentials
+      await clearStoredCredentials();
     }
   };
 
@@ -198,23 +318,23 @@ export default function Login() {
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={{ flex: 1 }} 
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-      <LinearGradient 
-        colors={["#667eea", "#764ba2", "#667eea"]} 
+      <LinearGradient
+        colors={["#667eea", "#764ba2", "#667eea"]}
         style={styles.container}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       >
-        <ScrollView 
-          contentContainerStyle={styles.scrollContainer} 
+        <ScrollView
+          contentContainerStyle={styles.scrollContainer}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Animated.View 
+          <Animated.View
             style={[
               styles.content,
               {
@@ -239,50 +359,50 @@ export default function Login() {
 
             {/* Login Form */}
             <View style={styles.formContainer}>
-              {loginError ? (
+              {errorMessage ? (
                 <View style={styles.errorContainer}>
                   <Ionicons name="alert-circle" size={20} color="#ef4444" />
-                  <Text style={styles.errorText}>{loginError}</Text>
+                  <Text style={styles.errorText}>{errorMessage}</Text>
                 </View>
               ) : null}
 
-              {/* Email Input */}
-              <Animated.View style={{ transform: [{ scale: emailAnim }] }}>
+              {/* FIXED: Changed label to Email only */}
+              <Animated.View style={{ transform: [{ scale: loginAnim }] }}>
                 <TextInput
                   label="Email Address"
                   mode="outlined"
-                  value={email}
+                  value={login}
                   onChangeText={(text) => {
-                    setEmail(text);
-                    setEmailError(false);
-                    setLoginError("");
+                    setLogin(text);
+                    setLoginError(false);
+                    setErrorMessage("");
                   }}
-                  onFocus={() => handleFocus(emailAnim)}
-                  onBlur={() => handleBlur(emailAnim)}
-                  keyboardType="email-address"
+                  onFocus={() => handleFocus(loginAnim)}
+                  onBlur={() => handleBlur(loginAnim)}
                   autoCapitalize="none"
                   autoComplete="email"
+                  keyboardType="email-address"
                   style={[
                     styles.input,
-                    emailError && styles.inputError
+                    loginError && styles.inputError
                   ]}
-                  outlineColor={emailError ? "#ef4444" : "transparent"}
-                  activeOutlineColor={emailError ? "#ef4444" : "#2563eb"}
+                  outlineColor={loginError ? "#ef4444" : "transparent"}
+                  activeOutlineColor={loginError ? "#ef4444" : "#2563eb"}
                   textColor="#111827"
                   left={
-                    <TextInput.Icon 
+                    <TextInput.Icon
                       icon={() => (
-                        <Ionicons 
-                          name="mail" 
-                          size={22} 
-                          color={emailError ? "#ef4444" : "#6b7280"} 
+                        <Ionicons
+                          name="mail"
+                          size={22}
+                          color={loginError ? "#ef4444" : "#6b7280"}
                         />
-                      )} 
+                      )}
                     />
                   }
                   theme={{
                     colors: {
-                      primary: emailError ? "#ef4444" : "#2563eb",
+                      primary: loginError ? "#ef4444" : "#2563eb",
                       background: "transparent",
                     },
                     roundness: 12,
@@ -299,7 +419,7 @@ export default function Login() {
                   onChangeText={(text) => {
                     setPassword(text);
                     setPasswordError(false);
-                    setLoginError("");
+                    setErrorMessage("");
                   }}
                   secureTextEntry={!showPassword}
                   onFocus={() => handleFocus(passwordAnim)}
@@ -312,26 +432,26 @@ export default function Login() {
                   activeOutlineColor={passwordError ? "#ef4444" : "#2563eb"}
                   textColor="#111827"
                   left={
-                    <TextInput.Icon 
+                    <TextInput.Icon
                       icon={() => (
-                        <Ionicons 
-                          name="lock-closed" 
-                          size={22} 
-                          color={passwordError ? "#ef4444" : "#6b7280"} 
+                        <Ionicons
+                          name="lock-closed"
+                          size={22}
+                          color={passwordError ? "#ef4444" : "#6b7280"}
                         />
-                      )} 
+                      )}
                     />
                   }
                   right={
-                    <TextInput.Icon 
+                    <TextInput.Icon
                       icon={() => (
-                        <Ionicons 
-                          name={showPassword ? "eye-off" : "eye"} 
-                          size={22} 
+                        <Ionicons
+                          name={showPassword ? "eye-off" : "eye"}
+                          size={22}
                           color="#6b7280"
                           onPress={() => setShowPassword(!showPassword)}
                         />
-                      )} 
+                      )}
                     />
                   }
                   theme={{
@@ -348,12 +468,12 @@ export default function Login() {
               <View style={styles.optionsRow}>
                 <TouchableOpacity
                   style={styles.rememberRow}
-                  onPress={() => setRememberMe(!rememberMe)}
+                  onPress={handleRememberMeToggle}
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: rememberMe }}
                 >
                   <View style={[
-                    styles.checkbox, 
+                    styles.checkbox,
                     rememberMe && styles.checkboxChecked
                   ]}>
                     {rememberMe && (
@@ -362,11 +482,17 @@ export default function Login() {
                   </View>
                   <Text style={styles.rememberText}>Remember me</Text>
                 </TouchableOpacity>
-
-                <TouchableOpacity onPress={() => navigation.navigate("ForgotPassword")}>
-                  <Text style={styles.forgotText}>Forgot Password?</Text>
-                </TouchableOpacity>
               </View>
+
+              {/* Security Notice for Remember Me */}
+              {rememberMe && (
+                <View style={styles.securityNotice}>
+                  <Ionicons name="shield-checkmark" size={16} color="#059669" />
+                  <Text style={styles.securityText}>
+                    Your credentials will be stored securely on this device
+                  </Text>
+                </View>
+              )}
 
               {/* Login Button */}
               <TouchableOpacity
@@ -377,8 +503,8 @@ export default function Login() {
                 activeOpacity={0.9}
               >
                 <Animated.View style={{ transform: [{ scale: buttonAnim }] }}>
-                  <LinearGradient 
-                    colors={["#2563eb", "#1d4ed8"]} 
+                  <LinearGradient
+                    colors={["#2563eb", "#1d4ed8"]}
                     style={styles.loginButton}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
@@ -399,7 +525,7 @@ export default function Login() {
               <View style={styles.signupContainer}>
                 <Text style={styles.signupText}>
                   Don't have an account?{" "}
-                  <Text 
+                  <Text
                     style={styles.signupLink}
                     onPress={() => navigation.navigate("Register")}
                   >
@@ -423,11 +549,11 @@ export default function Login() {
 }
 
 const styles = StyleSheet.create({
-  container: { 
+  container: {
     flex: 1,
   },
-  scrollContainer: { 
-    flexGrow: 1, 
+  scrollContainer: {
+    flexGrow: 1,
     justifyContent: "center",
     minHeight: height,
   },
@@ -475,7 +601,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 24,
     elevation: 12,
-    backdropFilter: "blur(10px)",
   },
   errorContainer: {
     flexDirection: "row",
@@ -508,7 +633,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 24,
+    marginBottom: 16,
     marginTop: 8,
   },
   rememberRow: {
@@ -538,6 +663,23 @@ const styles = StyleSheet.create({
     color: "#2563eb",
     fontSize: 14,
     fontWeight: "600",
+  },
+  securityNotice: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f0fdf4",
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
+  },
+  securityText: {
+    color: "#059669",
+    fontSize: 12,
+    fontWeight: "500",
+    marginLeft: 8,
+    flex: 1,
   },
   loginButton: {
     borderRadius: 16,

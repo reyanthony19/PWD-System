@@ -13,7 +13,7 @@ import {
   Dimensions,
   StatusBar,
 } from "react-native";
-import { TextInput, RadioButton } from "react-native-paper";
+import { TextInput, RadioButton, Menu, Divider } from "react-native-paper";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import api from "@/services/api";
@@ -46,7 +46,6 @@ export default function Register() {
     barangay: "",
     
     // Optional fields
-    id_number: "",
     disability_type: "",
     blood_type: "",
     sss_number: "",
@@ -74,11 +73,44 @@ export default function Register() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [currentSection, setCurrentSection] = useState(0);
 
-  const bloodTypes = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
-  const disabilityTypes = ["Physical", "Visual", "Hearing", "Intellectual", "Psychosocial", "Multiple", "Other"];
-  const barangays = [
-    "Bagong Silang", "Commonwealth", "Payatas", "Batasan Hills", "Holy Spirit", 
-    "Novaliches", "Fairview", "Project 6", "Project 7", "Project 8"
+  // Menu states for dropdowns
+  const [barangayMenuVisible, setBarangayMenuVisible] = useState(false);
+  const [bloodTypeMenuVisible, setBloodTypeMenuVisible] = useState(false);
+  const [disabilityMenuVisible, setDisabilityMenuVisible] = useState(false);
+  const [guardianRelationshipMenuVisible, setGuardianRelationshipMenuVisible] = useState(false);
+
+  // Options matching web version
+  const barangayOptions = [
+    "Awang", "Bagocboc", "Barra", "Bonbon", "Cauyonan", "Igpit",
+    "Limonda", "Luyong Bonbon", "Malanang", "Nangcaon", "Patag",
+    "Poblacion", "Taboc", "Tingalan"
+  ];
+
+  const bloodTypeOptions = [
+    "A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "Unknown"
+  ];
+
+  // Updated disability types to match PHP array exactly
+  const disabilityTypeOptions = [
+    { value: "physical", label: "Physical Disability" },
+    { value: "mental_health", label: "Mental Health Disability" },
+    { value: "sensory", label: "Sensory Disability" },
+    { value: "neurological", label: "Neurological Disability" },
+    { value: "developmental", label: "Developmental Disability" },
+    { value: "chronic_health", label: "Chronic Health Condition" },
+    { value: "other", label: "Other Disability" }
+  ];
+
+  const guardianRelationshipOptions = [
+    { value: "parent", label: "Parent" },
+    { value: "spouse", label: "Spouse" },
+    { value: "child", label: "Child" },
+    { value: "sibling", label: "Sibling" },
+    { value: "grandparent", label: "Grandparent" },
+    { value: "aunt_uncle", label: "Aunt/Uncle" },
+    { value: "cousin", label: "Cousin" },
+    { value: "guardian", label: "Legal Guardian" },
+    { value: "other", label: "Other" }
   ];
 
   // Animation values
@@ -214,7 +246,6 @@ export default function Register() {
       // Optional fields
       if (form.middle_name) formData.append("middle_name", form.middle_name);
       if (form.contact_number) formData.append("contact_number", form.contact_number);
-      if (form.id_number) formData.append("id_number", form.id_number);
       if (form.disability_type) formData.append("disability_type", form.disability_type);
       if (form.blood_type) formData.append("blood_type", form.blood_type);
       if (form.sss_number) formData.append("sss_number", form.sss_number);
@@ -268,6 +299,23 @@ export default function Register() {
     setLoading(false);
   };
 
+  // Helper function to get display value for dropdowns
+  const getDisplayValue = (fieldName, value) => {
+    if (!value) return `Select ${fieldName.replace('_', ' ')}`;
+    
+    if (fieldName === 'disability_type') {
+      const option = disabilityTypeOptions.find(opt => opt.value === value);
+      return option ? option.label : value;
+    }
+    
+    if (fieldName === 'guardian_relationship') {
+      const option = guardianRelationshipOptions.find(opt => opt.value === value);
+      return option ? option.label : value;
+    }
+    
+    return value;
+  };
+
   const sections = [
     {
       title: "Account Information",
@@ -294,7 +342,6 @@ export default function Register() {
     {
       title: "Additional Information",
       fields: [
-        { name: 'id_number', label: 'ID Number', icon: 'card' },
         { name: 'disability_type', label: 'Disability Type', icon: 'accessibility', type: 'select' },
         { name: 'blood_type', label: 'Blood Type', icon: 'water', type: 'select' },
         { name: 'sss_number', label: 'SSS Number', icon: 'document' },
@@ -305,7 +352,7 @@ export default function Register() {
       title: "Guardian Information",
       fields: [
         { name: 'guardian_full_name', label: 'Guardian Full Name', icon: 'people' },
-        { name: 'guardian_relationship', label: 'Relationship', icon: 'heart' },
+        { name: 'guardian_relationship', label: 'Relationship', icon: 'heart', type: 'select' },
         { name: 'guardian_contact_number', label: 'Guardian Contact', icon: 'call', keyboardType: 'phone-pad' },
         { name: 'guardian_address', label: 'Guardian Address', icon: 'home' },
       ]
@@ -365,30 +412,60 @@ export default function Register() {
         );
 
       case 'select':
-        const options = field.name === 'barangay' ? barangays : 
-                       field.name === 'blood_type' ? bloodTypes : disabilityTypes;
+        const options = field.name === 'barangay' ? barangayOptions :
+                        field.name === 'blood_type' ? bloodTypeOptions :
+                        field.name === 'disability_type' ? disabilityTypeOptions :
+                        guardianRelationshipOptions;
+
+        const isVisible = field.name === 'barangay' ? barangayMenuVisible :
+                          field.name === 'blood_type' ? bloodTypeMenuVisible :
+                          field.name === 'disability_type' ? disabilityMenuVisible :
+                          guardianRelationshipMenuVisible;
+
+        const setVisible = (visible) => {
+          if (field.name === 'barangay') setBarangayMenuVisible(visible);
+          else if (field.name === 'blood_type') setBloodTypeMenuVisible(visible);
+          else if (field.name === 'disability_type') setDisabilityMenuVisible(visible);
+          else setGuardianRelationshipMenuVisible(visible);
+        };
+
         return (
-          <View>
+          <View style={styles.selectField}>
             <Text style={styles.selectLabel}>{field.label}{field.required ? ' *' : ''}</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.selectContainer}>
-              {options.map((option) => (
+            <Menu
+              visible={isVisible}
+              onDismiss={() => setVisible(false)}
+              anchor={
                 <TouchableOpacity
-                  key={option}
-                  style={[
-                    styles.selectOption,
-                    form[field.name] === option && styles.selectOptionActive
-                  ]}
-                  onPress={() => handleChange(field.name, option)}
+                  style={styles.selectInput}
+                  onPress={() => setVisible(true)}
                 >
+                  <Ionicons name={field.icon} size={22} color="#6b7280" style={styles.inputIcon} />
                   <Text style={[
-                    styles.selectOptionText,
-                    form[field.name] === option && styles.selectOptionTextActive
+                    styles.selectInputText,
+                    !form[field.name] && styles.selectInputPlaceholder
                   ]}>
-                    {option}
+                    {getDisplayValue(field.name, form[field.name])}
                   </Text>
+                  <Ionicons name="chevron-down" size={20} color="#6b7280" />
                 </TouchableOpacity>
+              }
+              style={styles.menu}
+            >
+              {options.map((option, index) => (
+                <React.Fragment key={option.value || option}>
+                  <Menu.Item
+                    onPress={() => {
+                      handleChange(field.name, option.value || option);
+                      setVisible(false);
+                    }}
+                    title={option.label || option}
+                    titleStyle={styles.menuItemText}
+                  />
+                  {index < options.length - 1 && <Divider />}
+                </React.Fragment>
               ))}
-            </ScrollView>
+            </Menu>
           </View>
         );
 
@@ -450,6 +527,39 @@ export default function Register() {
 
   const currentSectionData = sections[currentSection];
 
+  // Fixed Progress Step Component
+  const ProgressStep = ({ index, currentSection }) => {
+    const isCompleted = index < currentSection;
+    const isActive = index <= currentSection;
+
+    return (
+      <View style={styles.stepContainer}>
+        <View style={[
+          styles.step,
+          isActive && styles.stepActive,
+          isCompleted && styles.stepCompleted
+        ]}>
+          {isCompleted ? (
+            <Ionicons name="checkmark" size={16} color="#fff" />
+          ) : (
+            <Text style={[
+              styles.stepNumber,
+              isActive && styles.stepNumberActive
+            ]}>
+              {index + 1}
+            </Text>
+          )}
+        </View>
+        {index < sections.length - 1 && (
+          <View style={[
+            styles.stepLine,
+            index < currentSection && styles.stepLineActive
+          ]} />
+        )}
+      </View>
+    );
+  };
+
   return (
     <KeyboardAvoidingView 
       style={{ flex: 1 }} 
@@ -487,33 +597,14 @@ export default function Register() {
               <Text style={styles.subtitle}>Join our community</Text>
             </View>
 
-            {/* Progress Steps */}
+            {/* Progress Steps - FIXED */}
             <View style={styles.progressContainer}>
               {sections.map((_, index) => (
-                <View key={index} style={styles.stepContainer}>
-                  <View style={[
-                    styles.step,
-                    index <= currentSection && styles.stepActive,
-                    index < currentSection && styles.stepCompleted
-                  ]}>
-                    {index < currentSection ? (
-                      <Ionicons name="checkmark" size={16} color="#fff" />
-                    ) : (
-                      <Text style={[
-                        styles.stepNumber,
-                        index <= currentSection && styles.stepNumberActive
-                      ]}>
-                        {index + 1}
-                      </Text>
-                    )}
-                  </View>
-                  {index < sections.length - 1 && (
-                    <View style={[
-                      styles.stepLine,
-                      index < currentSection && styles.stepLineActive
-                    ]} />
-                  )}
-                </View>
+                <ProgressStep 
+                  key={index}
+                  index={index}
+                  currentSection={currentSection}
+                />
               ))}
             </View>
 
@@ -775,35 +866,50 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#374151',
   },
+  selectField: {
+    marginBottom: 16,
+  },
   selectLabel: {
     fontSize: 16,
     fontWeight: '500',
     color: '#374151',
     marginBottom: 8,
   },
-  selectContainer: {
-    marginBottom: 16,
-  },
-  selectOption: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#f3f4f6',
-    marginRight: 8,
+  selectInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: '#d1d5db',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 16,
+    height: 56,
   },
-  selectOptionActive: {
-    backgroundColor: '#2563eb',
-    borderColor: '#2563eb',
+  selectInputText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#111827',
   },
-  selectOptionText: {
-    fontSize: 14,
-    color: '#374151',
-    fontWeight: '500',
+  selectInputPlaceholder: {
+    color: '#6b7280',
   },
-  selectOptionTextActive: {
-    color: '#fff',
+  menu: {
+    marginTop: 8,
+    borderRadius: 12,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+  },
+  menuItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  menuItemText: {
+    fontSize: 16,
+    color: '#111827',
   },
   documentButton: {
     flexDirection: 'row',

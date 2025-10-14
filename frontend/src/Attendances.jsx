@@ -1,4 +1,4 @@
-import { useState, useEffect} from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   Users,
@@ -22,15 +22,84 @@ import {
   Printer,
   Ban,
   User,
-  Scan
+  Scan,
+  RefreshCw,
+  CheckCircle as CheckCircleIcon
 } from "lucide-react";
 import api from "./api";
 import Layout from "./Layout";
 
-// Cache implementation
-const eventCache = new Map();
-const membersCache = new Map();
-const attendancesCache = new Map();
+// Cache configuration
+const CACHE_KEYS = {
+  EVENT: (eventId) => `attendance_event_${eventId}`,
+  MEMBERS: 'attendance_members',
+  ATTENDANCES: (eventId) => `attendance_attendances_${eventId}`,
+  TIMESTAMP: 'attendance_cache_timestamp'
+};
+
+const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes in milliseconds
+
+// Cache utility functions
+const cache = {
+  // Get data from cache
+  get: (key) => {
+    try {
+      const item = localStorage.getItem(key);
+      if (!item) return null;
+      
+      const { data, timestamp } = JSON.parse(item);
+      
+      // Check if cache is still valid
+      if (Date.now() - timestamp > CACHE_DURATION) {
+        cache.clear(key);
+        return null;
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Error reading from cache:', error);
+      return null;
+    }
+  },
+  
+  // Set data in cache
+  set: (key, data) => {
+    try {
+      const item = {
+        data,
+        timestamp: Date.now()
+      };
+      localStorage.setItem(key, JSON.stringify(item));
+    } catch (error) {
+      console.error('Error writing to cache:', error);
+    }
+  },
+  
+  // Clear specific cache
+  clear: (key) => {
+    try {
+      localStorage.removeItem(key);
+    } catch (error) {
+      console.error('Error clearing cache:', error);
+    }
+  },
+  
+  // Clear all attendance cache
+  clearAll: () => {
+    // Clear all keys that start with 'attendance_'
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith('attendance_')) {
+        cache.clear(key);
+      }
+    });
+  },
+  
+  // Check if cache is valid
+  isValid: (key) => {
+    const data = cache.get(key);
+    return data !== null;
+  }
+};
 
 function Attendances() {
   const [members, setMembers] = useState([]);
@@ -39,6 +108,8 @@ function Attendances() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(null);
 
   // filters
   const [search, setSearch] = useState("");
@@ -50,8 +121,8 @@ function Attendances() {
   const queryParams = new URLSearchParams(location.search);
   const eventId = queryParams.get("event_id");
 
-  // Check if event is past due
-  const isEventPastDue = (eventDate) => {
+  // Check if event is completed
+  const isEventCompleted = (eventDate) => {
     if (!eventDate) return false;
     const today = new Date();
     const eventDateObj = new Date(eventDate);
@@ -124,82 +195,141 @@ function Attendances() {
     });
   };
 
-  useEffect(() => {
-    const fetchAllData = async () => {
-      try {
-        setLoading(true);
-        setDataLoaded(false);
-
-        // Check cache for event
-        const eventCacheKey = `event-${eventId}`;
-        if (eventCache.has(eventCacheKey)) {
-          console.log('📦 Using cached event data');
-          setEvent(eventCache.get(eventCacheKey));
-        } else {
-          // Fetch event details
-          const eventRes = await api.get(`/events/${eventId}`);
-          eventCache.set(eventCacheKey, eventRes.data);
-          setEvent(eventRes.data);
-        }
-
-        // Check cache for members and attendances
-        const membersCacheKey = 'members-all';
-        const attendancesCacheKey = `attendances-${eventId}`;
-
-        let membersData, attendanceData;
-
-        // Fetch members from cache or API
-        if (membersCache.has(membersCacheKey)) {
-          console.log('📦 Using cached members data');
-          membersData = membersCache.get(membersCacheKey);
-        } else {
-          const membersRes = await api.get("/users?role=member");
-          membersData = membersRes.data.data || membersRes.data;
-          membersCache.set(membersCacheKey, membersData);
-        }
-
-        // Fetch attendances from cache or API
-        if (attendancesCache.has(attendancesCacheKey)) {
-          console.log('📦 Using cached attendances data');
-          attendanceData = attendancesCache.get(attendancesCacheKey);
-        } else {
-          const attendancesRes = await api.get(`/events/${eventId}/attendances`);
-          attendanceData = attendancesRes.data.data || attendancesRes.data;
-          attendancesCache.set(attendancesCacheKey, attendanceData);
-        }
-
-        setMembers(membersData);
-        setAttendances(attendanceData);
-        setDataLoaded(true);
-
-      } catch (err) {
-        console.error("Failed to fetch data:", err);
-        setError("Failed to load event or attendance records.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (eventId) {
-      fetchAllData();
-      // Set up refresh interval only after initial load
-      const interval = setInterval(async () => {
-        try {
-          const attendancesCacheKey = `attendances-${eventId}`;
-          const attRes = await api.get(`/events/${eventId}/attendances`);
-          const attendanceData = attRes.data.data || attRes.data;
-          
-          // Update cache and state
-          attendancesCache.set(attendancesCacheKey, attendanceData);
-          setAttendances(attendanceData);
-        } catch (err) {
-          console.error("Failed to refresh attendances:", err);
-        }
-      }, 5000);
+  // Manual refresh function
+  const handleRefresh = useCallback(async () => {
+    if (!eventId) return;
+    
+    try {
+      setRefreshing(true);
       
-      return () => clearInterval(interval);
+      // Clear cache for this event
+      cache.clear(CACHE_KEYS.EVENT(eventId));
+      cache.clear(CACHE_KEYS.ATTENDANCES(eventId));
+      cache.clear(CACHE_KEYS.MEMBERS);
+      
+      // Fetch fresh data
+      const [eventRes, membersRes, attendancesRes] = await Promise.all([
+        api.get(`/events/${eventId}`),
+        api.get("/users?role=member"),
+        api.get(`/events/${eventId}/attendances`)
+      ]);
+
+      // Update cache
+      cache.set(CACHE_KEYS.EVENT(eventId), eventRes.data);
+      cache.set(CACHE_KEYS.MEMBERS, membersRes.data.data || membersRes.data);
+      cache.set(CACHE_KEYS.ATTENDANCES(eventId), attendancesRes.data.data || attendancesRes.data);
+
+      // Update state
+      setEvent(eventRes.data);
+      setMembers(membersRes.data.data || membersRes.data);
+      setAttendances(attendancesRes.data.data || attendancesRes.data);
+      setLastUpdated(new Date());
+      
+    } catch (err) {
+      console.error("Failed to refresh data:", err);
+      setError("Failed to refresh attendance records.");
+    } finally {
+      setRefreshing(false);
     }
   }, [eventId]);
+
+  const fetchAllData = useCallback(async (forceRefresh = false) => {
+    if (!eventId) return;
+
+    try {
+      if (forceRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+      setDataLoaded(false);
+
+      let eventData, membersData, attendanceData;
+
+      // Check cache for event unless force refresh
+      const eventCacheKey = CACHE_KEYS.EVENT(eventId);
+      if (!forceRefresh && cache.isValid(eventCacheKey)) {
+        console.log('📦 Using cached event data');
+        eventData = cache.get(eventCacheKey);
+      } else {
+        const eventRes = await api.get(`/events/${eventId}`);
+        eventData = eventRes.data;
+        cache.set(eventCacheKey, eventData);
+      }
+
+      // Check cache for members unless force refresh
+      const membersCacheKey = CACHE_KEYS.MEMBERS;
+      if (!forceRefresh && cache.isValid(membersCacheKey)) {
+        console.log('📦 Using cached members data');
+        membersData = cache.get(membersCacheKey);
+      } else {
+        const membersRes = await api.get("/users?role=member");
+        membersData = membersRes.data.data || membersRes.data;
+        cache.set(membersCacheKey, membersData);
+      }
+
+      // Check cache for attendances unless force refresh
+      const attendancesCacheKey = CACHE_KEYS.ATTENDANCES(eventId);
+      if (!forceRefresh && cache.isValid(attendancesCacheKey)) {
+        console.log('📦 Using cached attendances data');
+        attendanceData = cache.get(attendancesCacheKey);
+      } else {
+        const attendancesRes = await api.get(`/events/${eventId}/attendances`);
+        attendanceData = attendancesRes.data.data || attendancesRes.data;
+        cache.set(attendancesCacheKey, attendanceData);
+      }
+
+      setEvent(eventData);
+      setMembers(membersData);
+      setAttendances(attendanceData);
+      setDataLoaded(true);
+      setLastUpdated(new Date());
+      setError("");
+
+    } catch (err) {
+      console.error("Failed to fetch data:", err);
+      setError("Failed to load event or attendance records.");
+      
+      // Try to use cached data as fallback
+      const cachedEvent = cache.get(CACHE_KEYS.EVENT(eventId));
+      const cachedMembers = cache.get(CACHE_KEYS.MEMBERS);
+      const cachedAttendances = cache.get(CACHE_KEYS.ATTENDANCES(eventId));
+      
+      if (cachedEvent && cachedMembers && cachedAttendances) {
+        setEvent(cachedEvent);
+        setMembers(cachedMembers);
+        setAttendances(cachedAttendances);
+        setDataLoaded(true);
+      }
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [eventId]);
+
+  useEffect(() => {
+    fetchAllData();
+    
+    // Set up refresh interval only after initial load
+    const interval = setInterval(async () => {
+      if (!eventId) return;
+      
+      try {
+        const attendancesCacheKey = CACHE_KEYS.ATTENDANCES(eventId);
+        const attRes = await api.get(`/events/${eventId}/attendances`);
+        const attendanceData = attRes.data.data || attRes.data;
+        
+        // Update cache and state
+        cache.set(attendancesCacheKey, attendanceData);
+        setAttendances(attendanceData);
+        setLastUpdated(new Date());
+      } catch (err) {
+        console.error("Failed to refresh attendances:", err);
+      }
+    }, 5000);
+    
+    return () => clearInterval(interval);
+  }, [eventId, fetchAllData]);
 
   // Filter members based on event's target barangay - ONLY when data is loaded
   const filteredMembersByEventBarangay = dataLoaded ? members.filter(member => {
@@ -233,7 +363,7 @@ function Attendances() {
     } else if (isEventUpcoming(event?.event_date)) {
       status = "Expected";
       statusVariant = "expected";
-    } else if (isEventPastDue(event?.event_date)) {
+    } else if (isEventCompleted(event?.event_date)) {
       status = "Absent";
       statusVariant = "absent";
     }
@@ -280,7 +410,7 @@ function Attendances() {
 
   // Determine the label for the third statistic card
   const getThirdStatLabel = () => {
-    if (isEventPastDue(event?.event_date)) return "Absent";
+    if (isEventCompleted(event?.event_date)) return "Absent";
     if (isEventToday(event?.event_date)) return "Expected Today";
     return "Expected";
   };
@@ -396,6 +526,42 @@ function Attendances() {
         </div>
 
         <div className="max-w-7xl mx-auto relative">
+          {/* Cache Status Indicator */}
+          <div className="mb-4 flex justify-between items-center">
+            <div className="text-sm text-gray-600">
+              {cache.isValid(CACHE_KEYS.EVENT(eventId)) && 
+               cache.isValid(CACHE_KEYS.MEMBERS) && 
+               cache.isValid(CACHE_KEYS.ATTENDANCES(eventId)) ? (
+                <span className="text-green-600 flex items-center gap-2">
+                  <CheckCircleIcon size={16} />
+                  Using cached data
+                </span>
+              ) : (
+                <span className="text-yellow-600 flex items-center gap-2">
+                  <RefreshCw size={16} />
+                  Fetching fresh data
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-4">
+              {lastUpdated && (
+                <span className="text-xs text-gray-500">
+                  Last updated: {lastUpdated.toLocaleTimeString()}
+                </span>
+              )}
+              <button
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-700 
+                         rounded-lg text-sm font-medium hover:bg-blue-200 
+                         transition-colors disabled:opacity-50"
+              >
+                <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
+                {refreshing ? "Refreshing..." : "Refresh"}
+              </button>
+            </div>
+          </div>
+
           {/* Header */}
           <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 p-8 mb-8">
             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-8">
@@ -445,15 +611,15 @@ function Attendances() {
                           Barangay: {event.target_barangay || "All Barangays"}
                         </span>
                         <span className={`flex items-center gap-2 px-3 py-1 rounded-full font-semibold ${
-                          isEventPastDue(event.event_date)
-                            ? "bg-red-100 text-red-700"
+                          isEventCompleted(event.event_date)
+                            ? "bg-gray-100 text-gray-700"
                             : isEventToday(event.event_date)
                             ? "bg-orange-100 text-orange-700"
                             : "bg-green-100 text-green-700"
                         }`}>
                           <CalendarClock className="w-4 h-4" />
-                          {isEventPastDue(event.event_date)
-                            ? "Past Due"
+                          {isEventCompleted(event.event_date)
+                            ? "Event Completed"
                             : isEventToday(event.event_date)
                             ? "Today"
                             : "Upcoming"}
@@ -477,8 +643,8 @@ function Attendances() {
                   <div className="text-green-100 text-xs font-medium">Present</div>
                 </div>
                 <div className={`p-5 rounded-2xl shadow-lg text-center text-white ${
-                  isEventPastDue(event?.event_date)
-                    ? "bg-gradient-to-br from-red-500 to-red-600"
+                  isEventCompleted(event?.event_date)
+                    ? "bg-gradient-to-br from-gray-500 to-gray-600"
                     : isEventToday(event?.event_date)
                     ? "bg-gradient-to-br from-orange-500 to-orange-600"
                     : "bg-gradient-to-br from-yellow-500 to-yellow-600"
@@ -498,6 +664,7 @@ function Attendances() {
             </div>
           </div>
 
+          {/* Rest of your component remains the same */}
           {/* Search + Filters */}
           <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-white/20 p-6 mb-8">
             <div className="flex flex-col lg:flex-row lg:items-end gap-6">

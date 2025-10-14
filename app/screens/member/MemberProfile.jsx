@@ -10,14 +10,26 @@ import {
   Image,
   TouchableOpacity,
   Modal,
+  RefreshControl // ADDED: Import RefreshControl
 } from "react-native";
 import { Button, Avatar, Card } from "react-native-paper";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import api from "@/services/api";
+import NetInfo from '@react-native-community/netinfo';
 
 const { width } = Dimensions.get("window");
+
+// Cache keys
+const CACHE_KEYS = {
+  USER_PROFILE: 'cached_user_profile',
+  USER_DOCUMENTS: 'cached_user_documents',
+  LAST_UPDATED: 'cache_last_updated'
+};
+
+// Cache expiration time (10 minutes)
+const CACHE_EXPIRY_TIME = 10 * 60 * 1000;
 
 const defaultValues = {
   contact_number: "No contact yet",
@@ -41,31 +53,83 @@ const defaultValues = {
 export default function MemberProfile() {
   const navigation = useNavigation();
   const [user, setUser] = useState(null);
-  const [documents, setDocuments] = useState(null);
+  const [documents, setDocuments] = useState({}); // FIXED: Initialize as empty object
   const [loading, setLoading] = useState(true);
   const [incompleteFields, setIncompleteFields] = useState([]);
   const [selectedImage, setSelectedImage] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+  const [usingCachedData, setUsingCachedData] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const BASE_URL = "http://192.168.0.101:8000/storage/";
+  // Get base URL from api instance - FIXED: Handle case where baseURL might not be set
+  const BASE_URL = api.defaults.baseURL || "http://192.168.1.101:8000";
 
   useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const token = await AsyncStorage.getItem("token");
-        if (!token) {
-          Alert.alert("Session Expired", "Please log in again.");
-          navigation.reset({ index: 0, routes: [{ name: "Login" }] });
-          return;
+    // Subscribe to network state updates
+    const unsubscribeNetInfo = NetInfo.addEventListener(state => {
+      setIsOnline(state.isConnected);
+    });
+
+    return () => unsubscribeNetInfo();
+  }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchUserProfile();
+    }, [])
+  );
+
+  // Cache management functions
+  const saveToCache = async (key, data) => {
+    try {
+      const cacheData = {
+        data: data,
+        timestamp: Date.now()
+      };
+      await AsyncStorage.setItem(key, JSON.stringify(cacheData));
+    } catch (error) {
+      console.log('Error saving to cache:', error);
+    }
+  };
+
+  const getFromCache = async (key) => {
+    try {
+      const cached = await AsyncStorage.getItem(key);
+      if (cached) {
+        const cacheData = JSON.parse(cached);
+        // Check if cache is still valid
+        if (Date.now() - cacheData.timestamp < CACHE_EXPIRY_TIME) {
+          return cacheData.data;
+        } else {
+          // Clear expired cache
+          await AsyncStorage.removeItem(key);
         }
+      }
+      return null;
+    } catch (error) {
+      console.log('Error reading from cache:', error);
+      return null;
+    }
+  };
 
-        api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-        const res = await api.get("/user");
-        setUser(res.data);
+  const loadCachedData = async () => {
+    try {
+      const [cachedProfile, cachedDocuments] = await Promise.all([
+        getFromCache(CACHE_KEYS.USER_PROFILE),
+        getFromCache(CACHE_KEYS.USER_DOCUMENTS)
+      ]);
 
-        const profile = res.data?.member_profile || {};
+      if (cachedProfile) {
+        setUser(cachedProfile);
+
+        // Use cached documents or empty object if none
+        const documentsData = cachedDocuments || {};
+        setDocuments(documentsData);
+
+        // Calculate incomplete fields for cached data
+        const profile = cachedProfile?.member_profile || {};
         const missing = [];
-
         Object.entries(defaultValues).forEach(([key, defValue]) => {
           if (
             profile[key] === defValue ||
@@ -75,34 +139,144 @@ export default function MemberProfile() {
             missing.push(key);
           }
         });
-
         setIncompleteFields(missing);
 
-        const userDocuments = await getMemberDocuments(res.data.id);
-        setDocuments(userDocuments);
-      } catch (err) {
-        console.error("Profile fetch error:", err.response?.data || err.message);
-        Alert.alert("Error", "Failed to load profile. Please log in again.");
-        await AsyncStorage.clear();
-        navigation.reset({ index: 0, routes: [{ name: "Login" }] });
-      } finally {
-        setLoading(false);
+        setUsingCachedData(true);
+        return true;
       }
-    };
+      return false;
+    } catch (error) {
+      console.log('Error loading cached data:', error);
+      return false;
+    }
+  };
 
-    fetchUser();
-    const intervalId = setInterval(fetchUser, 30000);
-    return () => clearInterval(intervalId);
-  }, []);
-
+  // FIXED: Improved document fetching with better error handling
+  // FIXED: Improved document fetching with better error handling
   const getMemberDocuments = async (user_id) => {
     try {
-      const res = await api.get(`/user/documents/${user_id}`);  
-      return res.data;  
+      const res = await api.get(`/user/documents/${user_id}`);
+
+      // Check if response has data and it's in expected format
+      if (res.data && typeof res.data === 'object') {
+        return res.data;
+      } else {
+        console.warn("Documents response format unexpected:", res.data);
+        // Return default documents directly
+        return {
+          picture_2x2: null,
+          barangay_indigency: null,
+          medical_certificate: null,
+          birth_certificate: null
+        };
+      }
     } catch (error) {
       console.error("Error fetching member documents:", error);
-      throw new Error("Failed to fetch member documents.");
+
+      // Return default documents structure if endpoint doesn't exist or fails
+      return {
+        picture_2x2: null,
+        barangay_indigency: null,
+        medical_certificate: null,
+        birth_certificate: null
+      };
     }
+  };
+
+  const fetchUserProfile = async (forceRefresh = false) => {
+    try {
+      setRefreshing(true);
+
+      const token = await AsyncStorage.getItem("token");
+      if (!token) {
+        Alert.alert("Session Expired", "Please log in again.");
+        navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+        return;
+      }
+
+      // Try to load from cache first if not forcing refresh and offline
+      if (!forceRefresh && !isOnline) {
+        const hasCachedData = await loadCachedData();
+        if (hasCachedData) {
+          setLoading(false);
+          setRefreshing(false);
+          return;
+        } else {
+          Alert.alert("Offline", "No internet connection and no cached data available.");
+          setLoading(false);
+          setRefreshing(false);
+          return;
+        }
+      }
+
+      // If online or force refresh, fetch fresh data
+      api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+
+      // Fetch user profile
+      const res = await api.get("/user");
+      const userData = res.data;
+      setUser(userData);
+      await saveToCache(CACHE_KEYS.USER_PROFILE, userData);
+
+      // Calculate incomplete fields
+      const profile = userData?.member_profile || {};
+      const missing = [];
+      Object.entries(defaultValues).forEach(([key, defValue]) => {
+        if (
+          profile[key] === defValue ||
+          profile[key]?.toString().trim() === "" ||
+          profile[key] == null
+        ) {
+          missing.push(key);
+        }
+      });
+      setIncompleteFields(missing);
+
+      // Fetch documents - FIXED: Better error handling
+      try {
+        const userDocuments = await getMemberDocuments(userData.id);
+        setDocuments(userDocuments);
+        await saveToCache(CACHE_KEYS.USER_DOCUMENTS, userDocuments);
+      } catch (docError) {
+        console.error("Documents fetch failed, using empty documents:", docError);
+        const emptyDocuments = {
+          picture_2x2: null,
+          barangay_indigency: null,
+          medical_certificate: null,
+          birth_certificate: null
+        };
+        setDocuments(emptyDocuments);
+        await saveToCache(CACHE_KEYS.USER_DOCUMENTS, emptyDocuments);
+      }
+
+      setUsingCachedData(false);
+
+    } catch (err) {
+      console.error("Profile fetch error:", err.response?.data || err.message);
+
+      // If online fetch fails, try to load cached data
+      if (isOnline) {
+        const hasCachedData = await loadCachedData();
+        if (!hasCachedData) {
+          Alert.alert("Error", "Failed to load profile. Please try again.");
+        }
+      } else {
+        Alert.alert("Offline", "No internet connection. Using cached data if available.");
+        await loadCachedData();
+      }
+
+      if (err.response?.status === 401) {
+        await AsyncStorage.clear();
+        navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+      }
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  const handleManualRefresh = () => {
+    fetchUserProfile(true); // Force refresh
   };
 
   const handleLogout = async () => {
@@ -111,13 +285,17 @@ export default function MemberProfile() {
       "Are you sure you want to logout?",
       [
         { text: "Cancel", style: "cancel" },
-        { 
-          text: "Logout", 
+        {
+          text: "Logout",
           style: "destructive",
           onPress: async () => {
             try {
-              await AsyncStorage.removeItem("token");
-              await AsyncStorage.removeItem("user");
+              // Clear cache on logout
+              await AsyncStorage.multiRemove([
+                "token",
+                "user",
+                ...Object.values(CACHE_KEYS)
+              ]);
               delete api.defaults.headers.common["Authorization"];
               navigation.reset({ index: 0, routes: [{ name: "Login" }] });
             } catch (err) {
@@ -149,7 +327,7 @@ export default function MemberProfile() {
   const isImageFile = (filename) => {
     if (!filename) return false;
     const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
-    return imageExtensions.some(ext => 
+    return imageExtensions.some(ext =>
       filename.toLowerCase().includes(ext)
     );
   };
@@ -158,7 +336,7 @@ export default function MemberProfile() {
     if (!hasDocument) {
       return "alert-circle";
     }
-    
+
     switch (documentType) {
       case 'picture_2x2':
         return 'image';
@@ -218,33 +396,33 @@ export default function MemberProfile() {
   ];
 
   const documentFields = [
-    { 
-      label: "2x2 Picture", 
-      value: docs.picture_2x2, 
-      icon: "image", 
+    {
+      label: "2x2 Picture",
+      value: docs.picture_2x2,
+      icon: "image",
       key: "picture_2x2",
-      type: "image" 
+      type: "image"
     },
-    { 
-      label: "Barangay Indigency", 
-      value: docs.barangay_indigency, 
-      icon: "file-document", 
+    {
+      label: "Barangay Indigency",
+      value: docs.barangay_indigency,
+      icon: "file-document",
       key: "barangay_indigency",
-      type: "document" 
+      type: "document"
     },
-    { 
-      label: "Medical Certificate", 
-      value: docs.medical_certificate, 
-      icon: "file-document", 
+    {
+      label: "Medical Certificate",
+      value: docs.medical_certificate,
+      icon: "file-document",
       key: "medical_certificate",
-      type: "document" 
+      type: "document"
     },
-    { 
-      label: "Birth Certificate", 
-      value: docs.birth_certificate, 
-      icon: "file-document", 
+    {
+      label: "Birth Certificate",
+      value: docs.birth_certificate,
+      icon: "file-document",
       key: "birth_certificate",
-      type: "document" 
+      type: "document"
     },
   ];
 
@@ -260,12 +438,12 @@ export default function MemberProfile() {
           <Icon name="alert-circle" size={16} color="#dc2626" style={styles.warningIcon} />
         )}
       </View>
-      
+
       {field.key.includes("picture") && field.value ? (
-        <TouchableOpacity onPress={() => openImageModal(`${BASE_URL}${field.value}`)}>
-          <Image 
-            source={{ uri: `${BASE_URL}${field.value}` }} 
-            style={styles.documentImage} 
+        <TouchableOpacity onPress={() => openImageModal(`${BASE_URL}/storage/${field.value}`)}>
+          <Image
+            source={{ uri: `${BASE_URL}/storage/${field.value}` }}
+            style={styles.documentImage}
           />
           <Text style={styles.viewImageText}>Tap to view</Text>
         </TouchableOpacity>
@@ -300,19 +478,19 @@ export default function MemberProfile() {
   const renderDocumentItem = (field, idx) => {
     const hasDocument = !!field.value;
     const isImage = field.type === "image" || (field.value && isImageFile(field.value));
-    
+
     return (
-      <TouchableOpacity 
-        key={idx} 
+      <TouchableOpacity
+        key={idx}
         style={styles.documentItem}
-        onPress={() => hasDocument && isImage && openImageModal(`${BASE_URL}${field.value}`)}
+        onPress={() => hasDocument && isImage && openImageModal(`${BASE_URL}/storage/${field.value}`)}
         disabled={!hasDocument || !isImage}
       >
         <View style={styles.documentContent}>
           {hasDocument && isImage ? (
             <View style={styles.documentImageContainer}>
-              <Image 
-                source={{ uri: `${BASE_URL}${field.value}` }} 
+              <Image
+                source={{ uri: `${BASE_URL}/storage/${field.value}` }}
                 style={styles.documentThumbnail}
                 resizeMode="cover"
               />
@@ -322,14 +500,14 @@ export default function MemberProfile() {
             </View>
           ) : (
             <View style={styles.documentIconContainer}>
-              <Icon 
-                name={getDocumentIcon(field.key, hasDocument)} 
-                size={24} 
-                color={getDocumentColor(hasDocument)} 
+              <Icon
+                name={getDocumentIcon(field.key, hasDocument)}
+                size={24}
+                color={getDocumentColor(hasDocument)}
               />
             </View>
           )}
-          
+
           <View style={styles.documentTextContainer}>
             <Text style={styles.documentLabel}>{field.label}</Text>
             <Text style={[
@@ -342,7 +520,7 @@ export default function MemberProfile() {
             </Text>
           </View>
         </View>
-        
+
         {hasDocument && !isImage && (
           <View style={styles.documentBadge}>
             <Icon name="file-document" size={12} color="#fff" />
@@ -354,24 +532,48 @@ export default function MemberProfile() {
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl // FIXED: Now properly imported and used
+            refreshing={refreshing}
+            onRefresh={handleManualRefresh}
+            colors={["#2563eb"]}
+            tintColor="#2563eb"
+            enabled={isOnline}
+          />
+        }
+      >
+        {/* Connection Status Banner */}
+        {!isOnline && (
+          <View style={styles.offlineBanner}>
+            <Icon name="cloud-offline" size={16} color="#fff" />
+            <Text style={styles.offlineText}>
+              You're offline. Showing cached data.
+            </Text>
+          </View>
+        )}
+
         {/* Profile Completion Banner */}
         {incompleteFields.length > 0 && (
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.completionBanner}
             onPress={() => navigation.navigate("MemberEditProfile")}
           >
             <View style={styles.completionHeader}>
               <Icon name="alert-circle" size={20} color="#ffffff" />
               <Text style={styles.completionTitle}>Profile Incomplete</Text>
+              {usingCachedData && (
+                <Text style={styles.cachedIndicator}> • Cached</Text>
+              )}
             </View>
             <View style={styles.progressContainer}>
               <View style={styles.progressBar}>
-                <View 
+                <View
                   style={[
-                    styles.progressFill, 
+                    styles.progressFill,
                     { width: `${completionPercentage}%` }
-                  ]} 
+                  ]}
                 />
               </View>
               <Text style={styles.completionText}>
@@ -394,6 +596,9 @@ export default function MemberProfile() {
               <View style={styles.memberIdContainer}>
                 <Icon name="identifier" size={14} color="#6b7280" />
                 <Text style={styles.memberId}>ID: {user?.id}</Text>
+                {usingCachedData && (
+                  <Text style={styles.cachedBadge}> • Cached</Text>
+                )}
               </View>
             </View>
             <View style={styles.profileStats}>
@@ -422,7 +627,9 @@ export default function MemberProfile() {
           <Card.Content>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Documents</Text>
-              <Text style={styles.documentsSubtitle}>Uploaded Files</Text>
+              <Text style={styles.documentsSubtitle}>
+                Uploaded Files {usingCachedData && "• Cached"}
+              </Text>
             </View>
             <View style={styles.documentsGrid}>
               {documentFields.map(renderDocumentItem)}
@@ -466,15 +673,15 @@ export default function MemberProfile() {
       >
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.closeButton}
               onPress={closeImageModal}
             >
               <Icon name="close" size={24} color="#fff" />
             </TouchableOpacity>
             {selectedImage && (
-              <Image 
-                source={{ uri: selectedImage }} 
+              <Image
+                source={{ uri: selectedImage }}
                 style={styles.fullSizeImage}
                 resizeMode="contain"
               />
@@ -487,23 +694,39 @@ export default function MemberProfile() {
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: "#f8fafc" 
+  container: {
+    flex: 1,
+    backgroundColor: "#f8fafc"
   },
-  scrollContent: { 
+  scrollContent: {
     padding: 16,
-    paddingBottom: 20 
+    paddingBottom: 20
   },
-  loader: { 
-    flex: 1, 
-    justifyContent: "center", 
-    alignItems: "center" 
+  loader: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center"
   },
-  loadingText: { 
-    marginTop: 12, 
+  loadingText: {
+    marginTop: 12,
     color: "#2563eb",
-    fontSize: 16 
+    fontSize: 16
+  },
+
+  // Offline Banner
+  offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(245, 158, 11, 0.9)',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  offlineText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 8,
   },
 
   // Completion Banner
@@ -523,6 +746,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     marginLeft: 8,
+  },
+  cachedIndicator: {
+    color: "rgba(255, 255, 255, 0.8)",
+    fontSize: 14,
+    fontStyle: "italic",
   },
   progressContainer: {
     marginBottom: 8,
@@ -587,6 +815,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#9ca3af",
     marginLeft: 4,
+  },
+  cachedBadge: {
+    fontSize: 10,
+    color: "#f59e0b",
+    fontStyle: "italic",
   },
   profileStats: {
     alignItems: "flex-end",

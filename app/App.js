@@ -29,6 +29,8 @@ import MemberProfile from "./screens/member/MemberProfile";
 import MemberEditProfile from "./screens/member/MemberEditProfile";
 import MemberEvents from "./screens/member/MemberEvents";
 import MemberBenefits from "./screens/member/MemberBenefits";
+import MemberAttendance from "./screens/member/MemberAttendance";
+import MemberBenefitsRecord from "./screens/member/MemberBenefitsRecord";
 import Terms from "./screens/member/Terms";
 import ContactUs from "./screens/member/ContactUs";
 
@@ -38,7 +40,7 @@ const Tab = createBottomTabNavigator();
 export default function App() {
   const [initialRoute, setInitialRoute] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [userRole, setUserRole] = useState(''); 
+  const [userRole, setUserRole] = useState('');
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -48,7 +50,7 @@ export default function App() {
         const user = userStr ? JSON.parse(userStr) : null;
 
         if (token && user?.role) {
-          setUserRole(user.role); 
+          setUserRole(user.role);
           setInitialRoute(user.role === "staff" ? "StaffFlow" : "MemberFlow");
         } else {
           setInitialRoute("Login");
@@ -78,17 +80,17 @@ export default function App() {
   // Custom Tab Bar Icon Component
   const TabBarIcon = ({ focused, iconName, label, type = 'ionicons' }) => {
     const IconComponent = type === 'material' ? MaterialCommunityIcons : Ionicons;
-    
+
     return (
       <View style={{ alignItems: 'center', justifyContent: 'center', paddingTop: 4 }}>
-        <IconComponent 
-          name={iconName} 
-          size={24} 
-          color={focused ? '#2563eb' : '#9ca3af'} 
+        <IconComponent
+          name={iconName}
+          size={24}
+          color={focused ? '#2563eb' : '#9ca3af'}
         />
-        <Text 
-          style={{ 
-            fontSize: 10, 
+        <Text
+          style={{
+            fontSize: 10,
             marginTop: 2,
             color: focused ? '#2563eb' : '#9ca3af',
             fontWeight: focused ? '600' : '400'
@@ -121,7 +123,7 @@ export default function App() {
           },
           tabBarActiveTintColor: '#2563eb',
           tabBarInactiveTintColor: '#9ca3af',
-          headerStyle: { 
+          headerStyle: {
             backgroundColor: '#2563eb',
             shadowColor: '#000',
             shadowOffset: { width: 0, height: 2 },
@@ -130,78 +132,78 @@ export default function App() {
             elevation: 4,
           },
           headerTintColor: '#ffffff',
-          headerTitleStyle: { 
-            fontWeight: 'bold', 
+          headerTitleStyle: {
+            fontWeight: 'bold',
             fontSize: 20,
           },
           headerTitleAlign: 'center',
         }}
       >
-        <Tab.Screen 
-          name="Home" 
-          component={StaffHome} 
+        <Tab.Screen
+          name="Home"
+          component={StaffHome}
           options={{
             tabBarIcon: ({ focused }) => (
-              <TabBarIcon 
-                focused={focused} 
-                iconName={focused ? 'home' : 'home-outline'} 
-                label="" 
+              <TabBarIcon
+                focused={focused}
+                iconName={focused ? 'home' : 'home-outline'}
+                label="Home"
               />
             ),
             title: 'Staff Dashboard',
           }}
         />
-        <Tab.Screen 
-          name="Events" 
-          component={Events} 
+        <Tab.Screen
+          name="Events"
+          component={Events}
           options={{
             tabBarIcon: ({ focused }) => (
-              <TabBarIcon 
-                focused={focused} 
-                iconName={focused ? 'calendar' : 'calendar-outline'} 
-                label="" 
+              <TabBarIcon
+                focused={focused}
+                iconName={focused ? 'calendar' : 'calendar-outline'}
+                label="Events"
               />
             ),
             title: 'Event Management',
           }}
         />
-        <Tab.Screen 
-          name="Benefits" 
-          component={Benefits} 
+        <Tab.Screen
+          name="Benefits"
+          component={Benefits}
           options={{
             tabBarIcon: ({ focused }) => (
-              <TabBarIcon 
-                focused={focused} 
-                iconName={focused ? 'gift' : 'gift-outline'} 
-                label="" 
+              <TabBarIcon
+                focused={focused}
+                iconName={focused ? 'gift' : 'gift-outline'}
+                label="Benefits"
               />
             ),
             title: 'Benefits Management',
           }}
         />
-        <Tab.Screen 
-          name="Members" 
-          component={MemberList} 
+        <Tab.Screen
+          name="Members"
+          component={MemberList}
           options={{
             tabBarIcon: ({ focused }) => (
-              <TabBarIcon 
-                focused={focused} 
-                iconName={focused ? 'people' : 'people-outline'} 
-                label="" 
+              <TabBarIcon
+                focused={focused}
+                iconName={focused ? 'people' : 'people-outline'}
+                label="Members"
               />
             ),
             title: 'Member Management',
           }}
         />
-        <Tab.Screen 
-          name="Profile" 
-          component={Profile} 
+        <Tab.Screen
+          name="Profile"
+          component={Profile}
           options={{
             tabBarIcon: ({ focused }) => (
-              <TabBarIcon 
-                focused={focused} 
-                iconName={focused ? 'person' : 'person-outline'} 
-                label="" 
+              <TabBarIcon
+                focused={focused}
+                iconName={focused ? 'person' : 'person-outline'}
+                label="Profile"
               />
             ),
             title: 'My Profile',
@@ -232,7 +234,7 @@ export default function App() {
           },
           tabBarActiveTintColor: '#2563eb',
           tabBarInactiveTintColor: '#9ca3af',
-          headerStyle: { 
+          headerStyle: {
             backgroundColor: '#2563eb',
             shadowColor: '#000',
             shadowOffset: { width: 0, height: 2 },
@@ -241,78 +243,78 @@ export default function App() {
             elevation: 4,
           },
           headerTintColor: '#ffffff',
-          headerTitleStyle: { 
-            fontWeight: 'bold', 
+          headerTitleStyle: {
+            fontWeight: 'bold',
             fontSize: 20,
           },
           headerTitleAlign: 'center',
         }}
       >
-        <Tab.Screen 
-          name="Home" 
-          component={MemberHome} 
+        <Tab.Screen
+          name="Home"
+          component={MemberHome}
           options={{
             tabBarIcon: ({ focused }) => (
-              <TabBarIcon 
-                focused={focused} 
-                iconName={focused ? 'home' : 'home-outline'} 
-                label="" 
+              <TabBarIcon
+                focused={focused}
+                iconName={focused ? 'home' : 'home-outline'}
+                label="Home"
               />
             ),
             title: 'Dashboard',
           }}
         />
-        <Tab.Screen 
-          name="Events" 
-          component={MemberEvents} 
+        <Tab.Screen
+          name="Events"
+          component={MemberEvents}
           options={{
             tabBarIcon: ({ focused }) => (
-              <TabBarIcon 
-                focused={focused} 
-                iconName={focused ? 'calendar' : 'calendar-outline'} 
-                label="" 
+              <TabBarIcon
+                focused={focused}
+                iconName={focused ? 'calendar' : 'calendar-outline'}
+                label="Events"
               />
             ),
             title: 'My Events',
           }}
         />
-        <Tab.Screen 
-          name="Benefits" 
-          component={MemberBenefits} 
+        <Tab.Screen
+          name="Benefits"
+          component={MemberBenefits}
           options={{
             tabBarIcon: ({ focused }) => (
-              <TabBarIcon 
-                focused={focused} 
-                iconName={focused ? 'gift' : 'gift-outline'} 
-                label="" 
+              <TabBarIcon
+                focused={focused}
+                iconName={focused ? 'gift' : 'gift-outline'}
+                label="Benefits"
               />
             ),
             title: 'My Benefits',
           }}
         />
-        <Tab.Screen 
-          name="About" 
-          component={About} 
+        <Tab.Screen
+          name="About"
+          component={About}
           options={{
             tabBarIcon: ({ focused }) => (
-              <TabBarIcon 
-                focused={focused} 
-                iconName={focused ? 'information-circle' : 'information-circle-outline'} 
-                label="" 
+              <TabBarIcon
+                focused={focused}
+                iconName={focused ? 'information-circle' : 'information-circle-outline'}
+                label="About"
               />
             ),
             title: 'About PDAO',
           }}
         />
-        <Tab.Screen 
-          name="Profile" 
-          component={MemberProfile} 
+        <Tab.Screen
+          name="Profile"
+          component={MemberProfile}
           options={{
             tabBarIcon: ({ focused }) => (
-              <TabBarIcon 
-                focused={focused} 
-                iconName={focused ? 'person' : 'person-outline'} 
-                label="" 
+              <TabBarIcon
+                focused={focused}
+                iconName={focused ? 'person' : 'person-outline'}
+                label="Profile"
               />
             ),
             title: 'My Profile',
@@ -327,7 +329,7 @@ export default function App() {
       <Stack.Navigator
         initialRouteName={initialRoute}
         screenOptions={{
-          headerStyle: { 
+          headerStyle: {
             backgroundColor: "#2563eb",
             shadowColor: "#000",
             shadowOffset: { width: 0, height: 2 },
@@ -336,8 +338,8 @@ export default function App() {
             elevation: 4,
           },
           headerTintColor: "#ffffff",
-          headerTitleStyle: { 
-            fontWeight: "bold", 
+          headerTitleStyle: {
+            fontWeight: "bold",
             fontSize: 18,
           },
           headerTitleAlign: "center",
@@ -347,97 +349,108 @@ export default function App() {
         }}
       >
         {/* Public Screens */}
-        {initialRoute === "Login" && (
-          <Stack.Screen 
-            name="Login" 
-            component={Login} 
-            options={{ headerShown: false }} 
-          />
-        )}
-        
-        <Stack.Screen 
-          name="Register" 
-          component={Register} 
-          options={{ 
+        <Stack.Screen
+          name="Login"
+          component={Login}
+          options={{ headerShown: false }}
+        />
+
+        <Stack.Screen
+          name="Register"
+          component={Register}
+          options={{
             headerShown: true,
             title: 'Create Account',
-          }} 
+          }}
         />
 
         {/* Staff Flow */}
-        <Stack.Screen 
-          name="StaffFlow" 
+        <Stack.Screen
+          name="StaffFlow"
+          component={StaffFlow}
           options={{ headerShown: false }}
-        >
-          {() => <StaffFlow />}
-        </Stack.Screen>
+        />
 
         {/* Member Flow */}
-        <Stack.Screen 
-          name="MemberFlow" 
+        <Stack.Screen
+          name="MemberFlow"
+          component={MemberFlow}
           options={{ headerShown: false }}
-        >
-          {() => <MemberFlow />}
-        </Stack.Screen>
+        />
 
         {/* Staff Screens */}
-        <Stack.Screen 
-          name="Attendance" 
-          component={Attendance} 
+        <Stack.Screen
+          name="Attendance"
+          component={Attendance}
           options={{ title: 'Event Attendance' }}
         />
-        <Stack.Screen 
-          name="EditProfile" 
-          component={EditProfile} 
+        <Stack.Screen
+          name="EditProfile"
+          component={EditProfile}
           options={{ title: 'Edit Profile' }}
         />
-        <Stack.Screen 
-          name="BenefitAttendance" 
-          component={BenefitAttendance} 
+        <Stack.Screen
+          name="BenefitAttendance"
+          component={BenefitAttendance}
           options={{ title: 'Benefit Claims' }}
         />
-        <Stack.Screen 
-          name="Scanner" 
-          component={Scanner} 
+        <Stack.Screen
+          name="Scanner"
+          component={Scanner}
           options={{ title: 'QR Scanner' }}
         />
-        <Stack.Screen 
-          name="BenefitScanner" 
-          component={BenefitScanner} 
+        <Stack.Screen
+          name="BenefitScanner"
+          component={BenefitScanner}
           options={{ title: 'Benefit QR Scanner' }}
         />
-        <Stack.Screen 
-          name="MemberList" 
-          component={MemberList} 
+        <Stack.Screen
+          name="MemberList"
+          component={MemberList}
           options={{ title: 'Member Directory' }}
         />
 
         {/* Member Screens */}
-        <Stack.Screen 
-          name="MemberEditProfile" 
-          component={MemberEditProfile} 
+        <Stack.Screen
+          name="MemberEditProfile"
+          component={MemberEditProfile}
           options={{ title: 'Edit Profile' }}
         />
-        <Stack.Screen 
-          name="Terms & Conditions" 
-          component={Terms} 
+
+        {/* FIXED: Added missing MemberAttendance route */}
+        <Stack.Screen
+          name="MemberAttendance"
+          component={MemberAttendance}
+          options={{ title: 'Event Details' }}
+        />
+
+        {/* FIXED: Added missing MemberBenefitsRecord route */}
+        <Stack.Screen
+          name="MemberBenefitsRecord"
+          component={MemberBenefitsRecord}
+          options={{ title: 'Benefit Records' }}
+        />
+
+        <Stack.Screen
+          name="Terms"
+          component={Terms}
           options={{ title: 'Terms & Conditions' }}
         />
-        <Stack.Screen 
-          name="Visit Us" 
-          component={ContactUs} 
+        <Stack.Screen
+          name="ContactUs"
+          component={ContactUs}
           options={{ title: 'Contact Us' }}
         />
-        
+
         {/* Shared Screens */}
-        <Stack.Screen 
-          name="Profile" 
-          component={Profile} 
+        <Stack.Screen
+          name="Profile"
+          component={Profile}
           options={{ title: 'Profile' }}
         />
-        <Stack.Screen 
-          name="About" 
-          component={About} 
+        <Stack.Screen
+          name="About"
+          component={About}
           options={{ title: 'About PDAO' }}
         />
       </Stack.Navigator>

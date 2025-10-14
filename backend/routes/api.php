@@ -16,6 +16,8 @@ use App\Http\Controllers\AttendanceController;
 
 // Admin login/register
 Route::post('/login', [AuthController::class, 'login']);
+Route::post('/loginMobile', [AuthController::class, 'loginMobile']);
+
 
 // Member registration
 Route::post('/member/register', [MemberController::class, 'register']);

@@ -35,6 +35,33 @@ class AuthController extends Controller
             'token' => $token
         ], 200);
     }
+
+    public function loginMobile(Request $request)
+    {
+        // Validate input
+        $request->validate([
+            'email'    => 'required|email',
+            'password' => 'required',
+        ]);
+
+        // Find user by email
+        $user = User::where('email', $request->email)->first();
+
+        // Check if user exists and password matches
+        if (!$user || !Hash::check($request->password, $user->password)) {
+            return response()->json(['message' => 'Invalid credentials'], 401);
+        }
+
+        // Generate API token
+        $token = $user->createToken('token')->plainTextToken;
+
+        // Return user with role-based profile and token
+        return response()->json([
+            'user'  => $user->load($user->role . 'Profile'),
+            'token' => $token
+        ], 200);
+    }
+
     /**
      * Logout
      */

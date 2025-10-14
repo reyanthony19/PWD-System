@@ -1,16 +1,18 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { 
-  Search, 
-  Filter, 
-  ChevronDown, 
-  MapPin, 
-  Calendar, 
+import {
+  Search,
+  Filter,
+  ChevronDown,
+  MapPin,
+  Calendar,
   Clock,
   CalendarCheck,
   AlertCircle,
   Archive,
-  RefreshCw
+  RefreshCw,
+  Users,
+  AlertTriangle
 } from "lucide-react";
 import api from "./api";
 import Layout from "./Layout";
@@ -30,22 +32,22 @@ const cache = {
     try {
       const item = localStorage.getItem(key);
       if (!item) return null;
-      
+
       const { data, timestamp } = JSON.parse(item);
-      
+
       // Check if cache is still valid
       if (Date.now() - timestamp > CACHE_DURATION) {
         cache.clear(key);
         return null;
       }
-      
+
       return data;
     } catch (error) {
       console.error('Error reading from cache:', error);
       return null;
     }
   },
-  
+
   // Set data in cache
   set: (key, data) => {
     try {
@@ -58,7 +60,7 @@ const cache = {
       console.error('Error writing to cache:', error);
     }
   },
-  
+
   // Clear specific cache
   clear: (key) => {
     try {
@@ -67,14 +69,14 @@ const cache = {
       console.error('Error clearing cache:', error);
     }
   },
-  
+
   // Clear all events cache
   clearAll: () => {
     Object.values(CACHE_KEYS).forEach(key => {
       cache.clear(key);
     });
   },
-  
+
   // Check if cache is valid
   isValid: (key) => {
     const data = cache.get(key);
@@ -88,6 +90,7 @@ function Events() {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortOption, setSortOption] = useState("date-upcoming");
   const [barangayFilter, setBarangayFilter] = useState("All");
+  const [activeTab, setActiveTab] = useState("upcoming"); // "upcoming", "ongoing", "completed"
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
@@ -128,7 +131,7 @@ function Events() {
     } catch (err) {
       console.error(err);
       setError("Failed to load events.");
-      
+
       // If API fails, try to use cached data as fallback
       const cachedEvents = cache.get(CACHE_KEYS.EVENTS);
       if (cachedEvents) {
@@ -157,10 +160,10 @@ function Events() {
   const calculateEventStatus = useCallback((event) => {
     const today = new Date();
     const eventDate = new Date(event.event_date);
-    
+
     today.setHours(0, 0, 0, 0);
     eventDate.setHours(0, 0, 0, 0);
-    
+
     if (eventDate < today) {
       return "completed";
     } else if (eventDate.getTime() === today.getTime()) {
@@ -173,52 +176,92 @@ function Events() {
   // Get status color and display text
   const getStatusInfo = useCallback((event) => {
     const status = calculateEventStatus(event);
-    
+
     switch (status) {
       case "upcoming":
-        return { 
+        return {
           color: "bg-green-100 text-green-800 border-green-200",
           gradient: "from-green-500 to-green-600",
           text: "Upcoming",
-          icon: <CalendarCheck className="w-4 h-4" />
+          icon: <CalendarCheck className="w-4 h-4" />,
+          badgeColor: "bg-green-500",
+          rowHighlight: false
         };
       case "ongoing":
-        return { 
+        return {
           color: "bg-yellow-100 text-yellow-800 border-yellow-200",
           gradient: "from-yellow-500 to-yellow-600",
           text: "Ongoing",
-          icon: <Clock className="w-4 h-4" />
+          icon: <Clock className="w-4 h-4" />,
+          badgeColor: "bg-yellow-500",
+          rowHighlight: true
         };
       case "completed":
-        return { 
+        return {
           color: "bg-gray-100 text-gray-800 border-gray-200",
           gradient: "from-gray-500 to-gray-600",
           text: "Completed",
-          icon: <Archive className="w-4 h-4" />
+          icon: <Archive className="w-4 h-4" />,
+          badgeColor: "bg-gray-500",
+          rowHighlight: false
         };
       default:
-        return { 
+        return {
           color: "bg-gray-100 text-gray-800 border-gray-200",
           gradient: "from-gray-500 to-gray-600",
           text: "Unknown",
-          icon: <AlertCircle className="w-4 h-4" />
+          icon: <AlertCircle className="w-4 h-4" />,
+          badgeColor: "bg-gray-500",
+          rowHighlight: false
         };
     }
   }, [calculateEventStatus]);
 
-  // Memoized filtered events
-  const filteredEvents = useMemo(() => {
-    return events
+  // Memoized events by status
+  const eventsByStatus = useMemo(() => {
+    const upcoming = [];
+    const ongoing = [];
+    const completed = [];
+
+    events.forEach(event => {
+      const status = calculateEventStatus(event);
+      if (status === "upcoming") upcoming.push(event);
+      else if (status === "ongoing") ongoing.push(event);
+      else if (status === "completed") completed.push(event);
+    });
+
+    return { upcoming, ongoing, completed };
+  }, [events, calculateEventStatus]);
+
+  // Memoized filtered events for current tab
+  const filteredEventsForTab = useMemo(() => {
+    let eventsToFilter = [];
+
+    switch (activeTab) {
+      case "upcoming":
+        eventsToFilter = eventsByStatus.upcoming;
+        break;
+      case "ongoing":
+        eventsToFilter = eventsByStatus.ongoing;
+        break;
+      case "completed":
+        eventsToFilter = eventsByStatus.completed;
+        break;
+      default:
+        eventsToFilter = eventsByStatus.upcoming;
+    }
+
+    return eventsToFilter
       .filter((e) => {
         const term = searchTerm.toLowerCase();
-        
+
         // Barangay filter
         if (barangayFilter !== "All") {
           if (e.target_barangay !== barangayFilter) {
             return false;
           }
         }
-        
+
         // Search filter
         return (
           e.title?.toLowerCase().includes(term) ||
@@ -239,7 +282,7 @@ function Events() {
         }
         return 0;
       });
-  }, [events, searchTerm, barangayFilter, sortOption]);
+  }, [eventsByStatus, activeTab, searchTerm, barangayFilter, sortOption]);
 
   // Memoized counts
   const barangayCounts = useMemo(() => {
@@ -251,12 +294,12 @@ function Events() {
   }, [events]);
 
   const statusCounts = useMemo(() => {
-    return events.reduce((acc, event) => {
-      const status = calculateEventStatus(event);
-      acc[status] = (acc[status] || 0) + 1;
-      return acc;
-    }, {});
-  }, [events, calculateEventStatus]);
+    return {
+      upcoming: eventsByStatus.upcoming.length,
+      ongoing: eventsByStatus.ongoing.length,
+      completed: eventsByStatus.completed.length
+    };
+  }, [eventsByStatus]);
 
   // Memoized available barangays
   const availableBarangays = useMemo(() => {
@@ -266,6 +309,13 @@ function Events() {
         .filter(Boolean)
     )].sort();
   }, [events]);
+
+  // Tab configuration - removed "All Events"
+  const tabs = [
+    { id: "upcoming", name: "Upcoming", count: statusCounts.upcoming, color: "green" },
+    { id: "ongoing", name: "Ongoing", count: statusCounts.ongoing, color: "yellow" },
+    { id: "completed", name: "Completed", count: statusCounts.completed, color: "gray" }
+  ];
 
   if (loading) {
     return (
@@ -406,6 +456,60 @@ function Events() {
             </div>
           </div>
 
+          {/* Ongoing Events Banner */}
+          {eventsByStatus.ongoing.length > 0 && (
+            <div className="mb-8">
+              <div className="bg-gradient-to-r from-yellow-400 to-orange-500 rounded-2xl shadow-xl p-6 border-2 border-yellow-300">
+                <div className="flex items-center gap-4">
+                  <div className="flex-shrink-0">
+                    <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                      <AlertTriangle className="w-6 h-6 text-white" />
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-xl font-bold text-white mb-1">
+                      Ongoing Events Today! 🎉
+                    </h3>
+                    <p className="text-yellow-100 text-sm">
+                      There {eventsByStatus.ongoing.length === 1 ? 'is' : 'are'} currently {eventsByStatus.ongoing.length} event{eventsByStatus.ongoing.length === 1 ? '' : 's'} happening today.
+                      Don't forget to track attendance!
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setActiveTab("ongoing")}
+                    className="bg-white text-orange-600 hover:bg-orange-50 px-6 py-3 rounded-xl font-semibold transition-all duration-200 transform hover:scale-105"
+                  >
+                    View Ongoing Events
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Status Tabs */}
+          <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-white/20 p-2 mb-8">
+            <div className="flex space-x-1">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex-1 py-4 px-6 rounded-2xl text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${activeTab === tab.id
+                      ? `bg-${tab.color}-500 text-white shadow-lg transform scale-105`
+                      : `bg-${tab.color}-50 text-${tab.color}-700 hover:bg-${tab.color}-100 hover:shadow-md`
+                    }`}
+                >
+                  {tab.name}
+                  <span className={`px-2 py-1 rounded-full text-xs ${activeTab === tab.id
+                      ? 'bg-white text-gray-800'
+                      : `bg-${tab.color}-200 text-${tab.color}-800`
+                    }`}>
+                    {tab.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Search + Filters */}
           <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-white/20 p-6 mb-8">
             <div className="flex flex-col lg:flex-row lg:items-end gap-6">
@@ -491,24 +595,24 @@ function Events() {
             {(searchTerm || barangayFilter !== "All") && (
               <div className="flex flex-wrap items-center gap-3 mt-6 pt-6 border-t border-gray-100">
                 <span className="text-sm font-semibold text-gray-600">Active filters:</span>
-                
+
                 {searchTerm && (
                   <span className="bg-blue-100 text-blue-800 text-sm px-4 py-2 rounded-full flex items-center gap-2 font-medium">
                     Search: "{searchTerm}"
-                    <button 
-                      onClick={() => setSearchTerm("")} 
+                    <button
+                      onClick={() => setSearchTerm("")}
                       className="text-blue-600 hover:text-blue-800 font-bold text-lg leading-none"
                     >
                       ×
                     </button>
                   </span>
                 )}
-                
+
                 {barangayFilter !== "All" && (
                   <span className="bg-purple-100 text-purple-800 text-sm px-4 py-2 rounded-full flex items-center gap-2 font-medium">
                     Barangay: {barangayFilter}
-                    <button 
-                      onClick={() => setBarangayFilter("All")} 
+                    <button
+                      onClick={() => setBarangayFilter("All")}
                       className="text-purple-600 hover:text-purple-800 font-bold text-lg leading-none"
                     >
                       ×
@@ -533,7 +637,7 @@ function Events() {
           <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex items-center gap-4">
               <span className="text-lg font-semibold text-gray-700">
-                {filteredEvents.length} of {events.length} events
+                {filteredEventsForTab.length} {activeTab} events
               </span>
               {barangayFilter !== "All" && (
                 <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
@@ -546,17 +650,6 @@ function Events() {
                 </span>
               )}
             </div>
-            
-            {filteredEvents.length > 0 && (
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span>Upcoming: {statusCounts.upcoming || 0}</span>
-                <div className="w-2 h-2 bg-yellow-500 rounded-full ml-2"></div>
-                <span>Ongoing: {statusCounts.ongoing || 0}</span>
-                <div className="w-2 h-2 bg-gray-500 rounded-full ml-2"></div>
-                <span>Completed: {statusCounts.completed || 0}</span>
-              </div>
-            )}
           </div>
 
           {/* Events Table */}
@@ -577,26 +670,38 @@ function Events() {
                     <th className="px-8 py-5 font-semibold text-left text-sm uppercase tracking-wider">
                       Status
                     </th>
+                    <th className="px-8 py-5 font-semibold text-left text-sm uppercase tracking-wider">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {filteredEvents.length > 0 ? (
-                    filteredEvents.map((event) => {
+                  {filteredEventsForTab.length > 0 ? (
+                    filteredEventsForTab.map((event) => {
                       const statusInfo = getStatusInfo(event);
                       return (
                         <tr
                           key={event.id}
-                          onClick={() => navigate(`/attendances?event_id=${event.id}`)}
-                          className="hover:bg-gray-50/80 transition-all duration-150 group cursor-pointer"
+                          className={`hover:bg-gray-50/80 transition-all duration-150 group ${statusInfo.rowHighlight ? 'bg-yellow-50/60 border-l-4 border-yellow-400' : ''
+                            }`}
                         >
                           <td className="px-8 py-5">
                             <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-purple-100 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                                <Calendar className="w-5 h-5 text-blue-600" />
+                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform ${statusInfo.rowHighlight
+                                  ? 'bg-yellow-100'
+                                  : 'bg-gradient-to-br from-blue-100 to-purple-100'
+                                }`}>
+                                <Calendar className={`w-5 h-5 ${statusInfo.rowHighlight ? 'text-yellow-600' : 'text-blue-600'
+                                  }`} />
                               </div>
                               <div>
                                 <div className="font-semibold text-gray-900">
                                   {event.title}
+                                  {statusInfo.rowHighlight && (
+                                    <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-bold bg-yellow-500 text-white">
+                                      LIVE NOW
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="text-xs text-gray-500 mt-1">
                                   ID: {event.id}
@@ -634,11 +739,10 @@ function Events() {
                                 <span className="text-sm">{event.location}</span>
                               </div>
                               <div>
-                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
-                                  event.target_barangay === 'All' 
+                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${event.target_barangay === 'All'
                                     ? 'bg-purple-100 text-purple-800 border border-purple-200'
                                     : 'bg-blue-100 text-blue-800 border border-blue-200'
-                                }`}>
+                                  }`}>
                                   {event.target_barangay || 'Unspecified'}
                                 </span>
                               </div>
@@ -650,19 +754,35 @@ function Events() {
                               {statusInfo.text}
                             </span>
                           </td>
+                          <td className="px-8 py-5">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => navigate(`/attendances?event_id=${event.id}`)}
+                                className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 
+                                         text-white rounded-xl transition-all duration-200 font-medium 
+                                         text-sm hover:shadow-md transform hover:-translate-y-0.5"
+                              >
+                                <Users className="w-4 h-4" />
+                                View Attendance
+                              </button>
+
+                            </div>
+                          </td>
                         </tr>
                       );
                     })
                   ) : (
                     <tr>
-                      <td colSpan="4" className="px-8 py-16 text-center">
+                      <td colSpan="5" className="px-8 py-16 text-center">
                         <div className="flex flex-col items-center justify-center text-gray-400">
                           <Calendar className="w-20 h-20 mb-4 opacity-40" />
-                          <p className="text-xl font-semibold text-gray-500 mb-2">No events found</p>
+                          <p className="text-xl font-semibold text-gray-500 mb-2">
+                            No {activeTab} events found
+                          </p>
                           <p className="text-sm max-w-md">
-                            {searchTerm || barangayFilter !== "All" 
+                            {searchTerm || barangayFilter !== "All"
                               ? "Try adjusting your search or filter criteria"
-                              : "No events have been created yet"
+                              : `No ${activeTab} events at the moment`
                             }
                           </p>
                           {(searchTerm || barangayFilter !== "All") && (
@@ -676,7 +796,7 @@ function Events() {
                               Clear all filters
                             </button>
                           )}
-                          {!searchTerm && barangayFilter === "All" && (
+                          {!searchTerm && barangayFilter === "All" && activeTab === "upcoming" && (
                             <button
                               onClick={() => navigate("/events/create")}
                               className="mt-4 inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors"
