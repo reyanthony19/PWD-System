@@ -12,8 +12,10 @@ import {
   Alert,
   Dimensions,
   StatusBar,
+  Modal,
+  FlatList,
 } from "react-native";
-import { TextInput, RadioButton, Menu, Divider } from "react-native-paper";
+import { Provider as PaperProvider, TextInput, RadioButton, Divider } from "react-native-paper";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import api from "@/services/api";
@@ -25,7 +27,20 @@ import * as ImagePicker from 'expo-image-picker';
 
 const { width, height } = Dimensions.get("window");
 
-export default function Register() {
+const theme = {
+  colors: {
+    primary: '#2563eb',
+    accent: '#10b981',
+    background: 'transparent',
+    surface: 'white',
+    text: '#111827',
+    disabled: 'rgba(0, 0, 0, 0.26)',
+    placeholder: '#6b7280',
+  },
+  roundness: 12,
+};
+
+function Register() {
   const navigation = useNavigation();
 
   const [form, setForm] = useState({
@@ -39,13 +54,17 @@ export default function Register() {
     first_name: "",
     middle_name: "",
     last_name: "",
+    severity: "",
+    monthly_income: "",
+    dependent: "",
     birthdate: new Date(),
     sex: "",
-    contact_number: "",
     address: "",
     barangay: "",
+    contact_number: "",
     
     // Optional fields
+    id_number: "",
     disability_type: "",
     blood_type: "",
     sss_number: "",
@@ -73,17 +92,34 @@ export default function Register() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [currentSection, setCurrentSection] = useState(0);
 
-  // Menu states for dropdowns
-  const [barangayMenuVisible, setBarangayMenuVisible] = useState(false);
-  const [bloodTypeMenuVisible, setBloodTypeMenuVisible] = useState(false);
-  const [disabilityMenuVisible, setDisabilityMenuVisible] = useState(false);
-  const [guardianRelationshipMenuVisible, setGuardianRelationshipMenuVisible] = useState(false);
+  // Dropdown modal state
+  const [dropdownModal, setDropdownModal] = useState({
+    visible: false,
+    field: '',
+    options: [],
+    title: ''
+  });
 
   // Options matching web version
   const barangayOptions = [
     "Awang", "Bagocboc", "Barra", "Bonbon", "Cauyonan", "Igpit",
     "Limonda", "Luyong Bonbon", "Malanang", "Nangcaon", "Patag",
     "Poblacion", "Taboc", "Tingalan"
+  ];
+
+  const severityOptions = [
+    "Mild", "Moderate", "Severe", "Profound"
+  ];
+
+  // Monthly income options - send these exact string values
+  const monthlyIncomeOptions = [
+    { value: "below_5000", label: "Below ₱5,000", description: "Extremely low income" },
+    { value: "5000_10000", label: "₱5,000 - ₱10,000", description: "Low income" },
+    { value: "10000_20000", label: "₱10,000 - ₱20,000", description: "Lower middle income" },
+    { value: "20000_30000", label: "₱20,000 - ₱30,000", description: "Middle income" },
+    { value: "30000_50000", label: "₱30,000 - ₱50,000", description: "Upper middle income" },
+    { value: "above_50000", label: "Above ₱50,000", description: "High income" },
+    { value: "no_income", label: "No Income", description: "Unemployed or no regular income" }
   ];
 
   const bloodTypeOptions = [
@@ -144,9 +180,59 @@ export default function Register() {
     }
   };
 
+  const openDropdown = (field, title) => {
+    let options = [];
+    
+    switch (field) {
+      case 'barangay':
+        options = barangayOptions;
+        break;
+      case 'severity':
+        options = severityOptions;
+        break;
+      case 'monthly_income':
+        options = monthlyIncomeOptions;
+        break;
+      case 'blood_type':
+        options = bloodTypeOptions;
+        break;
+      case 'disability_type':
+        options = disabilityTypeOptions;
+        break;
+      case 'guardian_relationship':
+        options = guardianRelationshipOptions;
+        break;
+      default:
+        options = [];
+    }
+
+    setDropdownModal({
+      visible: true,
+      field,
+      options,
+      title
+    });
+  };
+
+  const closeDropdown = () => {
+    setDropdownModal({
+      visible: false,
+      field: '',
+      options: [],
+      title: ''
+    });
+  };
+
+  const handleSelect = (value, label) => {
+    handleChange(dropdownModal.field, value);
+    closeDropdown();
+  };
+
   const handleDocumentPick = async (type) => {
     try {
       let result;
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+      
       if (type === 'picture_2x2') {
         result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -156,11 +242,17 @@ export default function Register() {
         });
         
         if (!result.canceled) {
+          const fileType = result.assets[0].mimeType || 'image/jpeg';
+          if (!allowedTypes.includes(fileType)) {
+            Alert.alert('Invalid File Type', 'Please select a JPG, JPEG, or PNG file.');
+            return;
+          }
+          
           setDocuments(prev => ({
             ...prev,
             [type]: {
               uri: result.assets[0].uri,
-              type: 'image/jpeg',
+              type: fileType,
               name: 'profile_picture.jpg'
             }
           }));
@@ -172,12 +264,27 @@ export default function Register() {
         });
         
         if (result.assets && result.assets.length > 0) {
+          const file = result.assets[0];
+          const fileType = file.mimeType;
+          
+          // Validate file types for barangay_indigency
+          if (type === 'barangay_indigency' && !allowedTypes.includes(fileType)) {
+            Alert.alert('Invalid File Type', 'Barangay Indigency must be JPG, JPEG, PNG, or PDF file.');
+            return;
+          }
+          
+          // Validate image types for other documents
+          if (type !== 'barangay_indigency' && !fileType.startsWith('image/')) {
+            Alert.alert('Invalid File Type', 'Please select an image file (JPG, JPEG, PNG).');
+            return;
+          }
+          
           setDocuments(prev => ({
             ...prev,
             [type]: {
-              uri: result.assets[0].uri,
-              type: result.assets[0].mimeType,
-              name: result.assets[0].name
+              uri: file.uri,
+              type: fileType,
+              name: file.name
             }
           }));
         }
@@ -188,11 +295,62 @@ export default function Register() {
     }
   };
 
+  const validateCurrentSection = () => {
+    const currentSectionData = sections[currentSection];
+    const requiredFields = currentSectionData.fields.filter(field => field.required);
+    
+    for (const field of requiredFields) {
+      if (!form[field.name] && field.name !== 'guardian_full_name' && 
+          field.name !== 'guardian_relationship' && field.name !== 'guardian_contact_number' && 
+          field.name !== 'guardian_address') {
+        
+        // Special validation for documents section
+        if (currentSection === 4 && field.type === 'image') {
+          if (!documents[field.name]) {
+            setError(`${field.label} is required`);
+            return false;
+          }
+        } else {
+          setError(`${field.label} is required`);
+          return false;
+        }
+      }
+    }
+    
+    // Additional validation for passwords
+    if (currentSection === 0 && form.password !== form.confirmPassword) {
+      setError("Password and confirmation do not match.");
+      return false;
+    }
+    
+    if (currentSection === 0 && form.password.length < 3) {
+      setError("Password must be at least 3 characters long.");
+      return false;
+    }
+    
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (currentSection === 0 && !emailRegex.test(form.email)) {
+      setError("Please enter a valid email address.");
+      return false;
+    }
+    
+    return true;
+  };
+
+  const handleNext = () => {
+    if (!validateCurrentSection()) {
+      return;
+    }
+    setCurrentSection(prev => prev + 1);
+    setError("");
+  };
+
   const validateForm = () => {
-    // Required fields validation
+    // Required fields validation for final submission
     const requiredFields = [
       'username', 'email', 'password', 'confirmPassword',
-      'first_name', 'last_name', 'sex', 'address', 'barangay'
+      'first_name', 'last_name', 'severity', 'monthly_income', 
+      'birthdate', 'sex', 'address', 'barangay'
     ];
 
     for (const field of requiredFields) {
@@ -221,6 +379,104 @@ export default function Register() {
     return true;
   };
 
+  // Create proper FormData with file objects
+  const createFormData = () => {
+    const formData = new FormData();
+
+    // Debug logging
+    console.log('Creating FormData with:', {
+      username: form.username,
+      email: form.email,
+      first_name: form.first_name,
+      last_name: form.last_name,
+      severity: form.severity,
+      monthly_income: form.monthly_income, // This should be the string value like "20000_30000"
+      birthdate: form.birthdate.toISOString().split('T')[0],
+      sex: form.sex,
+      address: form.address,
+      barangay: form.barangay
+    });
+
+    // User credentials
+    formData.append("username", form.username);
+    formData.append("email", form.email);
+    formData.append("password", form.password);
+
+    // Required profile fields
+    formData.append("first_name", form.first_name);
+    formData.append("last_name", form.last_name);
+    formData.append("severity", form.severity);
+    
+    // FIXED: Send the string value directly (e.g., "20000_30000")
+    formData.append("monthly_income", form.monthly_income);
+    
+    formData.append("birthdate", form.birthdate.toISOString().split('T')[0]);
+    formData.append("sex", form.sex);
+    formData.append("address", form.address);
+    formData.append("barangay", form.barangay);
+
+    // Optional fields - only append if they have values
+    if (form.middle_name && form.middle_name.trim() !== '') {
+      formData.append("middle_name", form.middle_name);
+    }
+    if (form.dependent && form.dependent.trim() !== '') {
+      formData.append("dependent", parseInt(form.dependent) || 0);
+    }
+    if (form.contact_number && form.contact_number.trim() !== '') {
+      formData.append("contact_number", form.contact_number);
+    }
+    if (form.id_number && form.id_number.trim() !== '') {
+      formData.append("id_number", form.id_number);
+    }
+    if (form.disability_type && form.disability_type.trim() !== '') {
+      formData.append("disability_type", form.disability_type);
+    }
+    if (form.blood_type && form.blood_type.trim() !== '') {
+      formData.append("blood_type", form.blood_type);
+    }
+    if (form.sss_number && form.sss_number.trim() !== '') {
+      formData.append("sss_number", form.sss_number);
+    }
+    if (form.philhealth_number && form.philhealth_number.trim() !== '') {
+      formData.append("philhealth_number", form.philhealth_number);
+    }
+    
+    // Guardian information (optional)
+    if (form.guardian_full_name && form.guardian_full_name.trim() !== '') {
+      formData.append("guardian_full_name", form.guardian_full_name);
+    }
+    if (form.guardian_relationship && form.guardian_relationship.trim() !== '') {
+      formData.append("guardian_relationship", form.guardian_relationship);
+    }
+    if (form.guardian_contact_number && form.guardian_contact_number.trim() !== '') {
+      formData.append("guardian_contact_number", form.guardian_contact_number);
+    }
+    if (form.guardian_address && form.guardian_address.trim() !== '') {
+      formData.append("guardian_address", form.guardian_address);
+    }
+    
+    // Remarks
+    if (form.remarks && form.remarks.trim() !== '') {
+      formData.append("remarks", form.remarks);
+    }
+
+    // Append documents - create proper file objects
+    Object.entries(documents).forEach(([key, document]) => {
+      if (document) {
+        console.log(`Appending document ${key}:`, document);
+        // Create proper file object for FormData
+        const fileObject = {
+          uri: document.uri,
+          type: document.type,
+          name: document.name
+        };
+        formData.append(key, fileObject);
+      }
+    });
+
+    return formData;
+  };
+
   const handleRegister = async () => {
     if (!validateForm()) return;
 
@@ -228,53 +484,22 @@ export default function Register() {
     setError("");
 
     try {
-      const formData = new FormData();
+      const formData = createFormData();
 
-      // User credentials
-      formData.append("username", form.username);
-      formData.append("email", form.email);
-      formData.append("password", form.password);
-
-      // Required profile fields
-      formData.append("first_name", form.first_name);
-      formData.append("last_name", form.last_name);
-      formData.append("birthdate", form.birthdate.toISOString().split('T')[0]);
-      formData.append("sex", form.sex);
-      formData.append("address", form.address);
-      formData.append("barangay", form.barangay);
-
-      // Optional fields
-      if (form.middle_name) formData.append("middle_name", form.middle_name);
-      if (form.contact_number) formData.append("contact_number", form.contact_number);
-      if (form.disability_type) formData.append("disability_type", form.disability_type);
-      if (form.blood_type) formData.append("blood_type", form.blood_type);
-      if (form.sss_number) formData.append("sss_number", form.sss_number);
-      if (form.philhealth_number) formData.append("philhealth_number", form.philhealth_number);
+      console.log('Sending registration request...');
       
-      // Guardian information
-      if (form.guardian_full_name) formData.append("guardian_full_name", form.guardian_full_name);
-      if (form.guardian_relationship) formData.append("guardian_relationship", form.guardian_relationship);
-      if (form.guardian_contact_number) formData.append("guardian_contact_number", form.guardian_contact_number);
-      if (form.guardian_address) formData.append("guardian_address", form.guardian_address);
-      
-      // Remarks
-      if (form.remarks) formData.append("remarks", form.remarks);
-
-      // Append documents
-      Object.entries(documents).forEach(([key, document]) => {
-        if (document) {
-          formData.append(key, document);
-        }
-      });
-
       const res = await api.post("/member/register", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
+        headers: { 
+          "Content-Type": "multipart/form-data",
+        },
         timeout: 30000,
       });
 
+      console.log('Registration successful:', res.data);
+
       Alert.alert(
         "Success", 
-        "Registration successful! Your account is pending approval.",
+        "Registration successful! Your account is waiting for approval.",
         [
           {
             text: "OK",
@@ -284,9 +509,28 @@ export default function Register() {
       );
       
     } catch (err) {
-      console.error("Registration error:", err);
+      console.error("Registration error details:", {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status,
+        config: err.config
+      });
+      
       if (err.message === "Network Error") {
         setError("Cannot connect to server. Check your internet connection.");
+      } else if (err.response?.status === 500) {
+        // More specific error message for 500 errors
+        const serverError = err.response?.data;
+        console.log('Server error response:', serverError);
+        
+        if (serverError?.message) {
+          setError(`Server error: ${serverError.message}`);
+        } else if (serverError?.errors) {
+          const errorMessages = Object.values(serverError.errors).flat().join(', ');
+          setError(`Validation errors: ${errorMessages}`);
+        } else {
+          setError("Server error (500). Please check the server logs or try again later.");
+        }
       } else {
         const errors = err.response?.data?.errors;
         setError(
@@ -303,6 +547,11 @@ export default function Register() {
   const getDisplayValue = (fieldName, value) => {
     if (!value) return `Select ${fieldName.replace('_', ' ')}`;
     
+    if (fieldName === 'monthly_income') {
+      const option = monthlyIncomeOptions.find(opt => opt.value === value);
+      return option ? option.label : value;
+    }
+    
     if (fieldName === 'disability_type') {
       const option = disabilityTypeOptions.find(opt => opt.value === value);
       return option ? option.label : value;
@@ -315,6 +564,51 @@ export default function Register() {
     
     return value;
   };
+
+  // Custom Dropdown Modal Component
+  const DropdownModal = () => (
+    <Modal
+      visible={dropdownModal.visible}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={closeDropdown}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{dropdownModal.title}</Text>
+            <TouchableOpacity onPress={closeDropdown} style={styles.closeButton}>
+              <Ionicons name="close" size={24} color="#374151" />
+            </TouchableOpacity>
+          </View>
+          
+          <FlatList
+            data={dropdownModal.options}
+            keyExtractor={(item, index) => 
+              item.value ? item.value : item.toString() + index
+            }
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={styles.optionItem}
+                onPress={() => handleSelect(
+                  item.value !== undefined ? item.value : item,
+                  item.label !== undefined ? item.label : item
+                )}
+              >
+                <Text style={styles.optionText}>
+                  {item.label !== undefined ? item.label : item}
+                </Text>
+                {form[dropdownModal.field] === (item.value !== undefined ? item.value : item) && (
+                  <Ionicons name="checkmark" size={20} color="#2563eb" />
+                )}
+              </TouchableOpacity>
+            )}
+            ItemSeparatorComponent={() => <View style={styles.optionSeparator} />}
+          />
+        </View>
+      </View>
+    </Modal>
+  );
 
   const sections = [
     {
@@ -332,6 +626,9 @@ export default function Register() {
         { name: 'first_name', label: 'First Name', icon: 'person', required: true },
         { name: 'middle_name', label: 'Middle Name', icon: 'person' },
         { name: 'last_name', label: 'Last Name', icon: 'person', required: true },
+        { name: 'severity', label: 'Disability Severity', icon: 'accessibility', type: 'select', required: true },
+        { name: 'monthly_income', label: 'Monthly Income', icon: 'cash', type: 'select', required: true },
+        { name: 'dependent', label: 'Number of Dependents', icon: 'people', keyboardType: 'numeric' },
         { name: 'birthdate', label: 'Birthdate', icon: 'calendar', type: 'date', required: true },
         { name: 'sex', label: 'Gender', icon: 'male-female', type: 'radio', required: true },
         { name: 'contact_number', label: 'Contact Number', icon: 'call', keyboardType: 'phone-pad' },
@@ -342,6 +639,7 @@ export default function Register() {
     {
       title: "Additional Information",
       fields: [
+        { name: 'id_number', label: 'ID Number', icon: 'card' },
         { name: 'disability_type', label: 'Disability Type', icon: 'accessibility', type: 'select' },
         { name: 'blood_type', label: 'Blood Type', icon: 'water', type: 'select' },
         { name: 'sss_number', label: 'SSS Number', icon: 'document' },
@@ -360,10 +658,10 @@ export default function Register() {
     {
       title: "Documents Upload",
       fields: [
-        { name: 'barangay_indigency', label: 'Barangay Indigency', icon: 'document', type: 'document' },
-        { name: 'medical_certificate', label: 'Medical Certificate', icon: 'medical', type: 'document' },
+        { name: 'barangay_indigency', label: 'Barangay Indigency', icon: 'document', type: 'image', required: true },
+        { name: 'medical_certificate', label: 'Medical Certificate', icon: 'medical', type: 'image' },
         { name: 'picture_2x2', label: '2x2 Picture', icon: 'camera', type: 'image' },
-        { name: 'birth_certificate', label: 'Birth Certificate', icon: 'document', type: 'document' },
+        { name: 'birth_certificate', label: 'Birth Certificate', icon: 'document', type: 'image' },
         { name: 'remarks', label: 'Remarks', icon: 'chatbubble', multiline: true },
       ]
     }
@@ -412,64 +710,25 @@ export default function Register() {
         );
 
       case 'select':
-        const options = field.name === 'barangay' ? barangayOptions :
-                        field.name === 'blood_type' ? bloodTypeOptions :
-                        field.name === 'disability_type' ? disabilityTypeOptions :
-                        guardianRelationshipOptions;
-
-        const isVisible = field.name === 'barangay' ? barangayMenuVisible :
-                          field.name === 'blood_type' ? bloodTypeMenuVisible :
-                          field.name === 'disability_type' ? disabilityMenuVisible :
-                          guardianRelationshipMenuVisible;
-
-        const setVisible = (visible) => {
-          if (field.name === 'barangay') setBarangayMenuVisible(visible);
-          else if (field.name === 'blood_type') setBloodTypeMenuVisible(visible);
-          else if (field.name === 'disability_type') setDisabilityMenuVisible(visible);
-          else setGuardianRelationshipMenuVisible(visible);
-        };
-
         return (
           <View style={styles.selectField}>
             <Text style={styles.selectLabel}>{field.label}{field.required ? ' *' : ''}</Text>
-            <Menu
-              visible={isVisible}
-              onDismiss={() => setVisible(false)}
-              anchor={
-                <TouchableOpacity
-                  style={styles.selectInput}
-                  onPress={() => setVisible(true)}
-                >
-                  <Ionicons name={field.icon} size={22} color="#6b7280" style={styles.inputIcon} />
-                  <Text style={[
-                    styles.selectInputText,
-                    !form[field.name] && styles.selectInputPlaceholder
-                  ]}>
-                    {getDisplayValue(field.name, form[field.name])}
-                  </Text>
-                  <Ionicons name="chevron-down" size={20} color="#6b7280" />
-                </TouchableOpacity>
-              }
-              style={styles.menu}
+            <TouchableOpacity
+              style={styles.selectInput}
+              onPress={() => openDropdown(field.name, field.label)}
             >
-              {options.map((option, index) => (
-                <React.Fragment key={option.value || option}>
-                  <Menu.Item
-                    onPress={() => {
-                      handleChange(field.name, option.value || option);
-                      setVisible(false);
-                    }}
-                    title={option.label || option}
-                    titleStyle={styles.menuItemText}
-                  />
-                  {index < options.length - 1 && <Divider />}
-                </React.Fragment>
-              ))}
-            </Menu>
+              <Ionicons name={field.icon} size={22} color="#6b7280" style={styles.inputIcon} />
+              <Text style={[
+                styles.selectInputText,
+                !form[field.name] && styles.selectInputPlaceholder
+              ]}>
+                {getDisplayValue(field.name, form[field.name])}
+              </Text>
+              <Ionicons name="chevron-down" size={20} color="#6b7280" />
+            </TouchableOpacity>
           </View>
         );
 
-      case 'document':
       case 'image':
         const document = documents[field.name];
         return (
@@ -480,14 +739,18 @@ export default function Register() {
             <Ionicons 
               name={document ? "checkmark-circle" : field.icon} 
               size={24} 
-              color={document ? "#10b981" : "#2563eb"} 
+              color={document ? "#10b981" : field.required ? "#ef4444" : "#2563eb"} 
             />
             <View style={styles.documentInfo}>
               <Text style={styles.documentLabel}>
-                {field.label}
+                {field.label}{field.required ? ' *' : ''}
               </Text>
-              <Text style={styles.documentStatus}>
-                {document ? "Uploaded" : "Tap to upload"}
+              <Text style={[
+                styles.documentStatus,
+                field.required && !document && styles.documentRequired
+              ]}>
+                {document ? "Uploaded" : field.required ? "Required - Tap to upload" : "Tap to upload"}
+                {field.name === 'barangay_indigency' && !document && " (JPG, JPEG, PNG, PDF)"}
               </Text>
             </View>
             <Ionicons name="cloud-upload" size={20} color="#6b7280" />
@@ -513,13 +776,7 @@ export default function Register() {
                 )} 
               />
             }
-            theme={{
-              colors: {
-                primary: '#2563eb',
-                background: 'transparent',
-              },
-              roundness: 12,
-            }}
+            theme={theme}
           />
         );
     }
@@ -561,133 +818,142 @@ export default function Register() {
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={{ flex: 1 }} 
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-      <LinearGradient 
-        colors={["#667eea", "#764ba2", "#667eea"]} 
-        style={styles.container}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+    <PaperProvider theme={theme}>
+      <KeyboardAvoidingView 
+        style={{ flex: 1 }} 
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
-        <ScrollView 
-          contentContainerStyle={styles.scrollContainer}
-          showsVerticalScrollIndicator={false}
+        <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+        <LinearGradient 
+          colors={["#667eea", "#764ba2", "#667eea"]} 
+          style={styles.container}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
         >
-          <Animated.View 
-            style={[
-              styles.content,
-              {
-                opacity: fadeAnim,
-                transform: [{ translateY: slideAnim }]
-              }
-            ]}
+          <ScrollView 
+            contentContainerStyle={styles.scrollContainer}
+            showsVerticalScrollIndicator={false}
           >
-            {/* Header */}
-            <View style={styles.header}>
-              <TouchableOpacity 
-                style={styles.backButton}
-                onPress={() => navigation.goBack()}
-              >
-                <Ionicons name="arrow-back" size={24} color="#fff" />
-              </TouchableOpacity>
-              <Text style={styles.title}>Create Account</Text>
-              <Text style={styles.subtitle}>Join our community</Text>
-            </View>
-
-            {/* Progress Steps - FIXED */}
-            <View style={styles.progressContainer}>
-              {sections.map((_, index) => (
-                <ProgressStep 
-                  key={index}
-                  index={index}
-                  currentSection={currentSection}
-                />
-              ))}
-            </View>
-
-            {/* Form Section */}
-            <View style={styles.formContainer}>
-              <Text style={styles.sectionTitle}>{currentSectionData.title}</Text>
-              
-              {error ? (
-                <View style={styles.errorContainer}>
-                  <Ionicons name="alert-circle" size={20} color="#ef4444" />
-                  <Text style={styles.errorText}>{error}</Text>
-                </View>
-              ) : null}
-
-              {currentSectionData.fields.map((field, index) => (
-                <View key={field.name} style={styles.fieldContainer}>
-                  {renderField(field)}
-                </View>
-              ))}
-
-              {/* Navigation Buttons */}
-              <View style={styles.navigationButtons}>
-                {currentSection > 0 && (
-                  <TouchableOpacity
-                    style={styles.prevButton}
-                    onPress={() => setCurrentSection(prev => prev - 1)}
-                  >
-                    <Text style={styles.prevButtonText}>Previous</Text>
-                  </TouchableOpacity>
-                )}
-                
-                {currentSection < sections.length - 1 ? (
-                  <TouchableOpacity
-                    style={styles.nextButton}
-                    onPress={() => setCurrentSection(prev => prev + 1)}
-                  >
-                    <Text style={styles.nextButtonText}>Next</Text>
-                    <Ionicons name="arrow-forward" size={20} color="#fff" />
-                  </TouchableOpacity>
-                ) : (
-                  <TouchableOpacity
-                    style={styles.submitButton}
-                    onPress={handleRegister}
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <ActivityIndicator color="#fff" size="small" />
-                    ) : (
-                      <>
-                        <Text style={styles.submitButtonText}>Create Account</Text>
-                        <Ionicons name="checkmark" size={20} color="#fff" />
-                      </>
-                    )}
-                  </TouchableOpacity>
-                )}
+            <Animated.View 
+              style={[
+                styles.content,
+                {
+                  opacity: fadeAnim,
+                  transform: [{ translateY: slideAnim }]
+                }
+              ]}
+            >
+              {/* Header */}
+              <View style={styles.header}>
+                <TouchableOpacity 
+                  style={styles.backButton}
+                  onPress={() => navigation.goBack()}
+                >
+                  <Ionicons name="arrow-back" size={24} color="#fff" />
+                </TouchableOpacity>
+                <Text style={styles.title}>Create Account</Text>
+                <Text style={styles.subtitle}>Join our community</Text>
               </View>
 
-              <TouchableOpacity 
-                style={styles.loginLink}
-                onPress={() => navigation.navigate("Login")}
-              >
-                <Text style={styles.loginText}>
-                  Already have an account? <Text style={styles.loginLinkText}>Sign in</Text>
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </Animated.View>
-        </ScrollView>
+              {/* Progress Steps - FIXED */}
+              <View style={styles.progressContainer}>
+                {sections.map((_, index) => (
+                  <ProgressStep 
+                    key={index}
+                    index={index}
+                    currentSection={currentSection}
+                  />
+                ))}
+              </View>
 
-        {showDatePicker && (
-          <DateTimePicker
-            value={form.birthdate}
-            mode="date"
-            display="spinner"
-            onChange={handleDateChange}
-            maximumDate={new Date()}
-          />
-        )}
-      </LinearGradient>
-    </KeyboardAvoidingView>
+              {/* Form Section */}
+              <View style={styles.formContainer}>
+                <Text style={styles.sectionTitle}>{currentSectionData.title}</Text>
+                
+                {error ? (
+                  <View style={styles.errorContainer}>
+                    <Ionicons name="alert-circle" size={20} color="#ef4444" />
+                    <Text style={styles.errorText}>{error}</Text>
+                  </View>
+                ) : null}
+
+                {currentSectionData.fields.map((field, index) => (
+                  <View key={field.name} style={styles.fieldContainer}>
+                    {renderField(field)}
+                  </View>
+                ))}
+
+                {/* Navigation Buttons */}
+                <View style={styles.navigationButtons}>
+                  {currentSection > 0 && (
+                    <TouchableOpacity
+                      style={styles.prevButton}
+                      onPress={() => {
+                        setCurrentSection(prev => prev - 1);
+                        setError("");
+                      }}
+                    >
+                      <Text style={styles.prevButtonText}>Previous</Text>
+                    </TouchableOpacity>
+                  )}
+                  
+                  {currentSection < sections.length - 1 ? (
+                    <TouchableOpacity
+                      style={styles.nextButton}
+                      onPress={handleNext}
+                    >
+                      <Text style={styles.nextButtonText}>Next</Text>
+                      <Ionicons name="arrow-forward" size={20} color="#fff" />
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.submitButton}
+                      onPress={handleRegister}
+                      disabled={loading}
+                    >
+                      {loading ? (
+                        <ActivityIndicator color="#fff" size="small" />
+                      ) : (
+                        <>
+                          <Text style={styles.submitButtonText}>Create Account</Text>
+                          <Ionicons name="checkmark" size={20} color="#fff" />
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                <TouchableOpacity 
+                  style={styles.loginLink}
+                  onPress={() => navigation.navigate("Login")}
+                >
+                  <Text style={styles.loginText}>
+                    Already have an account? <Text style={styles.loginLinkText}>Sign in</Text>
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </Animated.View>
+          </ScrollView>
+
+          {/* Dropdown Modal */}
+          <DropdownModal />
+
+          {showDatePicker && (
+            <DateTimePicker
+              value={form.birthdate}
+              mode="date"
+              display="spinner"
+              onChange={handleDateChange}
+              maximumDate={new Date()}
+            />
+          )}
+        </LinearGradient>
+      </KeyboardAvoidingView>
+    </PaperProvider>
   );
 }
 
+// ... (keep all the existing styles exactly as they were)
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -894,23 +1160,6 @@ const styles = StyleSheet.create({
   selectInputPlaceholder: {
     color: '#6b7280',
   },
-  menu: {
-    marginTop: 8,
-    borderRadius: 12,
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-  },
-  menuItem: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-  },
-  menuItemText: {
-    fontSize: 16,
-    color: '#111827',
-  },
   documentButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -934,6 +1183,9 @@ const styles = StyleSheet.create({
   documentStatus: {
     fontSize: 12,
     color: '#6b7280',
+  },
+  documentRequired: {
+    color: '#ef4444',
   },
   navigationButtons: {
     flexDirection: 'row',
@@ -1003,4 +1255,51 @@ const styles = StyleSheet.create({
     color: '#2563eb',
     fontWeight: 'bold',
   },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '60%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  closeButton: {
+    padding: 4,
+  },
+  optionItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+  },
+  optionText: {
+    fontSize: 16,
+    color: '#374151',
+    flex: 1,
+  },
+  optionSeparator: {
+    height: 1,
+    backgroundColor: '#f3f4f6',
+    marginHorizontal: 20,
+  },
 });
+
+export default Register;

@@ -538,7 +538,7 @@ export default function Login() {
             {/* Footer */}
             <View style={styles.footer}>
               <Text style={styles.footerText}>
-                By continuing, you agree to our Terms and Privacy Policy
+                © 2025 Opol Community College. All rights reserved.
               </Text>
             </View>
           </Animated.View>

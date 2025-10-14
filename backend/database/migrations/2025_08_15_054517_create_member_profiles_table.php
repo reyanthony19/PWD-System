@@ -39,7 +39,7 @@ return new class extends Migration
 
             $table->string('severity')->nullable();
             $table->string(column: 'dependent')->nullable();
-            $table->decimal('monthly_income', 10, 2)->nullable();
+            $table->string('monthly_income')->nullable();
 
             $table->timestamps();
         });
