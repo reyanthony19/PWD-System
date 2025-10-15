@@ -190,15 +190,15 @@ export default function MemberProfile() {
   // FIXED: Improved URL construction for images using centralized base URL
   const getImageUrl = (filePath) => {
     if (!filePath) return null;
-    
+
     // If it's already a full URL, use it directly
     if (filePath.startsWith('http')) {
       return filePath;
     }
-    
+
     // Remove leading slash if present to avoid double slashes
     const cleanPath = filePath.startsWith('/') ? filePath.substring(1) : filePath;
-    
+
     // Construct the full URL using centralized base URL
     return `${BASE_URL}/storage/${cleanPath}`;
   };
@@ -311,17 +311,30 @@ export default function MemberProfile() {
           style: "destructive",
           onPress: async () => {
             try {
-              // Clear cache on logout
-              await AsyncStorage.multiRemove([
+              setLoading(true);
+
+              // Clear all authentication data and cache
+              const keysToRemove = [
                 "token",
                 "user",
                 ...Object.values(CACHE_KEYS)
-              ]);
-              // No need to manually delete headers - they'll be reset on next login
-              navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+              ];
+
+              await AsyncStorage.multiRemove(keysToRemove);
+
+              // Optional: Clear any API headers if needed
+              // delete api.defaults.headers.common['Authorization'];
+
+              console.log("Logout successful, redirecting to login...");
+
+              // Use replace instead of reset for cleaner transition
+              navigation.replace("Login");
+
             } catch (err) {
               console.error("Logout error:", err);
               Alert.alert("Error", "Failed to logout. Please try again.");
+            } finally {
+              setLoading(false);
             }
           }
         }
@@ -566,8 +579,8 @@ export default function MemberProfile() {
               { color: hasImageError ? "#f59e0b" : getDocumentColor(hasDocument) }
             ]}>
               {hasDocument ? (
-                hasImageError ? "Load Failed" : 
-                isImage ? "View Image" : "Document Uploaded"
+                hasImageError ? "Load Failed" :
+                  isImage ? "View Image" : "Document Uploaded"
               ) : "Missing"}
             </Text>
           </View>

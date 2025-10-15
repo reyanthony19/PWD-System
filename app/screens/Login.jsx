@@ -10,7 +10,6 @@ import {
   Animated,
   Dimensions,
   StatusBar,
-  Alert,
 } from "react-native";
 import { Text, TextInput } from "react-native-paper";
 import { LinearGradient } from "expo-linear-gradient";
@@ -42,16 +41,9 @@ export default function Login() {
   useEffect(() => {
     const init = async () => {
       try {
-        // Check if someone is already logged in
-        const existingToken = await AsyncStorage.getItem("token");
-        if (existingToken) {
-          Alert.alert(
-            "Already Logged In",
-            "Someone is already logged in. Please log out first.",
-            [{ text: "OK" }]
-          );
-          return;
-        }
+        // Clear any existing tokens/sessions on login screen load
+        // This ensures fresh login every time user comes to this screen
+        await clearExistingSession();
 
         // Load remember me preference
         const storedRemember = await AsyncStorage.getItem("rememberMe");
@@ -100,6 +92,20 @@ export default function Login() {
       }),
     ]).start();
   }, []);
+
+  // Function to clear existing session
+  const clearExistingSession = async () => {
+    try {
+      // Keep remember me preferences but clear auth tokens
+      await AsyncStorage.multiRemove([
+        "token",
+        "user"
+      ]);
+      console.log("Existing session cleared");
+    } catch (error) {
+      console.log("Error clearing session:", error);
+    }
+  };
 
   // Function to clear stored credentials
   const clearStoredCredentials = async () => {
@@ -169,17 +175,8 @@ export default function Login() {
     try {
       setLoading(true);
 
-      // Check if someone is already logged in
-      const existingToken = await AsyncStorage.getItem("token");
-      if (existingToken) {
-        Alert.alert(
-          "Already Logged In",
-          "Someone is already logged in. Please log out first.",
-          [{ text: "OK" }]
-        );
-        setLoading(false);
-        return;
-      }
+      // Clear any existing session before new login
+      await clearExistingSession();
 
       const res = await api.post("/loginMobile", {
         email: login,
@@ -257,12 +254,15 @@ export default function Login() {
         await clearStoredCredentials();
       }
 
-      // Redirect based on role
-      if (user.role === "staff") {
-        navigation.replace("StaffFlow");
-      } else if (user.role === "member") {
-        navigation.replace("MemberFlow");
-      }
+      // Smooth transition with a small delay for better UX
+      setTimeout(() => {
+        // FIXED: Use navigate instead of replace, and use the correct screen names
+        if (user.role === "staff") {
+          navigation.navigate("StaffFlow");
+        } else if (user.role === "member") {
+          navigation.navigate("MemberFlow");
+        }
+      }, 300);
 
     } catch (err) {
       console.error("Login error:", err);

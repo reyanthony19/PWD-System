@@ -53,22 +53,30 @@ export default function Profile() {
   }, []);
 
   const handleLogout = async () => {
-    try {
-      // Remove only the sensitive session data (token, user)
-      await AsyncStorage.removeItem("token");
-      await AsyncStorage.removeItem("user");
+    Alert.alert(
+      "Confirm Logout",
+      "Are you sure you want to logout?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Logout",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              // Remove only the sensitive session data (token, user)
+              await AsyncStorage.removeItem("token");
+              await AsyncStorage.removeItem("user");
 
-      // Optionally, remove other session-related data, but retain the 'remember me' values
-      // await AsyncStorage.removeItem("email");
-      // await AsyncStorage.removeItem("password");
-      // await AsyncStorage.removeItem("rememberMe");
-
-      delete api.defaults.headers.common["Authorization"]; // Remove authorization header
-      navigation.reset({ index: 0, routes: [{ name: "Login" }] }); // Reset navigation to login
-    } catch (err) {
-      console.error("Logout error:", err);
-      Alert.alert("Error", "Failed to logout. Please try again.");
-    }
+              delete api.defaults.headers.common["Authorization"];
+              navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+            } catch (err) {
+              console.error("Logout error:", err);
+              Alert.alert("Error", "Failed to logout. Please try again.");
+            }
+          }
+        }
+      ]
+    );
   };
 
 

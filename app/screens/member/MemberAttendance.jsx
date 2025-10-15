@@ -31,7 +31,7 @@ export default function MemberAttendance() {
   }, []);
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser && eventId) {
       fetchData();
     }
   }, [eventId, currentUser]);
@@ -39,13 +39,13 @@ export default function MemberAttendance() {
   const fetchData = async () => {
     try {
       setRefreshing(true);
+      setError("");
       
-      // Event details
-      const eventRes = await api.get(`/events/${eventId}`);
-      setEvent(eventRes.data);
-
-      // Get current user's attendance for this event
-      await fetchUserAttendance(eventRes.data);
+      // Fetch event details and user attendance in parallel
+      await Promise.all([
+        fetchEventDetails(),
+        fetchUserAttendance()
+      ]);
 
     } catch (err) {
       console.error("Fetch error:", err);
@@ -56,84 +56,81 @@ export default function MemberAttendance() {
     }
   };
 
+  const fetchEventDetails = async () => {
+    try {
+      const eventRes = await api.get(`/events/${eventId}`);
+      setEvent(eventRes.data);
+    } catch (err) {
+      console.error("Event fetch error:", err);
+      throw new Error("Failed to load event details");
+    }
+  };
+
   const fetchCurrentUser = async () => {
     try {
       const userRes = await api.get("/user");
       setCurrentUser(userRes.data);
     } catch (error) {
       console.error("Error fetching current user:", error);
+      setError("Failed to load user information");
     }
   };
 
-  const fetchUserAttendance = async (eventData) => {
+  const fetchUserAttendance = async () => {
     try {
-      // Try the specific user attendance route first
-      if (currentUser?.id) {
-        try {
-          const attendanceRes = await api.get(`/attendances/${eventId}/user/${currentUser.id}`);
-          if (attendanceRes.data) {
-            setUserAttendance(attendanceRes.data);
-            setUserAttendanceStatus("present");
-            return;
-          }
-        } catch (error) {
-          console.log("Specific user attendance route not available, trying alternatives...");
-        }
-
-        // Alternative: Get all attendances and filter for current user
-        try {
-          const allAttendancesRes = await api.get(`/attendances/${eventId}`);
-          const allAttendances = allAttendancesRes.data.data || allAttendancesRes.data || [];
-          const userAtt = allAttendances.find(att => att.user_id === currentUser.id);
-          
-          if (userAtt) {
-            setUserAttendance(userAtt);
-            setUserAttendanceStatus("present");
-            return;
-          }
-        } catch (error) {
-          console.log("Alternative attendance route failed");
-        }
-
-        // Alternative: Get user's all attendances and filter for this event
-        try {
-          const userAttendancesRes = await api.get(`/users/${currentUser.id}/attendances`);
-          const userAttendances = userAttendancesRes.data.data || userAttendancesRes.data || [];
-          const userAtt = userAttendances.find(att => att.event_id === parseInt(eventId));
-          
-          if (userAtt) {
-            setUserAttendance(userAtt);
-            setUserAttendanceStatus("present");
-            return;
-          }
-        } catch (error) {
-          console.log("User attendances route failed");
-        }
+      if (!currentUser?.id || !eventId) {
+        console.log("Missing user ID or event ID");
+        determineStatusByEventDate();
+        return;
       }
 
-      // If no attendance found, check event date to determine status
-      checkAttendanceStatusByDate(eventData);
+      console.log(`Checking attendance for user ${currentUser.id} in event ${eventId}`);
       
+      // Use your specific endpoint to check user attendance
+      const attendanceRes = await api.get(`/attendances/${eventId}/user/${currentUser.id}`);
+      const attendanceData = attendanceRes.data;
+      
+      console.log("Attendance API response:", attendanceData);
+
+      if (attendanceData.attended && attendanceData.attendance) {
+        // User attended the event
+        setUserAttendance(attendanceData.attendance);
+        setUserAttendanceStatus("present");
+        console.log("User attendance marked as PRESENT");
+      } else {
+        // User did not attend - check event date to determine status
+        determineStatusByEventDate();
+      }
+
     } catch (error) {
       console.error("Error fetching user attendance:", error);
-      checkAttendanceStatusByDate(eventData);
+      
+      // If the endpoint returns 404 or error, check event date
+      determineStatusByEventDate();
     }
   };
 
-  const checkAttendanceStatusByDate = (eventData) => {
-    const currentDate = new Date();
-    const eventDate = new Date(eventData.event_date);
-    
-    // Check if event date is today
-    const isToday = currentDate.toDateString() === eventDate.toDateString();
-    
-    if (!isToday) {
-      setUserAttendanceStatus("not_today");
+  const determineStatusByEventDate = () => {
+    if (!event) {
+      setUserAttendanceStatus("unknown");
       return;
     }
 
-    // If event is today and no attendance record found, mark as absent
-    setUserAttendanceStatus("absent");
+    const currentDate = new Date();
+    const eventDate = new Date(event.event_date);
+    const isPastEvent = currentDate > eventDate;
+
+    console.log(`Event date: ${eventDate}, Current date: ${currentDate}, Is past: ${isPastEvent}`);
+
+    if (isPastEvent) {
+      // Event is over and no attendance record found = absent
+      setUserAttendanceStatus("absent");
+      console.log("Event is past - marking as ABSENT");
+    } else {
+      // Event is ongoing or future = unknown (attendance might not be recorded yet)
+      setUserAttendanceStatus("unknown");
+      console.log("Event is not past - marking as UNKNOWN");
+    }
   };
 
   const getEventStatus = () => {
@@ -154,6 +151,7 @@ export default function MemberAttendance() {
   const getUserAttendanceBadge = () => {
     const eventStatus = getEventStatus();
     
+    // For upcoming events, always show upcoming status
     if (eventStatus === "upcoming") {
       return {
         status: "Upcoming Event",
@@ -163,52 +161,49 @@ export default function MemberAttendance() {
       };
     }
     
-    if (eventStatus === "past") {
-      if (userAttendanceStatus === "present") {
+    // For today's or past events, show actual attendance status
+    switch (userAttendanceStatus) {
+      case "present":
         return {
           status: "Attended",
           color: "#10b981",
           icon: "checkmark-circle",
-          message: "You attended this event"
-        };
-      } else {
-        return {
-          status: "Not Attended",
-          color: "#6b7280",
-          icon: "close-circle",
-          message: "You did not attend this event"
-        };
-      }
-    }
-    
-    // Event is today
-    switch (userAttendanceStatus) {
-      case "present":
-        return {
-          status: "Present",
-          color: "#10b981",
-          icon: "checkmark-circle",
-          message: "You have attended this event today"
+          message: eventStatus === "today" 
+            ? "You have attended this event today" 
+            : "You attended this event"
         };
       case "absent":
         return {
-          status: "Absent",
+          status: "Not Attended",
           color: "#ef4444",
           icon: "close-circle",
-          message: "You have not attended this event today"
+          message: eventStatus === "today"
+            ? ""
+            : ""
         };
+      case "unknown":
       default:
-        return {
-          status: "Unknown",
-          color: "#6b7280",
-          icon: "help-circle",
-          message: "Attendance status not available"
-        };
+        if (eventStatus === "today") {
+          return {
+            status: "Attendance Pending",
+            color: "#f59e0b",
+            icon: "time-outline",
+            message: "Attendance recording in progress or not yet scanned"
+          };
+        } else {
+          return {
+            status: "Status Unknown",
+            color: "#6b7280",
+            icon: "help-circle",
+            message: "Attendance status not available"
+          };
+        }
     }
   };
 
   const renderAttendanceRecord = () => {
     const attendanceBadge = getUserAttendanceBadge();
+    const eventStatus = getEventStatus();
 
     return (
       <View style={styles.attendanceCard}>
@@ -259,11 +254,31 @@ export default function MemberAttendance() {
           </View>
         )}
 
-        {userAttendanceStatus === "absent" && getEventStatus() === "today" && (
+        {/* Show appropriate notices based on status */}
+        {eventStatus === "today" && userAttendanceStatus === "unknown" && (
+          <View style={styles.infoNotice}>
+            <Ionicons name="information-circle" size={20} color="#3b82f6" />
+            <Text style={styles.infoText}>
+              If you attended this event but don't see your attendance record, 
+              please check with the event staff for scanning.
+            </Text>
+          </View>
+        )}
+
+        {eventStatus === "past" && userAttendanceStatus === "absent" && (
           <View style={styles.absentNotice}>
             <Ionicons name="information-circle" size={20} color="#f59e0b" />
             <Text style={styles.absentText}>
-              If you attended this event but are marked as absent, please contact event staff.
+              You Did Not attend this event.
+            </Text>
+          </View>
+        )}
+
+        {eventStatus === "today" && userAttendanceStatus === "absent" && (
+          <View style={styles.absentNotice}>
+            <Ionicons name="information-circle" size={20} color="#f59e0b" />
+            <Text style={styles.absentText}>
+              Please check with event staff to get your attendance recorded.
             </Text>
           </View>
         )}
@@ -642,6 +657,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#374151',
     fontWeight: '500'
+  },
+  infoNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 12
+  },
+  infoText: {
+    fontSize: 12,
+    color: '#1e40af',
+    marginLeft: 8,
+    flex: 1,
+    lineHeight: 16
   },
   absentNotice: {
     flexDirection: 'row',

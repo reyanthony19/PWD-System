@@ -1,107 +1,135 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  FlatList,
-  Pressable,
   ActivityIndicator,
   ScrollView,
-  TouchableOpacity,
-  Dimensions,
   RefreshControl,
+  TouchableOpacity,
 } from "react-native";
-import { useNavigation, useRoute } from "@react-navigation/native"; 
-import { useCameraPermissions } from "expo-camera";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import api from "@/services/api";
 import { LinearGradient } from "expo-linear-gradient";
 
-const { width } = Dimensions.get("window");
-
 export default function MemberBenefitRecord() {
   const navigation = useNavigation();
   const route = useRoute();
-  const { benefitId, title } = route.params;
+  const { benefitId, title } = route.params || {};
 
-  const [permission, requestPermission] = useCameraPermissions();
   const [benefit, setBenefit] = useState(null);
   const [claims, setClaims] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [sortBy, setSortBy] = useState("nameAsc");
-
-  const isPermissionGranted = Boolean(permission?.granted);
+  const [error, setError] = useState("");
+  const [currentUser, setCurrentUser] = useState(null);
 
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 10000);
-    return () => clearInterval(interval);
-  }, [benefitId]);
+    fetchCurrentUser();
+  }, []);
+
+  useEffect(() => {
+    if (currentUser && benefitId) {
+      fetchData();
+    }
+  }, [benefitId, currentUser]);
 
   const fetchData = async () => {
     try {
       setRefreshing(true);
-      const benefitRes = await api.get(`/benefits/${benefitId}`);
-      setBenefit(benefitRes.data);
+      setError("");
 
-      const claimsRes = await api.get(`/benefits/${benefitId}/claims`);
-      const data = claimsRes.data?.data || claimsRes.data || [];
-      setClaims(data);
+      // Fetch benefit details and claims in parallel
+      await Promise.all([
+        fetchBenefitDetails(),
+        fetchBenefitClaims()
+      ]);
+
     } catch (err) {
-      console.error("Fetch error:", err.response?.data || err.message);
+      console.error("Fetch error:", err);
+      setError("Failed to load benefit data");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  // Budget & Remaining logic
-  const lockedCount = Number(benefit?.locked_member_count ?? 0);
-  const perUnit = benefit?.type === "cash"
-    ? Number(benefit?.budget_amount ?? benefit?.amount ?? 0)
-    : Number(benefit?.budget_quantity ?? benefit?.amount ?? 0);
-
-  const claimedMembers = Array.isArray(claims)
-    ? claims.filter((c) => c.claimed_at || c.status === "claimed").length
-    : 0;
-
-  const claimedFromClaims = claimedMembers;
-  const recordsCountFromBenefit = Number(benefit?.records_count ?? 0);
-
-  const effectiveClaimed = Math.min(
-    Math.max(claimedFromClaims, recordsCountFromBenefit),
-    lockedCount
-  );
-
-  const totalBudget = perUnit * lockedCount;
-  let remaining = totalBudget - effectiveClaimed * perUnit;
-  remaining = Math.max(0, remaining);
-
-  const completionPercentage = lockedCount > 0 ? (effectiveClaimed / lockedCount) * 100 : 0;
-
-  // Sorting Logic
-  const sortedClaims = [...claims].sort((a, b) => {
-    const nameA = `${a.user?.member_profile?.last_name || ""} ${a.user?.member_profile?.first_name || ""}`.toLowerCase();
-    const nameB = `${b.user?.member_profile?.last_name || ""} ${b.user?.member_profile?.first_name || ""}`.toLowerCase();
-    const brgyA = a.user?.member_profile?.barangay || "";
-    const brgyB = b.user?.member_profile?.barangay || "";
-
-    switch (sortBy) {
-      case "nameAsc": return nameA.localeCompare(nameB);
-      case "nameDesc": return nameB.localeCompare(nameA);
-      case "barangayAsc": return brgyA.localeCompare(brgyB);
-      case "barangayDesc": return brgyB.localeCompare(brgyA);
-      default: return 0;
+  const fetchBenefitDetails = async () => {
+    try {
+      const benefitRes = await api.get(`/benefits/${benefitId}`);
+      setBenefit(benefitRes.data);
+    } catch (err) {
+      console.error("Benefit fetch error:", err);
+      throw new Error("Failed to load benefit details");
     }
-  });
+  };
 
-  const sortOptions = [
-    { label: "Name (A → Z)", value: "nameAsc", icon: "sort-alphabetical-ascending" },
-    { label: "Name (Z → A)", value: "nameDesc", icon: "sort-alphabetical-descending" },
-    { label: "Barangay (A → Z)", value: "barangayAsc", icon: "sort-alphabetical-ascending" },
-    { label: "Barangay (Z → A)", value: "barangayDesc", icon: "sort-alphabetical-descending" },
-  ];
+  const fetchBenefitClaims = async () => {
+    try {
+      const claimsRes = await api.get(`/benefits/${benefitId}/claims`);
+      const data = claimsRes.data?.data || claimsRes.data || [];
+      setClaims(data);
+    } catch (err) {
+      console.error("Claims fetch error:", err);
+      throw new Error("Failed to load claims data");
+    }
+  };
+
+  const fetchCurrentUser = async () => {
+    try {
+      const userRes = await api.get("/user");
+      setCurrentUser(userRes.data);
+    } catch (error) {
+      console.error("Error fetching current user:", error);
+      setError("Failed to load user information");
+    }
+  };
+
+  // Budget & Claim Calculations
+  const calculateBenefitStats = () => {
+    if (!benefit) return {
+      totalBudget: 0,
+      perUnit: 0,
+      claimedCount: 0,
+      remainingCount: 0,
+      completionPercentage: 0,
+      usedAmount: 0,
+      remainingAmount: 0
+    };
+
+    const lockedCount = Number(benefit?.locked_member_count ?? 0);
+    const isCash = benefit?.type === "cash";
+
+    // Determine per unit value based on benefit type
+    const perUnit = isCash
+      ? Number(benefit?.budget_amount ?? 0)
+      : Number(benefit?.budget_quantity ?? 0);
+
+    // Calculate claimed members
+    const claimedMembers = Array.isArray(claims)
+      ? claims.filter((c) => c.claimed_at || c.status === "claimed").length
+      : 0;
+
+    const totalBudget = perUnit * lockedCount;
+    const claimedCount = Math.min(claimedMembers, lockedCount);
+    const remainingCount = Math.max(0, lockedCount - claimedCount);
+    const completionPercentage = lockedCount > 0 ? (claimedCount / lockedCount) * 100 : 0;
+
+    const usedAmount = claimedCount * perUnit;
+    const remainingAmount = Math.max(0, totalBudget - usedAmount);
+
+    return {
+      totalBudget,
+      perUnit,
+      claimedCount,
+      remainingCount,
+      completionPercentage,
+      usedAmount,
+      remainingAmount,
+      lockedCount
+    };
+  };
 
   const getBenefitColor = (type) => {
     switch (type?.toLowerCase()) {
@@ -123,97 +151,138 @@ export default function MemberBenefitRecord() {
     }
   };
 
-  const renderStatsCard = () => (
-    <View style={styles.statsContainer}>
-      <View style={styles.statCard}>
-        <View style={[styles.statIcon, { backgroundColor: 'rgba(37, 99, 235, 0.1)' }]}>
-          <Ionicons name="people" size={20} color="#2563eb" />
-        </View>
-        <Text style={styles.statNumber}>{lockedCount}</Text>
-        <Text style={styles.statLabel}>Target</Text>
-      </View>
-      
-      <View style={styles.statCard}>
-        <View style={[styles.statIcon, { backgroundColor: 'rgba(34, 197, 94, 0.1)' }]}>
-          <Ionicons name="checkmark-done" size={20} color="#22c55e" />
-        </View>
-        <Text style={styles.statNumber}>{effectiveClaimed}</Text>
-        <Text style={styles.statLabel}>Claimed</Text>
-      </View>
-      
-      <View style={styles.statCard}>
-        <View style={[styles.statIcon, { backgroundColor: 'rgba(59, 130, 246, 0.1)' }]}>
-          <Ionicons name="time" size={20} color="#3b82f6" />
-        </View>
-        <Text style={styles.statNumber}>{lockedCount - effectiveClaimed}</Text>
-        <Text style={styles.statLabel}>Remaining</Text>
-      </View>
-      
-      <View style={styles.statCard}>
-        <View style={[styles.statIcon, { backgroundColor: 'rgba(168, 85, 247, 0.1)' }]}>
-          <Ionicons name="trending-up" size={20} color="#a855f7" />
-        </View>
-        <Text style={styles.statNumber}>{Math.round(completionPercentage)}%</Text>
-        <Text style={styles.statLabel}>Progress</Text>
-      </View>
-    </View>
-  );
+  const formatAmount = (amount, type, unit = "") => {
+    if (type === "cash") {
+      return `₱${Number(amount).toLocaleString()}`;
+    } else {
+      return `${Number(amount).toLocaleString()} ${unit}`.trim();
+    }
+  };
 
-  const renderBudgetInfo = () => (
-    <View style={styles.budgetCard}>
-      <View style={styles.budgetHeader}>
-        <Ionicons name="wallet" size={24} color="#2563eb" />
-        <Text style={styles.budgetTitle}>Budget Overview</Text>
+  const renderBenefitDetails = () => {
+    if (!benefit) return null;
+
+    const stats = calculateBenefitStats();
+    const benefitColor = getBenefitColor(benefit.type);
+
+    return (
+      <View style={styles.benefitCard}>
+        <View style={styles.benefitHeader}>
+          <View style={[styles.benefitIcon, { backgroundColor: benefitColor }]}>
+            <MaterialCommunityIcons
+              name={getBenefitIcon(benefit.type)}
+              size={28}
+              color="#fff"
+            />
+          </View>
+          <View style={styles.benefitInfo}>
+            <Text style={styles.benefitTitle}>{benefit.name}</Text>
+            <View style={styles.benefitMeta}>
+              <Text style={[styles.benefitType, { color: benefitColor }]}>
+                {benefit.type}
+              </Text>
+              <Text style={styles.benefitAmount}>
+                • {formatAmount(stats.perUnit, benefit.type, benefit.unit)} per member
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.benefitStats}>
+          <View style={styles.statRow}>
+            <View style={styles.statItem}>
+              <Text style={styles.statLabel}>Target Members</Text>
+              <Text style={styles.statValue}>{stats.lockedCount}</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statLabel}>Claimed</Text>
+              <Text style={[styles.statValue, { color: '#10b981' }]}>{stats.claimedCount}</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statLabel}>Remaining</Text>
+              <Text style={[styles.statValue, { color: '#ef4444' }]}>{stats.remainingCount}</Text>
+            </View>
+          </View>
+
+          {/* Progress Bar */}
+          <View style={styles.progressContainer}>
+            <View style={styles.progressBar}>
+              <View
+                style={[
+                  styles.progressFill,
+                  { width: `${stats.completionPercentage}%`, backgroundColor: benefitColor }
+                ]}
+              />
+            </View>
+            <Text style={styles.progressText}>
+              {Math.round(stats.completionPercentage)}% Complete ({stats.claimedCount} of {stats.lockedCount} members)
+            </Text>
+          </View>
+        </View>
       </View>
-      
-      <View style={styles.budgetRow}>
-        <View style={styles.budgetItem}>
-          <Text style={styles.budgetLabel}>Total Budget</Text>
-          <Text style={styles.budgetValue}>
-            {benefit?.type === "cash" ? `₱${totalBudget.toLocaleString()}` : `${totalBudget} ${benefit?.unit || ""}`}
-          </Text>
+    );
+  };
+
+  const renderBudgetOverview = () => {
+    if (!benefit) return null;
+
+    const stats = calculateBenefitStats();
+    const isCash = benefit.type === "cash";
+
+    return (
+      <View style={styles.budgetCard}>
+        <View style={styles.budgetHeader}>
+          <Ionicons name="wallet" size={24} color="#2563eb" />
+          <Text style={styles.budgetTitle}>Budget Overview</Text>
         </View>
-        
-        <View style={styles.budgetItem}>
-          <Text style={styles.budgetLabel}>Per Member</Text>
-          <Text style={styles.budgetValue}>
-            {benefit?.type === "cash" ? `₱${perUnit.toLocaleString()}` : `${perUnit} ${benefit?.unit || ""}`}
-          </Text>
+
+        <View style={styles.budgetDetails}>
+          <View style={styles.budgetRow}>
+            <View style={styles.budgetItem}>
+              <Text style={styles.budgetLabel}>Total Budget</Text>
+              <Text style={styles.budgetValue}>
+                {formatAmount(stats.totalBudget, benefit.type, benefit.unit)}
+              </Text>
+            </View>
+
+            <View style={styles.budgetItem}>
+              <Text style={styles.budgetLabel}>Per Member</Text>
+              <Text style={styles.budgetValue}>
+                {formatAmount(stats.perUnit, benefit.type, benefit.unit)}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.budgetRow}>
+            <View style={styles.budgetItem}>
+              <Text style={styles.budgetLabel}>Used</Text>
+              <Text style={[styles.budgetValue, { color: '#ef4444' }]}>
+                {formatAmount(stats.usedAmount, benefit.type, benefit.unit)}
+              </Text>
+            </View>
+
+            <View style={styles.budgetItem}>
+              <Text style={styles.budgetLabel}>Remaining</Text>
+              <Text style={[styles.budgetValue, { color: '#10b981' }]}>
+                {formatAmount(stats.remainingAmount, benefit.type, benefit.unit)}
+              </Text>
+            </View>
+          </View>
         </View>
+
+        {benefit.status && (
+          <View style={styles.statusContainer}>
+            <Text style={styles.statusLabel}>Status:</Text>
+            <View style={[styles.statusBadge, { backgroundColor: `${getBenefitColor(benefit.type)}20` }]}>
+              <Text style={[styles.statusText, { color: getBenefitColor(benefit.type) }]}>
+                {benefit.status.toUpperCase()}
+              </Text>
+            </View>
+          </View>
+        )}
       </View>
-      
-      <View style={styles.budgetRow}>
-        <View style={styles.budgetItem}>
-          <Text style={styles.budgetLabel}>Remaining</Text>
-          <Text style={[styles.budgetValue, { color: '#10b981' }]}>
-            {benefit?.type === "cash" ? `₱${remaining.toLocaleString()}` : `${remaining} ${benefit?.unit || ""}`}
-          </Text>
-        </View>
-        
-        <View style={styles.budgetItem}>
-          <Text style={styles.budgetLabel}>Used</Text>
-          <Text style={[styles.budgetValue, { color: '#ef4444' }]}>
-            {benefit?.type === "cash" ? `₱${(totalBudget - remaining).toLocaleString()}` : `${totalBudget - remaining} ${benefit?.unit || ""}`}
-          </Text>
-        </View>
-      </View>
-      
-      {/* Progress Bar */}
-      <View style={styles.progressContainer}>
-        <View style={styles.progressBar}>
-          <View 
-            style={[
-              styles.progressFill, 
-              { width: `${completionPercentage}%` }
-            ]} 
-          />
-        </View>
-        <Text style={styles.progressText}>
-          {effectiveClaimed} of {lockedCount} members claimed ({Math.round(completionPercentage)}%)
-        </Text>
-      </View>
-    </View>
-  );
+    );
+  };
 
   const renderClaimItem = ({ item, index }) => {
     const fullName = item.user?.member_profile
@@ -229,12 +298,14 @@ export default function MemberBenefitRecord() {
       const date = new Date(dateString);
       const now = new Date();
       const diffInMinutes = Math.floor((now - date) / (1000 * 60));
-      
+
       if (diffInMinutes < 1) return "Just now";
       if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
       if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
       return `${Math.floor(diffInMinutes / 1440)}d ago`;
     };
+
+    const isClaimed = item.claimed_at || item.status === "claimed";
 
     return (
       <View style={[
@@ -247,7 +318,7 @@ export default function MemberBenefitRecord() {
               {fullName.split(' ').map(n => n[0]).join('').toUpperCase()}
             </Text>
           </View>
-          {index < 3 && (
+          {isClaimed && index < 3 && (
             <View style={styles.rankBadge}>
               <Ionicons name="trophy" size={12} color="#fff" />
             </View>
@@ -259,11 +330,15 @@ export default function MemberBenefitRecord() {
             <Text style={styles.claimName} numberOfLines={1}>
               {fullName}
             </Text>
-            <Text style={styles.timeAgo}>
-              {item.claimed_at ? getTimeAgo(item.claimed_at) : "Not claimed"}
-            </Text>
+            {isClaimed ? (
+              <Text style={styles.timeAgo}>
+                {getTimeAgo(item.claimed_at)}
+              </Text>
+            ) : (
+              <Text style={styles.pendingText}>Pending</Text>
+            )}
           </View>
-          
+
           <View style={styles.detailsRow}>
             <View style={styles.detailItem}>
               <Ionicons name="location" size={14} color="#6b7280" />
@@ -271,8 +346,8 @@ export default function MemberBenefitRecord() {
                 {item.user?.member_profile?.barangay || "—"}
               </Text>
             </View>
-            
-            {item.claimed_at && (
+
+            {isClaimed && (
               <View style={styles.detailItem}>
                 <Ionicons name="calendar" size={14} color="#6b7280" />
                 <Text style={styles.detailText}>
@@ -282,7 +357,7 @@ export default function MemberBenefitRecord() {
             )}
           </View>
 
-          {item.claimed_at && (
+          {isClaimed && (
             <View style={styles.scanInfo}>
               <Ionicons name="person" size={12} color="#9ca3af" />
               <Text style={styles.scanInfoText}>
@@ -295,9 +370,48 @@ export default function MemberBenefitRecord() {
           )}
         </View>
 
-        {item.claimed_at && (
+        {isClaimed ? (
           <View style={styles.statusBadge}>
             <Ionicons name="checkmark-circle" size={20} color="#10b981" />
+          </View>
+        ) : (
+          <View style={styles.pendingBadge}>
+            <Ionicons name="time" size={20} color="#f59e0b" />
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  const renderClaimsList = () => {
+    const stats = calculateBenefitStats();
+
+    return (
+      <View style={styles.claimsSection}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>
+            Claimants ({claims.length})
+          </Text>
+          <Text style={styles.sectionSubtitle}>
+            {stats.claimedCount} successfully claimed • {stats.remainingCount} remaining
+          </Text>
+        </View>
+
+        {claims.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="people-outline" size={64} color="#9ca3af" />
+            <Text style={styles.emptyTitle}>No Claimants Yet</Text>
+            <Text style={styles.emptyText}>
+              Claimants will appear here once they scan the QR code and claim their benefit
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.claimsList}>
+            {claims.map((item, index) => (
+              <View key={item.id}>
+                {renderClaimItem({ item, index })}
+              </View>
+            ))}
           </View>
         )}
       </View>
@@ -315,22 +429,36 @@ export default function MemberBenefitRecord() {
     );
   }
 
+  if (error) {
+    return (
+      <LinearGradient colors={["#667eea", "#764ba2"]} style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle" size={64} color="#fff" />
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={fetchData}>
+            <Text style={styles.retryText}>Try Again</Text>
+          </TouchableOpacity>
+        </View>
+      </LinearGradient>
+    );
+  }
+
   return (
     <LinearGradient colors={["#667eea", "#764ba2"]} style={styles.container}>
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         refreshControl={
-          <RefreshControl 
-            refreshing={refreshing} 
+          <RefreshControl
+            refreshing={refreshing}
             onRefresh={fetchData}
             colors={["#fff"]}
             tintColor="#fff"
           />
         }
       >
-        {/* Header */}
+        {/* Header Section */}
         <View style={styles.header}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
@@ -340,137 +468,14 @@ export default function MemberBenefitRecord() {
           <View style={styles.headerRight} />
         </View>
 
-        {/* Benefit Card */}
-        {benefit && (
-          <View style={styles.benefitCard}>
-            <View style={styles.benefitHeader}>
-              <View style={[
-                styles.benefitIcon,
-                { backgroundColor: getBenefitColor(benefit.type) }
-              ]}>
-                <MaterialCommunityIcons 
-                  name={getBenefitIcon(benefit.type)} 
-                  size={28} 
-                  color="#fff" 
-                />
-              </View>
-              <View style={styles.benefitInfo}>
-                <Text style={styles.benefitTitle}>{benefit.name}</Text>
-                <View style={styles.benefitType}>
-                  <Text style={[
-                    styles.typeText,
-                    { color: getBenefitColor(benefit.type) }
-                  ]}>
-                    {benefit.type}
-                  </Text>
-                  {benefit.amount && (
-                    <Text style={styles.amountText}>
-                      • {benefit.type === "cash" ? `₱${Number(benefit.amount).toLocaleString()}` : `${Number(benefit.amount).toLocaleString()} ${benefit.unit || ""}`}
-                    </Text>
-                  )}
-                </View>
-              </View>
-            </View>
-          </View>
-        )}
+        {/* Benefit Details Card */}
+        {renderBenefitDetails()}
 
-        {/* Scan Button */}
-        <TouchableOpacity 
-          style={[
-            styles.scanButton,
-            (!isPermissionGranted || effectiveClaimed >= lockedCount) && styles.scanButtonDisabled
-          ]}
-          disabled={!isPermissionGranted || effectiveClaimed >= lockedCount}
-          onPress={() => navigation.navigate("BenefitScanner", { benefitId, title: benefit?.name })}
-        >
-          <LinearGradient
-            colors={(!isPermissionGranted || effectiveClaimed >= lockedCount) ? ["#9ca3af", "#6b7280"] : ["#2563eb", "#1d4ed8"]}
-            style={styles.scanButtonGradient}
-          >
-            <Ionicons name="qr-code" size={24} color="#fff" />
-            <Text style={styles.scanButtonText}>
-              {effectiveClaimed >= lockedCount
-                ? "All Members Claimed"
-                : !isPermissionGranted
-                ? "Grant Camera Permission"
-                : "Scan QR Code"}
-            </Text>
-            {isPermissionGranted && effectiveClaimed < lockedCount && (
-              <View style={styles.scanBadge}>
-                <Ionicons name="scan" size={16} color="#fff" />
-              </View>
-            )}
-          </LinearGradient>
-        </TouchableOpacity>
-
-        {/* Statistics */}
-        {renderStatsCard()}
-
-        {/* Budget Information */}
-        {renderBudgetInfo()}
-
-        {/* Sort Options */}
-        <View style={styles.sortSection}>
-          <Text style={styles.sortLabel}>Sort By:</Text>
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            style={styles.sortContainer}
-          >
-            {sortOptions.map((opt) => (
-              <TouchableOpacity
-                key={opt.value}
-                style={[
-                  styles.sortButton,
-                  sortBy === opt.value && styles.sortButtonActive
-                ]}
-                onPress={() => setSortBy(opt.value)}
-              >
-                <MaterialCommunityIcons 
-                  name={opt.icon} 
-                  size={16} 
-                  color={sortBy === opt.value ? "#fff" : "#6b7280"} 
-                />
-                <Text style={[
-                  styles.sortButtonText,
-                  sortBy === opt.value && styles.sortButtonTextActive
-                ]}>
-                  {opt.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
+        {/* Budget Overview Card */}
+        {renderBudgetOverview()}
 
         {/* Claims List */}
-        <View style={styles.claimsSection}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>
-              Claimants ({claims.length})
-            </Text>
-            <Text style={styles.sectionSubtitle}>
-              {effectiveClaimed} successfully claimed
-            </Text>
-          </View>
-
-          {sortedClaims.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Ionicons name="people-outline" size={64} color="#9ca3af" />
-              <Text style={styles.emptyTitle}>No Claimants Yet</Text>
-              <Text style={styles.emptyText}>
-                Claimants will appear here once they scan the QR code
-              </Text>
-            </View>
-          ) : (
-            <FlatList
-              data={sortedClaims}
-              keyExtractor={(item) => item.id.toString()}
-              renderItem={renderClaimItem}
-              scrollEnabled={false}
-              showsVerticalScrollIndicator={false}
-            />
-          )}
-        </View>
+        {renderClaimsList()}
 
         <View style={styles.bottomSpacing} />
       </ScrollView>
@@ -478,9 +483,10 @@ export default function MemberBenefitRecord() {
   );
 }
 
+
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1 
+  container: {
+    flex: 1
   },
   scrollView: {
     flex: 1,
@@ -491,8 +497,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  loadingText: { 
-    marginTop: 12, 
+  loadingText: {
+    marginTop: 12,
     color: "#fff",
     fontSize: 16,
     fontWeight: '600'

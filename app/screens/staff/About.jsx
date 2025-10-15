@@ -8,11 +8,11 @@ const { width } = Dimensions.get("window");
 
 export default function About({ navigation }) {
   const navigateToTerms = () => {
-    navigation.navigate("Terms & Conditions");
+    navigation.navigate("Terms");
   };
 
   const navigateToContactUs = () => {
-    navigation.navigate("Visit Us");
+    navigation.navigate("ContactUs");
   };
 
   const features = [
