@@ -15,16 +15,18 @@ return [
     |
     */
 
-    'paths' => ['api/*', 'sanctum/csrf-cookie'],
+    'paths' => ['api/*', 'sanctum/csrf-cookie', 'member/*'],
 
     'allowed_methods' => ['*'],
 
     // Correct the allowed_origins by keeping the second array
     'allowed_origins' => [
-        'http://localhost:3000', 
-        'http://192.168.0.100:3000', 
-        'http://localhost:8081', 
+        'http://localhost:3000',
+        'http://192.168.0.100:3000',
+        'http://localhost:8081',
         'http://192.168.0.100:8081',
+        'http://192.168.1.101:8081',
+
     ],
 
     'allowed_origins_patterns' => [],

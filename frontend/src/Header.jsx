@@ -31,22 +31,22 @@ const cache = {
     try {
       const item = localStorage.getItem(key);
       if (!item) return null;
-      
+
       const { data, timestamp } = JSON.parse(item);
-      
+
       // Check if cache is still valid
       if (Date.now() - timestamp > CACHE_DURATION) {
         cache.clear(key);
         return null;
       }
-      
+
       return data;
     } catch (error) {
       console.error('Error reading from cache:', error);
       return null;
     }
   },
-  
+
   // Set data in cache
   set: (key, data) => {
     try {
@@ -59,7 +59,7 @@ const cache = {
       console.error('Error writing to cache:', error);
     }
   },
-  
+
   // Clear specific cache
   clear: (key) => {
     try {
@@ -68,14 +68,14 @@ const cache = {
       console.error('Error clearing cache:', error);
     }
   },
-  
+
   // Clear all header cache
   clearAll: () => {
     Object.values(CACHE_KEYS).forEach(key => {
       cache.clear(key);
     });
   },
-  
+
   // Check if cache is valid
   isValid: (key) => {
     const data = cache.get(key);
@@ -114,7 +114,7 @@ function Header({ sidebarOpen, setSidebarOpen }) {
       setLastUpdated(new Date());
     } catch (err) {
       console.error("Error fetching user:", err);
-      
+
       // If API fails, try to use cached data as fallback
       const cachedUser = cache.get(CACHE_KEYS.CURRENT_USER);
       if (cachedUser) {
@@ -127,7 +127,7 @@ function Header({ sidebarOpen, setSidebarOpen }) {
 
   useEffect(() => {
     fetchUser();
-    
+
     // Refresh user data every 15 minutes
     const interval = setInterval(() => fetchUser(), 15 * 60 * 1000);
     return () => clearInterval(interval);
@@ -233,28 +233,6 @@ function Header({ sidebarOpen, setSidebarOpen }) {
               </h1>
               <p className="text-xs text-slate-300 mt-1">Management System</p>
             </div>
-          </div>
-          
-          {/* Cache Status */}
-          <div className="mt-3 flex items-center justify-between text-xs">
-            <div className="text-slate-400">
-              {cache.isValid(CACHE_KEYS.CURRENT_USER) ? (
-                <span className="text-green-400 flex items-center gap-1">
-                  <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                  Cached
-                </span>
-              ) : (
-                <span className="text-yellow-400 flex items-center gap-1">
-                  <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
-                  Live
-                </span>
-              )}
-            </div>
-            {lastUpdated && (
-              <span className="text-slate-500 text-xs">
-                Updated: {lastUpdated.toLocaleTimeString()}
-              </span>
-            )}
           </div>
         </div>
 
@@ -363,12 +341,7 @@ function Header({ sidebarOpen, setSidebarOpen }) {
                   {currentUser?.username || "Loading..."}
                 </p>
                 <p className="text-xs text-slate-500">{currentUser?.email || ""}</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <div className={`w-2 h-2 rounded-full ${cache.isValid(CACHE_KEYS.CURRENT_USER) ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
-                  <span className="text-xs text-slate-400">
-                    {cache.isValid(CACHE_KEYS.CURRENT_USER) ? 'Cached' : 'Live'}
-                  </span>
-                </div>
+         
               </div>
               <ChevronDown size={16} className={`text-slate-500 transition-transform duration-200 ${dropdownOpen ? "rotate-180" : "rotate-0"}`} />
             </button>

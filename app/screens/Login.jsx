@@ -29,7 +29,7 @@ export default function Login() {
   const [loginError, setLoginError] = useState(false);
   const [passwordError, setPasswordError] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [rememberMe, setRememberMe] = useState(false); // Default to false
+  const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   // Animated values
@@ -53,7 +53,7 @@ export default function Login() {
           return;
         }
 
-        // Load remember me preference - FIXED: Check if it exists and is true
+        // Load remember me preference
         const storedRemember = await AsyncStorage.getItem("rememberMe");
 
         // Only set to true if explicitly "true", otherwise false
@@ -76,7 +76,6 @@ export default function Login() {
             await clearStoredCredentials();
           }
         } else {
-          // FIXED: Explicitly set to false and clear any stored data
           setRememberMe(false);
           await clearStoredCredentials();
         }
@@ -134,7 +133,7 @@ export default function Login() {
     }
   };
 
-  // FIXED: Only validate email format
+  // Validate email format
   const validateEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
@@ -159,7 +158,7 @@ export default function Login() {
       return;
     }
 
-    // FIXED: Only validate email format
+    // Validate email format
     if (!validateEmail(login)) {
       setLoginError(true);
       animateError(loginAnim);
@@ -182,9 +181,8 @@ export default function Login() {
         return;
       }
 
-      // FIXED: Use the correct endpoint and field names
       const res = await api.post("/loginMobile", {
-        email: login, // Changed from 'login' to 'email'
+        email: login,
         password: password
       });
 
@@ -196,7 +194,7 @@ export default function Login() {
         return;
       }
 
-      // Check if user has authorized role (staff or member)
+      // Check if user has authorized role
       const allowedRoles = ["staff", "member"];
       if (!allowedRoles.includes(user.role)) {
         setErrorMessage("Access denied. You must be a staff/member to login.");
@@ -204,16 +202,58 @@ export default function Login() {
         return;
       }
 
+      // Check approval status for members
+      if (user.role === "member") {
+        // Check if member profile exists
+        if (!user.member_profile) {
+          setErrorMessage("Member profile not found. Please contact administrator.");
+          await AsyncStorage.clear();
+          return;
+        }
+
+        const approvalStatus = user.status;
+        
+        if (approvalStatus !== "approved") {
+          let statusMessage = "";
+          
+          switch (approvalStatus) {
+            case "pending":
+              statusMessage = "Your account is waiting for approval. Expected approval time: 30-60 minutes. Please wait for administrator approval.";
+              break;
+            case "rejected":
+              statusMessage = "Your account has been rejected. Please contact administrator for more information.";
+              break;
+            case "suspended":
+              statusMessage = "Your account has been suspended. Please contact administrator.";
+              break;
+            default:
+              statusMessage = "Your account is not approved. Please contact administrator.";
+          }
+          
+          setErrorMessage(statusMessage);
+          await AsyncStorage.clear();
+          return;
+        }
+      }
+
+      // Check staff status if needed
+      if (user.role === "staff") {
+        // Optional: Add staff-specific status checks
+        if (user.status && user.status !== "approved") {
+          setErrorMessage("Your staff account is not approved. Please contact administrator.");
+          await AsyncStorage.clear();
+          return;
+        }
+      }
+
       // Store authentication data
       await AsyncStorage.setItem("token", res.data.token);
       await AsyncStorage.setItem("user", JSON.stringify(user));
 
-      // Handle Remember Me - IMPROVED
+      // Handle Remember Me
       if (rememberMe) {
-        // Store credentials for future auto-login
         await storeCredentials(login, password);
       } else {
-        // User doesn't want to be remembered - clear all stored credentials
         await clearStoredCredentials();
       }
 
@@ -222,16 +262,16 @@ export default function Login() {
         navigation.replace("StaffFlow");
       } else if (user.role === "member") {
         navigation.replace("MemberFlow");
-      } else {
-        setErrorMessage("Unauthorized role. Contact admin.");
-        await AsyncStorage.clear();
       }
 
+    } catch (err) {
+      console.error("Login error:", err);
+      
       // Handle specific error cases
       if (err.response?.status === 401) {
         setErrorMessage("Invalid login credentials.");
       } else if (err.response?.status === 403) {
-        setErrorMessage("Access denied. You must be a staff/admin to login.");
+        setErrorMessage("Access denied. You must be a staff/member to login.");
       } else if (err.message === "Network Error") {
         setErrorMessage("Network error. Please check your connection.");
       } else if (err.response?.status >= 500) {
@@ -252,7 +292,7 @@ export default function Login() {
     }
   };
 
-  // Handle "Remember Me" toggle - FIXED
+  // Handle "Remember Me" toggle
   const handleRememberMeToggle = async () => {
     const newRememberMe = !rememberMe;
     setRememberMe(newRememberMe);
@@ -366,7 +406,7 @@ export default function Login() {
                 </View>
               ) : null}
 
-              {/* FIXED: Changed label to Email only */}
+              {/* Email Input */}
               <Animated.View style={{ transform: [{ scale: loginAnim }] }}>
                 <TextInput
                   label="Email Address"

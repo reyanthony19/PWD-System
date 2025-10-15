@@ -233,7 +233,7 @@ export default function MemberBenefits() {
           index === 0 && styles.firstCard
         ]}
         onPress={() =>
-          navigation.navigate("MemberBenefitRecord", { 
+          navigation.navigate("MemberBenefitsRecord", { 
             benefitId: item.id, 
             title: item.name 
           })

@@ -3,15 +3,12 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
-  Pressable,
   ActivityIndicator,
   ScrollView,
   RefreshControl,
   TouchableOpacity,
 } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { useCameraPermissions } from "expo-camera";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import api from "@/services/api";
 import { LinearGradient } from "expo-linear-gradient";
@@ -21,25 +18,23 @@ export default function MemberAttendance() {
   const route = useRoute();
   const { eventId, eventTitle } = route.params || {};
 
-  const [permission, requestPermission] = useCameraPermissions();
   const [event, setEvent] = useState(null);
-  const [attendances, setAttendances] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
-  const [canScan, setCanScan] = useState(true);
-  const [stats, setStats] = useState({
-    totalAttendees: 0,
-    maleCount: 0,
-    femaleCount: 0,
-    recentAttendees: 0
-  });
-
-  const isPermissionGranted = Boolean(permission?.granted);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [userAttendance, setUserAttendance] = useState(null);
+  const [userAttendanceStatus, setUserAttendanceStatus] = useState("unknown");
 
   useEffect(() => {
-    fetchData();
-  }, [eventId]);
+    fetchCurrentUser();
+  }, []);
+
+  useEffect(() => {
+    if (currentUser) {
+      fetchData();
+    }
+  }, [eventId, currentUser]);
 
   const fetchData = async () => {
     try {
@@ -49,186 +44,310 @@ export default function MemberAttendance() {
       const eventRes = await api.get(`/events/${eventId}`);
       setEvent(eventRes.data);
 
-      // Attendance list
-      const attRes = await api.get(`/events/${eventId}/attendances`);
-      const data = attRes.data.data || attRes.data;
-      setAttendances(data);
+      // Get current user's attendance for this event
+      await fetchUserAttendance(eventRes.data);
 
-      // Calculate statistics
-      calculateStats(data);
-      
-      // Check scan validity
-      checkScanValidity(eventRes.data.event_date);
     } catch (err) {
       console.error("Fetch error:", err);
-      setError("Failed to load attendance data");
+      setError("Failed to load event data");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  const calculateStats = (attendanceData) => {
-    const totalAttendees = attendanceData.length;
-    const maleCount = attendanceData.filter(item => 
-      item.user?.member_profile?.sex?.toLowerCase() === 'male'
-    ).length;
-    const femaleCount = attendanceData.filter(item => 
-      item.user?.member_profile?.sex?.toLowerCase() === 'female'
-    ).length;
-    
-    // Count attendees from last 2 hours
-    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
-    const recentAttendees = attendanceData.filter(item => 
-      item.scanned_at && new Date(item.scanned_at) > twoHoursAgo
-    ).length;
-
-    setStats({
-      totalAttendees,
-      maleCount,
-      femaleCount,
-      recentAttendees
-    });
+  const fetchCurrentUser = async () => {
+    try {
+      const userRes = await api.get("/user");
+      setCurrentUser(userRes.data);
+    } catch (error) {
+      console.error("Error fetching current user:", error);
+    }
   };
 
-  const checkScanValidity = (eventDate) => {
+  const fetchUserAttendance = async (eventData) => {
+    try {
+      // Try the specific user attendance route first
+      if (currentUser?.id) {
+        try {
+          const attendanceRes = await api.get(`/attendances/${eventId}/user/${currentUser.id}`);
+          if (attendanceRes.data) {
+            setUserAttendance(attendanceRes.data);
+            setUserAttendanceStatus("present");
+            return;
+          }
+        } catch (error) {
+          console.log("Specific user attendance route not available, trying alternatives...");
+        }
+
+        // Alternative: Get all attendances and filter for current user
+        try {
+          const allAttendancesRes = await api.get(`/attendances/${eventId}`);
+          const allAttendances = allAttendancesRes.data.data || allAttendancesRes.data || [];
+          const userAtt = allAttendances.find(att => att.user_id === currentUser.id);
+          
+          if (userAtt) {
+            setUserAttendance(userAtt);
+            setUserAttendanceStatus("present");
+            return;
+          }
+        } catch (error) {
+          console.log("Alternative attendance route failed");
+        }
+
+        // Alternative: Get user's all attendances and filter for this event
+        try {
+          const userAttendancesRes = await api.get(`/users/${currentUser.id}/attendances`);
+          const userAttendances = userAttendancesRes.data.data || userAttendancesRes.data || [];
+          const userAtt = userAttendances.find(att => att.event_id === parseInt(eventId));
+          
+          if (userAtt) {
+            setUserAttendance(userAtt);
+            setUserAttendanceStatus("present");
+            return;
+          }
+        } catch (error) {
+          console.log("User attendances route failed");
+        }
+      }
+
+      // If no attendance found, check event date to determine status
+      checkAttendanceStatusByDate(eventData);
+      
+    } catch (error) {
+      console.error("Error fetching user attendance:", error);
+      checkAttendanceStatusByDate(eventData);
+    }
+  };
+
+  const checkAttendanceStatusByDate = (eventData) => {
     const currentDate = new Date();
-    const eventDateObj = new Date(eventDate);
-
-    const dayBeforeEvent = new Date(eventDateObj);
-    dayBeforeEvent.setDate(eventDateObj.getDate() - 1);
-
-    const dayAfterEvent = new Date(eventDateObj);
-    dayAfterEvent.setDate(eventDateObj.getDate() + 1);
-
-    setCanScan(currentDate >= dayBeforeEvent && currentDate <= dayAfterEvent);
-  };
-
-  const handleScanPress = async () => {
-    if (!isPermissionGranted) {
-      await requestPermission();
+    const eventDate = new Date(eventData.event_date);
+    
+    // Check if event date is today
+    const isToday = currentDate.toDateString() === eventDate.toDateString();
+    
+    if (!isToday) {
+      setUserAttendanceStatus("not_today");
       return;
     }
+
+    // If event is today and no attendance record found, mark as absent
+    setUserAttendanceStatus("absent");
+  };
+
+  const getEventStatus = () => {
+    if (!event) return "unknown";
     
-    if (canScan) {
-      navigation.navigate("QRScanner", { 
-        eventId: eventId,
-        eventTitle: eventTitle || event?.title 
-      });
+    const currentDate = new Date();
+    const eventDate = new Date(event.event_date);
+    
+    if (currentDate.toDateString() === eventDate.toDateString()) {
+      return "today";
+    } else if (currentDate > eventDate) {
+      return "past";
+    } else {
+      return "upcoming";
     }
   };
 
-  const getTimeAgo = (dateString) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffInMinutes = Math.floor((now - date) / (1000 * 60));
+  const getUserAttendanceBadge = () => {
+    const eventStatus = getEventStatus();
     
-    if (diffInMinutes < 1) return "Just now";
-    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
-    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
-    return `${Math.floor(diffInMinutes / 1440)}d ago`;
+    if (eventStatus === "upcoming") {
+      return {
+        status: "Upcoming Event",
+        color: "#f59e0b",
+        icon: "time-outline",
+        message: "This event is scheduled for the future"
+      };
+    }
+    
+    if (eventStatus === "past") {
+      if (userAttendanceStatus === "present") {
+        return {
+          status: "Attended",
+          color: "#10b981",
+          icon: "checkmark-circle",
+          message: "You attended this event"
+        };
+      } else {
+        return {
+          status: "Not Attended",
+          color: "#6b7280",
+          icon: "close-circle",
+          message: "You did not attend this event"
+        };
+      }
+    }
+    
+    // Event is today
+    switch (userAttendanceStatus) {
+      case "present":
+        return {
+          status: "Present",
+          color: "#10b981",
+          icon: "checkmark-circle",
+          message: "You have attended this event today"
+        };
+      case "absent":
+        return {
+          status: "Absent",
+          color: "#ef4444",
+          icon: "close-circle",
+          message: "You have not attended this event today"
+        };
+      default:
+        return {
+          status: "Unknown",
+          color: "#6b7280",
+          icon: "help-circle",
+          message: "Attendance status not available"
+        };
+    }
   };
 
-  const renderStatsCard = () => (
-    <View style={styles.statsContainer}>
-      <View style={styles.statCard}>
-        <View style={[styles.statIcon, { backgroundColor: 'rgba(37, 99, 235, 0.1)' }]}>
-          <Ionicons name="people" size={24} color="#2563eb" />
-        </View>
-        <Text style={styles.statNumber}>{stats.totalAttendees}</Text>
-        <Text style={styles.statLabel}>Total Attendees</Text>
-      </View>
-      
-      <View style={styles.statCard}>
-        <View style={[styles.statIcon, { backgroundColor: 'rgba(34, 197, 94, 0.1)' }]}>
-          <Ionicons name="time" size={24} color="#22c55e" />
-        </View>
-        <Text style={styles.statNumber}>{stats.recentAttendees}</Text>
-        <Text style={styles.statLabel}>Recent (2h)</Text>
-      </View>
-      
-      <View style={styles.statCard}>
-        <View style={[styles.statIcon, { backgroundColor: 'rgba(59, 130, 246, 0.1)' }]}>
-          <Ionicons name="male" size={24} color="#3b82f6" />
-        </View>
-        <Text style={styles.statNumber}>{stats.maleCount}</Text>
-        <Text style={styles.statLabel}>Male</Text>
-      </View>
-      
-      <View style={styles.statCard}>
-        <View style={[styles.statIcon, { backgroundColor: 'rgba(236, 72, 153, 0.1)' }]}>
-          <Ionicons name="female" size={24} color="#ec4899" />
-        </View>
-        <Text style={styles.statNumber}>{stats.femaleCount}</Text>
-        <Text style={styles.statLabel}>Female</Text>
-      </View>
-    </View>
-  );
-
-  const renderAttendanceItem = ({ item, index }) => {
-    const fullName = item.user?.member_profile
-      ? `${item.user.member_profile.first_name || ""} ${item.user.member_profile.middle_name || ""} ${item.user.member_profile.last_name || ""}`.trim()
-      : item.user?.name || "—";
-
-    const scannedBy = item.scanned_by?.staff_profile
-      ? `${item.scanned_by.staff_profile.first_name || ""} ${item.scanned_by.staff_profile.middle_name || ""} ${item.scanned_by.staff_profile.last_name || ""}`.trim()
-      : item.scanned_by?.name || "—";
-
-    const barangay = item.user?.member_profile?.barangay || "—";
-    const sex = item.user?.member_profile?.sex || "—";
+  const renderAttendanceRecord = () => {
+    const attendanceBadge = getUserAttendanceBadge();
 
     return (
-      <View style={[
-        styles.attendanceItem,
-        index === 0 && styles.firstItem
-      ]}>
-        <View style={styles.avatarContainer}>
-          <View style={[
-            styles.avatar,
-            { backgroundColor: sex.toLowerCase() === 'male' ? '#3b82f6' : '#ec4899' }
-          ]}>
-            <Text style={styles.avatarText}>
-              {fullName.split(' ').map(n => n[0]).join('').toUpperCase()}
-            </Text>
-          </View>
-          {index < 3 && (
-            <View style={styles.rankBadge}>
-              <Ionicons name="trophy" size={12} color="#fff" />
-            </View>
-          )}
-        </View>
-
-        <View style={styles.attendeeInfo}>
-          <View style={styles.nameRow}>
-            <Text style={styles.attendeeName} numberOfLines={1}>
-              {fullName}
-            </Text>
-            <Text style={styles.timeAgo}>
-              {item.scanned_at ? getTimeAgo(item.scanned_at) : ""}
+      <View style={styles.attendanceCard}>
+        <Text style={styles.attendanceTitle}>Your Attendance Record</Text>
+        
+        <View style={styles.attendanceStatus}>
+          <View style={[styles.statusBadge, { backgroundColor: `${attendanceBadge.color}20` }]}>
+            <Ionicons name={attendanceBadge.icon} size={24} color={attendanceBadge.color} />
+            <Text style={[styles.statusText, { color: attendanceBadge.color }]}>
+              {attendanceBadge.status}
             </Text>
           </View>
           
-          <View style={styles.detailsRow}>
-            <View style={styles.detailItem}>
-              <Ionicons name="location" size={14} color="#6b7280" />
-              <Text style={styles.detailText}>{barangay}</Text>
-            </View>
+          <Text style={styles.statusMessage}>{attendanceBadge.message}</Text>
+        </View>
+
+        {userAttendance && (
+          <View style={styles.attendanceDetails}>
+            <Text style={styles.detailsTitle}>Attendance Details</Text>
             
+            <View style={styles.detailRow}>
+              <View style={styles.detailItem}>
+                <Ionicons name="time" size={16} color="#6b7280" />
+                <Text style={styles.detailLabel}>Checked in:</Text>
+                <Text style={styles.detailValue}>
+                  {userAttendance.scanned_at 
+                    ? new Date(userAttendance.scanned_at).toLocaleString()
+                    : "Not recorded"
+                  }
+                </Text>
+              </View>
+            </View>
+
+            {userAttendance.scanned_by && (
+              <View style={styles.detailRow}>
+                <View style={styles.detailItem}>
+                  <Ionicons name="person" size={16} color="#6b7280" />
+                  <Text style={styles.detailLabel}>Verified by:</Text>
+                  <Text style={styles.detailValue}>
+                    {userAttendance.scanned_by?.staff_profile 
+                      ? `${userAttendance.scanned_by.staff_profile.first_name} ${userAttendance.scanned_by.staff_profile.last_name}`
+                      : userAttendance.scanned_by?.username || "Staff"
+                    }
+                  </Text>
+                </View>
+              </View>
+            )}
+          </View>
+        )}
+
+        {userAttendanceStatus === "absent" && getEventStatus() === "today" && (
+          <View style={styles.absentNotice}>
+            <Ionicons name="information-circle" size={20} color="#f59e0b" />
+            <Text style={styles.absentText}>
+              If you attended this event but are marked as absent, please contact event staff.
+            </Text>
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  const renderEventDetails = () => {
+    if (!event) return null;
+
+    const eventDate = new Date(event.event_date);
+    const eventStatus = getEventStatus();
+
+    return (
+      <View style={styles.eventCard}>
+        <View style={styles.eventHeader}>
+          <View style={styles.eventIcon}>
+            <Ionicons name="calendar" size={28} color="#2563eb" />
+          </View>
+          <View style={styles.eventInfo}>
+            <Text style={styles.eventTitle}>{event.title}</Text>
+            <Text style={styles.eventStatus}>
+              {eventStatus === "today" ? "Happening Today" : 
+               eventStatus === "past" ? "Completed Event" : "Upcoming Event"}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.eventDetails}>
+          <View style={styles.detailRow}>
             <View style={styles.detailItem}>
-              <Ionicons name={sex.toLowerCase() === 'male' ? 'male' : 'female'} size={14} color="#6b7280" />
-              <Text style={styles.detailText}>{sex}</Text>
+              <MaterialCommunityIcons name="calendar-clock" size={20} color="#6b7280" />
+              <View style={styles.detailTextContainer}>
+                <Text style={styles.detailLabel}>Date</Text>
+                <Text style={styles.detailValue}>
+                  {eventDate.toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  })}
+                </Text>
+              </View>
             </View>
           </View>
 
-          <View style={styles.scanInfo}>
-            <Ionicons name="person" size={12} color="#9ca3af" />
-            <Text style={styles.scanInfoText}>
-              Scanned by {scannedBy}
-            </Text>
-            <Text style={styles.scanTime}>
-              {item.scanned_at ? new Date(item.scanned_at).toLocaleTimeString() : "—"}
-            </Text>
+          <View style={styles.detailRow}>
+            <View style={styles.detailItem}>
+              <Ionicons name="time" size={20} color="#6b7280" />
+              <View style={styles.detailTextContainer}>
+                <Text style={styles.detailLabel}>Time</Text>
+                <Text style={styles.detailValue}>
+                  {eventDate.toLocaleTimeString('en-US', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </Text>
+              </View>
+            </View>
           </View>
+
+          <View style={styles.detailRow}>
+            <View style={styles.detailItem}>
+              <Ionicons name="location" size={20} color="#6b7280" />
+              <View style={styles.detailTextContainer}>
+                <Text style={styles.detailLabel}>Location</Text>
+                <Text style={styles.detailValue}>{event.location || "Not specified"}</Text>
+              </View>
+            </View>
+          </View>
+
+          {event.description && (
+            <View style={styles.descriptionContainer}>
+              <Text style={styles.descriptionLabel}>Description</Text>
+              <Text style={styles.descriptionText}>{event.description}</Text>
+            </View>
+          )}
+
+          {event.target_barangay && (
+            <View style={styles.barangayContainer}>
+              <Ionicons name="map" size={16} color="#3b82f6" />
+              <Text style={styles.barangayText}>Target Barangay: {event.target_barangay}</Text>
+            </View>
+          )}
         </View>
       </View>
     );
@@ -239,7 +358,21 @@ export default function MemberAttendance() {
       <LinearGradient colors={["#667eea", "#764ba2"]} style={styles.container}>
         <View style={styles.loader}>
           <ActivityIndicator size="large" color="#fff" />
-          <Text style={styles.loadingText}>Loading Attendance...</Text>
+          <Text style={styles.loadingText}>Loading Event Details...</Text>
+        </View>
+      </LinearGradient>
+    );
+  }
+
+  if (error) {
+    return (
+      <LinearGradient colors={["#667eea", "#764ba2"]} style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle" size={64} color="#fff" />
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={fetchData}>
+            <Text style={styles.retryText}>Try Again</Text>
+          </TouchableOpacity>
         </View>
       </LinearGradient>
     );
@@ -266,108 +399,15 @@ export default function MemberAttendance() {
           >
             <Ionicons name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Attendance</Text>
+          <Text style={styles.headerTitle}>Event Attendance</Text>
           <View style={styles.headerRight} />
         </View>
 
-        {/* Event Card */}
-        {event && (
-          <View style={styles.eventCard}>
-            <View style={styles.eventHeader}>
-              <View style={styles.eventIcon}>
-                <Ionicons name="calendar" size={28} color="#2563eb" />
-              </View>
-              <View style={styles.eventInfo}>
-                <Text style={styles.eventTitle}>{event.title}</Text>
-                <View style={styles.eventDetails}>
-                  <View style={styles.eventDetail}>
-                    <MaterialCommunityIcons name="calendar-clock" size={16} color="#6b7280" />
-                    <Text style={styles.eventDetailText}>
-                      {new Date(event.event_date).toLocaleDateString('en-US', {
-                        weekday: 'long',
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric'
-                      })}
-                    </Text>
-                  </View>
-                  <View style={styles.eventDetail}>
-                    <Ionicons name="time" size={16} color="#6b7280" />
-                    <Text style={styles.eventDetailText}>
-                      {new Date(event.event_date).toLocaleTimeString('en-US', {
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </Text>
-                  </View>
-                  <View style={styles.eventDetail}>
-                    <Ionicons name="location" size={16} color="#6b7280" />
-                    <Text style={styles.eventDetailText}>{event.location}</Text>
-                  </View>
-                </View>
-              </View>
-            </View>
-          </View>
-        )}
+        {/* Event Details Card */}
+        {renderEventDetails()}
 
-        {/* Scan Button */}
-        <TouchableOpacity 
-          style={[
-            styles.scanButton,
-            !canScan && styles.scanButtonDisabled
-          ]}
-          onPress={handleScanPress}
-          disabled={!canScan}
-        >
-          <LinearGradient
-            colors={canScan ? ["#2563eb", "#1d4ed8"] : ["#9ca3af", "#6b7280"]}
-            style={styles.scanButtonGradient}
-          >
-            <Ionicons name="qr-code" size={24} color="#fff" />
-            <Text style={styles.scanButtonText}>
-              {!isPermissionGranted ? "Grant Camera Permission" : 
-               canScan ? "Scan QR Code" : "Scanning Not Available"}
-            </Text>
-            {canScan && (
-              <View style={styles.scanBadge}>
-                <Ionicons name="scan" size={16} color="#fff" />
-              </View>
-            )}
-          </LinearGradient>
-        </TouchableOpacity>
-
-        {/* Statistics */}
-        {renderStatsCard()}
-
-        {/* Attendance List */}
-        <View style={styles.attendanceSection}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>
-              Attendees ({attendances.length})
-            </Text>
-            <Text style={styles.sectionSubtitle}>
-              {stats.recentAttendees} checked in recently
-            </Text>
-          </View>
-
-          {attendances.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Ionicons name="people-outline" size={64} color="#9ca3af" />
-              <Text style={styles.emptyTitle}>No Attendees Yet</Text>
-              <Text style={styles.emptyText}>
-                Attendees will appear here once they scan the QR code
-              </Text>
-            </View>
-          ) : (
-            <FlatList
-              data={attendances}
-              keyExtractor={(item) => item.id.toString()}
-              renderItem={renderAttendanceItem}
-              scrollEnabled={false}
-              showsVerticalScrollIndicator={false}
-            />
-          )}
-        </View>
+        {/* Attendance Record Card */}
+        {renderAttendanceRecord()}
 
         <View style={styles.bottomSpacing} />
       </ScrollView>
@@ -392,6 +432,29 @@ const styles = StyleSheet.create({
     marginTop: 12, 
     color: "#fff",
     fontSize: 16,
+    fontWeight: '600'
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20
+  },
+  errorText: { 
+    color: "#fff",
+    fontSize: 16,
+    textAlign: 'center',
+    marginTop: 16,
+    marginBottom: 20
+  },
+  retryButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8
+  },
+  retryText: {
+    color: '#fff',
     fontWeight: '600'
   },
 
@@ -429,7 +492,8 @@ const styles = StyleSheet.create({
   },
   eventHeader: {
     flexDirection: 'row',
-    alignItems: 'flex-start'
+    alignItems: 'flex-start',
+    marginBottom: 16
   },
   eventIcon: {
     width: 50,
@@ -447,218 +511,152 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: '#111827',
-    marginBottom: 12
+    marginBottom: 4
   },
-  eventDetails: {
-    gap: 8
-  },
-  eventDetail: {
-    flexDirection: 'row',
-    alignItems: 'center'
-  },
-  eventDetailText: {
+  eventStatus: {
     fontSize: 14,
     color: '#6b7280',
+    fontStyle: 'italic'
+  },
+  eventDetails: {
+    gap: 16
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between'
+  },
+  detailItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    flex: 1
+  },
+  detailTextContainer: {
+    marginLeft: 12,
+    flex: 1
+  },
+  detailLabel: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginBottom: 2
+  },
+  detailValue: {
+    fontSize: 14,
+    color: '#374151',
+    fontWeight: '500'
+  },
+  descriptionContainer: {
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6'
+  },
+  descriptionLabel: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginBottom: 4
+  },
+  descriptionText: {
+    fontSize: 14,
+    color: '#374151',
+    lineHeight: 20
+  },
+  barangayContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6'
+  },
+  barangayText: {
+    fontSize: 14,
+    color: '#3b82f6',
+    fontWeight: '500',
     marginLeft: 8
   },
 
-  // Scan Button
-  scanButton: {
-    borderRadius: 16,
-    marginBottom: 20,
-    overflow: 'hidden'
+  // Attendance Card
+  attendanceCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 16,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12
   },
-  scanButtonDisabled: {
-    opacity: 0.7
-  },
-  scanButtonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 24
-  },
-  scanButtonText: {
-    color: '#fff',
+  attendanceTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    marginLeft: 12
-  },
-  scanBadge: {
-    position: 'absolute',
-    right: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 12,
-    padding: 4
-  },
-
-  // Statistics
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 24,
-    flexWrap: 'wrap'
-  },
-  statCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
-    width: '48%',
-    marginBottom: 12,
-    backdropFilter: 'blur(10px)'
-  },
-  statIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8
-  },
-  statNumber: {
-    fontSize: 20,
     fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 4
-  },
-  statLabel: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.8)',
-    textAlign: 'center'
-  },
-
-  // Attendance Section
-  attendanceSection: {
-    marginBottom: 20
-  },
-  sectionHeader: {
+    color: '#111827',
     marginBottom: 16
   },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 4
-  },
-  sectionSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.8)'
-  },
-
-  // Attendance Items
-  attendanceItem: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 8,
-    flexDirection: 'row',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8
-  },
-  firstItem: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#f59e0b'
-  },
-  avatarContainer: {
-    position: 'relative',
-    marginRight: 12
-  },
-  avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  avatarText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 14
-  },
-  rankBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: '#f59e0b',
-    borderRadius: 10,
-    width: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  attendeeInfo: {
-    flex: 1
-  },
-  nameRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  attendanceStatus: {
     alignItems: 'center',
-    marginBottom: 8
+    marginBottom: 20
   },
-  attendeeName: {
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 16,
+    marginBottom: 12
+  },
+  statusText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginLeft: 8
+  },
+  statusMessage: {
+    fontSize: 14,
+    color: '#6b7280',
+    textAlign: 'center',
+    lineHeight: 20
+  },
+  attendanceDetails: {
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6'
+  },
+  detailsTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
-    flex: 1
+    color: '#374151',
+    marginBottom: 12
   },
-  timeAgo: {
-    fontSize: 12,
-    color: '#10b981',
-    fontWeight: '500'
-  },
-  detailsRow: {
-    flexDirection: 'row',
-    marginBottom: 8,
-    gap: 12
+  detailRow: {
+    marginBottom: 12
   },
   detailItem: {
     flexDirection: 'row',
     alignItems: 'center'
   },
-  detailText: {
-    fontSize: 12,
+  detailLabel: {
+    fontSize: 14,
     color: '#6b7280',
-    marginLeft: 4
+    marginLeft: 8,
+    marginRight: 4
   },
-  scanInfo: {
-    flexDirection: 'row',
-    alignItems: 'center'
-  },
-  scanInfoText: {
-    fontSize: 11,
-    color: '#9ca3af',
-    marginLeft: 4,
-    marginRight: 8
-  },
-  scanTime: {
-    fontSize: 11,
-    color: '#9ca3af',
+  detailValue: {
+    fontSize: 14,
+    color: '#374151',
     fontWeight: '500'
   },
-
-  // Empty State
-  emptyState: {
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: 16,
-    padding: 40,
-    alignItems: 'center'
+  absentNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 12
   },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#6b7280',
-    marginTop: 16,
-    marginBottom: 8
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#9ca3af',
-    textAlign: 'center',
-    lineHeight: 20
+  absentText: {
+    fontSize: 12,
+    color: '#92400e',
+    marginLeft: 8,
+    flex: 1,
+    lineHeight: 16
   },
 
   bottomSpacing: {

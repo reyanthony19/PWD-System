@@ -4,7 +4,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { View, Text } from "react-native";
+import { View, Text, StatusBar } from "react-native";
 
 // Import Screens
 import Login from "./screens/Login";
@@ -33,6 +33,7 @@ import MemberAttendance from "./screens/member/MemberAttendance";
 import MemberBenefitsRecord from "./screens/member/MemberBenefitsRecord";
 import Terms from "./screens/member/Terms";
 import ContactUs from "./screens/member/ContactUs";
+import RegistrationSuccess from "./screens/RegistrationSuccess";
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -102,41 +103,23 @@ export default function App() {
     );
   };
 
-  // Staff Flow: Tab Navigation
+  // Staff Flow: Tab Navigation - COMPLETELY HEADERLESS
   const StaffFlow = () => {
     return (
       <Tab.Navigator
         initialRouteName="Home"
         screenOptions={{
+          headerShown: false, // No headers in tab navigator
           tabBarStyle: {
             backgroundColor: '#ffffff',
             borderTopWidth: 1,
             borderTopColor: '#e5e7eb',
-            height: 70,
+            height: 60, // Reduced tab bar height
             paddingBottom: 8,
             paddingTop: 8,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: -2 },
-            shadowOpacity: 0.1,
-            shadowRadius: 8,
-            elevation: 8,
           },
           tabBarActiveTintColor: '#2563eb',
           tabBarInactiveTintColor: '#9ca3af',
-          headerStyle: {
-            backgroundColor: '#2563eb',
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.1,
-            shadowRadius: 8,
-            elevation: 4,
-          },
-          headerTintColor: '#ffffff',
-          headerTitleStyle: {
-            fontWeight: 'bold',
-            fontSize: 20,
-          },
-          headerTitleAlign: 'center',
         }}
       >
         <Tab.Screen
@@ -147,10 +130,9 @@ export default function App() {
               <TabBarIcon
                 focused={focused}
                 iconName={focused ? 'home' : 'home-outline'}
-                label="Home"
+                label=""
               />
             ),
-            title: 'Staff Dashboard',
           }}
         />
         <Tab.Screen
@@ -161,10 +143,9 @@ export default function App() {
               <TabBarIcon
                 focused={focused}
                 iconName={focused ? 'calendar' : 'calendar-outline'}
-                label="Events"
+                label=""
               />
             ),
-            title: 'Event Management',
           }}
         />
         <Tab.Screen
@@ -175,10 +156,9 @@ export default function App() {
               <TabBarIcon
                 focused={focused}
                 iconName={focused ? 'gift' : 'gift-outline'}
-                label="Benefits"
+                label=""
               />
             ),
-            title: 'Benefits Management',
           }}
         />
         <Tab.Screen
@@ -189,10 +169,9 @@ export default function App() {
               <TabBarIcon
                 focused={focused}
                 iconName={focused ? 'people' : 'people-outline'}
-                label="Members"
+                label=""
               />
             ),
-            title: 'Member Management',
           }}
         />
         <Tab.Screen
@@ -203,51 +182,32 @@ export default function App() {
               <TabBarIcon
                 focused={focused}
                 iconName={focused ? 'person' : 'person-outline'}
-                label="Profile"
+                label=""
               />
             ),
-            title: 'My Profile',
           }}
         />
       </Tab.Navigator>
     );
   };
 
-  // Member Flow: Tab Navigation
+  // Member Flow: Tab Navigation - COMPLETELY HEADERLESS
   const MemberFlow = () => {
     return (
       <Tab.Navigator
         initialRouteName="Home"
         screenOptions={{
+          headerShown: false, // No headers in tab navigator
           tabBarStyle: {
             backgroundColor: '#ffffff',
             borderTopWidth: 1,
             borderTopColor: '#e5e7eb',
-            height: 70,
+            height: 60, // Reduced tab bar height
             paddingBottom: 8,
             paddingTop: 8,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: -2 },
-            shadowOpacity: 0.1,
-            shadowRadius: 8,
-            elevation: 8,
           },
           tabBarActiveTintColor: '#2563eb',
           tabBarInactiveTintColor: '#9ca3af',
-          headerStyle: {
-            backgroundColor: '#2563eb',
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.1,
-            shadowRadius: 8,
-            elevation: 4,
-          },
-          headerTintColor: '#ffffff',
-          headerTitleStyle: {
-            fontWeight: 'bold',
-            fontSize: 20,
-          },
-          headerTitleAlign: 'center',
         }}
       >
         <Tab.Screen
@@ -258,10 +218,9 @@ export default function App() {
               <TabBarIcon
                 focused={focused}
                 iconName={focused ? 'home' : 'home-outline'}
-                label="Home"
+                label=""
               />
             ),
-            title: 'Dashboard',
           }}
         />
         <Tab.Screen
@@ -272,10 +231,9 @@ export default function App() {
               <TabBarIcon
                 focused={focused}
                 iconName={focused ? 'calendar' : 'calendar-outline'}
-                label="Events"
+                label=""
               />
             ),
-            title: 'My Events',
           }}
         />
         <Tab.Screen
@@ -286,10 +244,9 @@ export default function App() {
               <TabBarIcon
                 focused={focused}
                 iconName={focused ? 'gift' : 'gift-outline'}
-                label="Benefits"
+                label=""
               />
             ),
-            title: 'My Benefits',
           }}
         />
         <Tab.Screen
@@ -300,10 +257,9 @@ export default function App() {
               <TabBarIcon
                 focused={focused}
                 iconName={focused ? 'information-circle' : 'information-circle-outline'}
-                label="About"
+                label=""
               />
             ),
-            title: 'About PDAO',
           }}
         />
         <Tab.Screen
@@ -314,10 +270,9 @@ export default function App() {
               <TabBarIcon
                 focused={focused}
                 iconName={focused ? 'person' : 'person-outline'}
-                label="Profile"
+                label=""
               />
             ),
-            title: 'My Profile',
           }}
         />
       </Tab.Navigator>
@@ -326,26 +281,27 @@ export default function App() {
 
   return (
     <NavigationContainer>
+      <StatusBar barStyle="light-content" backgroundColor="#2563eb" />
       <Stack.Navigator
         initialRouteName={initialRoute}
         screenOptions={{
+          // ULTRA COMPACT HEADER SETTINGS
           headerStyle: {
             backgroundColor: "#2563eb",
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.1,
-            shadowRadius: 8,
-            elevation: 4,
+            shadowColor: "transparent", // Remove shadow
+            elevation: 0, // Remove elevation on Android
+            height: 50, // Even more compact - from 60px to 50px
           },
           headerTintColor: "#ffffff",
           headerTitleStyle: {
-            fontWeight: "bold",
-            fontSize: 18,
+            fontWeight: "600",
+            fontSize: 16,
           },
           headerTitleAlign: "center",
           animation: "slide_from_right",
           headerBackTitleVisible: false,
           contentStyle: { backgroundColor: '#f8fafc' },
+          headerBackButtonMenuEnabled: false,
         }}
       >
         {/* Public Screens */}
@@ -361,97 +317,217 @@ export default function App() {
           options={{
             headerShown: true,
             title: 'Create Account',
+            headerStyle: {
+              backgroundColor: "#2563eb",
+              height: 50,
+              shadowColor: "transparent",
+              elevation: 0,
+            },
           }}
         />
 
-        {/* Staff Flow */}
+        <Stack.Screen
+          name="RegistrationSuccess"
+          component={RegistrationSuccess}
+          options={{ headerShown: false }}
+        />
+
+        {/* Main Flows - No Headers */}
         <Stack.Screen
           name="StaffFlow"
           component={StaffFlow}
           options={{ headerShown: false }}
         />
 
-        {/* Member Flow */}
         <Stack.Screen
           name="MemberFlow"
           component={MemberFlow}
           options={{ headerShown: false }}
         />
 
-        {/* Staff Screens */}
+        {/* Staff Screens - ULTRA COMPACT HEADERS */}
         <Stack.Screen
           name="Attendance"
           component={Attendance}
-          options={{ title: 'Event Attendance' }}
+          options={{ 
+            title: 'Event Attendance',
+            headerStyle: {
+              backgroundColor: "#2563eb",
+              height: 48, // Ultra compact
+              shadowColor: "transparent",
+              elevation: 0,
+            },
+          }}
         />
+
         <Stack.Screen
           name="EditProfile"
           component={EditProfile}
-          options={{ title: 'Edit Profile' }}
+          options={{ 
+            title: 'Edit Profile',
+            headerStyle: {
+              backgroundColor: "#2563eb",
+              height: 48,
+              shadowColor: "transparent",
+              elevation: 0,
+            },
+          }}
         />
+
         <Stack.Screen
           name="BenefitAttendance"
           component={BenefitAttendance}
-          options={{ title: 'Benefit Claims' }}
+          options={{ 
+            title: 'Benefit Claims',
+            headerStyle: {
+              backgroundColor: "#2563eb",
+              height: 48,
+              shadowColor: "transparent",
+              elevation: 0,
+            },
+          }}
         />
+
         <Stack.Screen
           name="Scanner"
           component={Scanner}
-          options={{ title: 'QR Scanner' }}
+          options={{ 
+            title: 'QR Scanner',
+            headerStyle: {
+              backgroundColor: "#2563eb",
+              height: 48,
+              shadowColor: "transparent",
+              elevation: 0,
+            },
+          }}
         />
+
         <Stack.Screen
           name="BenefitScanner"
           component={BenefitScanner}
-          options={{ title: 'Benefit QR Scanner' }}
+          options={{ 
+            title: 'Benefit QR Scanner',
+            headerStyle: {
+              backgroundColor: "#2563eb",
+              height: 48,
+              shadowColor: "transparent",
+              elevation: 0,
+            },
+          }}
         />
+
         <Stack.Screen
           name="MemberList"
           component={MemberList}
-          options={{ title: 'Member Directory' }}
+          options={{ 
+            title: 'Member Directory',
+            headerStyle: {
+              backgroundColor: "#2563eb",
+              height: 48,
+              shadowColor: "transparent",
+              elevation: 0,
+            },
+          }}
         />
 
-        {/* Member Screens */}
+        {/* Member Screens - ULTRA COMPACT HEADERS */}
         <Stack.Screen
           name="MemberEditProfile"
           component={MemberEditProfile}
-          options={{ title: 'Edit Profile' }}
+          options={{ 
+            title: 'Edit Profile',
+            headerStyle: {
+              backgroundColor: "#2563eb",
+              height: 48,
+              shadowColor: "transparent",
+              elevation: 0,
+            },
+          }}
         />
 
-        {/* FIXED: Added missing MemberAttendance route */}
         <Stack.Screen
           name="MemberAttendance"
           component={MemberAttendance}
-          options={{ title: 'Event Details' }}
+          options={{ 
+            title: 'Event Details',
+            headerStyle: {
+              backgroundColor: "#2563eb",
+              height: 48,
+              shadowColor: "transparent",
+              elevation: 0,
+            },
+          }}
         />
 
-        {/* FIXED: Added missing MemberBenefitsRecord route */}
         <Stack.Screen
           name="MemberBenefitsRecord"
           component={MemberBenefitsRecord}
-          options={{ title: 'Benefit Records' }}
+          options={{ 
+            title: 'Benefit Records',
+            headerStyle: {
+              backgroundColor: "#2563eb",
+              height: 48,
+              shadowColor: "transparent",
+              elevation: 0,
+            },
+          }}
         />
 
         <Stack.Screen
           name="Terms"
           component={Terms}
-          options={{ title: 'Terms & Conditions' }}
+          options={{ 
+            title: 'Terms & Conditions',
+            headerStyle: {
+              backgroundColor: "#2563eb",
+              height: 48,
+              shadowColor: "transparent",
+              elevation: 0,
+            },
+          }}
         />
+
         <Stack.Screen
           name="ContactUs"
           component={ContactUs}
-          options={{ title: 'Contact Us' }}
+          options={{ 
+            title: 'Contact Us',
+            headerStyle: {
+              backgroundColor: "#2563eb",
+              height: 48,
+              shadowColor: "transparent",
+              elevation: 0,
+            },
+          }}
         />
 
-        {/* Shared Screens */}
+        {/* Shared Screens - ULTRA COMPACT HEADERS */}
         <Stack.Screen
           name="Profile"
           component={Profile}
-          options={{ title: 'Profile' }}
+          options={{ 
+            title: 'Profile',
+            headerStyle: {
+              backgroundColor: "#2563eb",
+              height: 48,
+              shadowColor: "transparent",
+              elevation: 0,
+            },
+          }}
         />
+
         <Stack.Screen
           name="About"
           component={About}
-          options={{ title: 'About PDAO' }}
+          options={{ 
+            title: 'About PDAO',
+            headerStyle: {
+              backgroundColor: "#2563eb",
+              height: 48,
+              shadowColor: "transparent",
+              elevation: 0,
+            },
+          }}
         />
       </Stack.Navigator>
     </NavigationContainer>

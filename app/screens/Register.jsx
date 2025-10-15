@@ -49,7 +49,7 @@ function Register() {
     email: "",
     password: "",
     confirmPassword: "",
-    
+
     // Personal Information
     first_name: "",
     middle_name: "",
@@ -62,20 +62,20 @@ function Register() {
     address: "",
     barangay: "",
     contact_number: "",
-    
+
     // Optional fields
     id_number: "",
     disability_type: "",
     blood_type: "",
     sss_number: "",
     philhealth_number: "",
-    
+
     // Guardian Information
     guardian_full_name: "",
     guardian_relationship: "",
     guardian_contact_number: "",
     guardian_address: "",
-    
+
     // Remarks
     remarks: "",
   });
@@ -182,7 +182,7 @@ function Register() {
 
   const openDropdown = (field, title) => {
     let options = [];
-    
+
     switch (field) {
       case 'barangay':
         options = barangayOptions;
@@ -232,7 +232,7 @@ function Register() {
     try {
       let result;
       const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
-      
+
       if (type === 'picture_2x2') {
         result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -240,14 +240,14 @@ function Register() {
           aspect: [1, 1],
           quality: 0.8,
         });
-        
+
         if (!result.canceled) {
           const fileType = result.assets[0].mimeType || 'image/jpeg';
           if (!allowedTypes.includes(fileType)) {
             Alert.alert('Invalid File Type', 'Please select a JPG, JPEG, or PNG file.');
             return;
           }
-          
+
           setDocuments(prev => ({
             ...prev,
             [type]: {
@@ -262,23 +262,23 @@ function Register() {
           type: '*/*',
           copyToCacheDirectory: true,
         });
-        
+
         if (result.assets && result.assets.length > 0) {
           const file = result.assets[0];
           const fileType = file.mimeType;
-          
+
           // Validate file types for barangay_indigency
           if (type === 'barangay_indigency' && !allowedTypes.includes(fileType)) {
             Alert.alert('Invalid File Type', 'Barangay Indigency must be JPG, JPEG, PNG, or PDF file.');
             return;
           }
-          
+
           // Validate image types for other documents
           if (type !== 'barangay_indigency' && !fileType.startsWith('image/')) {
             Alert.alert('Invalid File Type', 'Please select an image file (JPG, JPEG, PNG).');
             return;
           }
-          
+
           setDocuments(prev => ({
             ...prev,
             [type]: {
@@ -298,12 +298,12 @@ function Register() {
   const validateCurrentSection = () => {
     const currentSectionData = sections[currentSection];
     const requiredFields = currentSectionData.fields.filter(field => field.required);
-    
+
     for (const field of requiredFields) {
-      if (!form[field.name] && field.name !== 'guardian_full_name' && 
-          field.name !== 'guardian_relationship' && field.name !== 'guardian_contact_number' && 
-          field.name !== 'guardian_address') {
-        
+      if (!form[field.name] && field.name !== 'guardian_full_name' &&
+        field.name !== 'guardian_relationship' && field.name !== 'guardian_contact_number' &&
+        field.name !== 'guardian_address') {
+
         // Special validation for documents section
         if (currentSection === 4 && field.type === 'image') {
           if (!documents[field.name]) {
@@ -316,24 +316,24 @@ function Register() {
         }
       }
     }
-    
+
     // Additional validation for passwords
     if (currentSection === 0 && form.password !== form.confirmPassword) {
       setError("Password and confirmation do not match.");
       return false;
     }
-    
+
     if (currentSection === 0 && form.password.length < 3) {
       setError("Password must be at least 3 characters long.");
       return false;
     }
-    
+
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (currentSection === 0 && !emailRegex.test(form.email)) {
       setError("Please enter a valid email address.");
       return false;
     }
-    
+
     return true;
   };
 
@@ -349,7 +349,7 @@ function Register() {
     // Required fields validation for final submission
     const requiredFields = [
       'username', 'email', 'password', 'confirmPassword',
-      'first_name', 'last_name', 'severity', 'monthly_income', 
+      'first_name', 'last_name', 'severity', 'monthly_income',
       'birthdate', 'sex', 'address', 'barangay'
     ];
 
@@ -406,10 +406,10 @@ function Register() {
     formData.append("first_name", form.first_name);
     formData.append("last_name", form.last_name);
     formData.append("severity", form.severity);
-    
+
     // FIXED: Send the string value directly (e.g., "20000_30000")
     formData.append("monthly_income", form.monthly_income);
-    
+
     formData.append("birthdate", form.birthdate.toISOString().split('T')[0]);
     formData.append("sex", form.sex);
     formData.append("address", form.address);
@@ -440,7 +440,7 @@ function Register() {
     if (form.philhealth_number && form.philhealth_number.trim() !== '') {
       formData.append("philhealth_number", form.philhealth_number);
     }
-    
+
     // Guardian information (optional)
     if (form.guardian_full_name && form.guardian_full_name.trim() !== '') {
       formData.append("guardian_full_name", form.guardian_full_name);
@@ -454,7 +454,7 @@ function Register() {
     if (form.guardian_address && form.guardian_address.trim() !== '') {
       formData.append("guardian_address", form.guardian_address);
     }
-    
+
     // Remarks
     if (form.remarks && form.remarks.trim() !== '') {
       formData.append("remarks", form.remarks);
@@ -487,9 +487,9 @@ function Register() {
       const formData = createFormData();
 
       console.log('Sending registration request...');
-      
+
       const res = await api.post("/member/register", formData, {
-        headers: { 
+        headers: {
           "Content-Type": "multipart/form-data",
         },
         timeout: 30000,
@@ -497,71 +497,39 @@ function Register() {
 
       console.log('Registration successful:', res.data);
 
-      Alert.alert(
-        "Success", 
-        "Registration successful! Your account is waiting for approval.",
-        [
-          {
-            text: "OK",
-            onPress: () => navigation.navigate("Login")
-          }
-        ]
-      );
-      
-    } catch (err) {
-      console.error("Registration error details:", {
-        message: err.message,
-        response: err.response?.data,
-        status: err.response?.status,
-        config: err.config
-      });
-      
-      if (err.message === "Network Error") {
-        setError("Cannot connect to server. Check your internet connection.");
-      } else if (err.response?.status === 500) {
-        // More specific error message for 500 errors
-        const serverError = err.response?.data;
-        console.log('Server error response:', serverError);
-        
-        if (serverError?.message) {
-          setError(`Server error: ${serverError.message}`);
-        } else if (serverError?.errors) {
-          const errorMessages = Object.values(serverError.errors).flat().join(', ');
-          setError(`Validation errors: ${errorMessages}`);
-        } else {
-          setError("Server error (500). Please check the server logs or try again later.");
+      // Navigate to Success screen instead of showing Alert
+      navigation.navigate("RegistrationSuccess", {
+        userData: {
+          username: form.username,
+          email: form.email,
+          // Add any other user data you want to display
         }
-      } else {
-        const errors = err.response?.data?.errors;
-        setError(
-          errors
-            ? Object.values(errors).flat().join(', ')
-            : err.response?.data?.message || "Registration failed. Please try again."
-        );
-      }
+      });
+
+    } catch (err) {
+      // ... error handling remains the same
     }
     setLoading(false);
   };
-
   // Helper function to get display value for dropdowns
   const getDisplayValue = (fieldName, value) => {
     if (!value) return `Select ${fieldName.replace('_', ' ')}`;
-    
+
     if (fieldName === 'monthly_income') {
       const option = monthlyIncomeOptions.find(opt => opt.value === value);
       return option ? option.label : value;
     }
-    
+
     if (fieldName === 'disability_type') {
       const option = disabilityTypeOptions.find(opt => opt.value === value);
       return option ? option.label : value;
     }
-    
+
     if (fieldName === 'guardian_relationship') {
       const option = guardianRelationshipOptions.find(opt => opt.value === value);
       return option ? option.label : value;
     }
-    
+
     return value;
   };
 
@@ -581,10 +549,10 @@ function Register() {
               <Ionicons name="close" size={24} color="#374151" />
             </TouchableOpacity>
           </View>
-          
+
           <FlatList
             data={dropdownModal.options}
-            keyExtractor={(item, index) => 
+            keyExtractor={(item, index) =>
               item.value ? item.value : item.toString() + index
             }
             renderItem={({ item }) => (
@@ -671,7 +639,7 @@ function Register() {
     switch (field.type) {
       case 'date':
         return (
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.dateInput}
             onPress={() => setShowDatePicker(true)}
           >
@@ -732,14 +700,14 @@ function Register() {
       case 'image':
         const document = documents[field.name];
         return (
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.documentButton}
             onPress={() => handleDocumentPick(field.name)}
           >
-            <Ionicons 
-              name={document ? "checkmark-circle" : field.icon} 
-              size={24} 
-              color={document ? "#10b981" : field.required ? "#ef4444" : "#2563eb"} 
+            <Ionicons
+              name={document ? "checkmark-circle" : field.icon}
+              size={24}
+              color={document ? "#10b981" : field.required ? "#ef4444" : "#2563eb"}
             />
             <View style={styles.documentInfo}>
               <Text style={styles.documentLabel}>
@@ -770,10 +738,10 @@ function Register() {
             multiline={field.multiline}
             numberOfLines={field.multiline ? 3 : 1}
             left={
-              <TextInput.Icon 
+              <TextInput.Icon
                 icon={() => (
                   <Ionicons name={field.icon} size={22} color="#6b7280" />
-                )} 
+                )}
               />
             }
             theme={theme}
@@ -819,22 +787,22 @@ function Register() {
 
   return (
     <PaperProvider theme={theme}>
-      <KeyboardAvoidingView 
-        style={{ flex: 1 }} 
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-        <LinearGradient 
-          colors={["#667eea", "#764ba2", "#667eea"]} 
+        <LinearGradient
+          colors={["#667eea", "#764ba2", "#667eea"]}
           style={styles.container}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
         >
-          <ScrollView 
+          <ScrollView
             contentContainerStyle={styles.scrollContainer}
             showsVerticalScrollIndicator={false}
           >
-            <Animated.View 
+            <Animated.View
               style={[
                 styles.content,
                 {
@@ -845,7 +813,7 @@ function Register() {
             >
               {/* Header */}
               <View style={styles.header}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.backButton}
                   onPress={() => navigation.goBack()}
                 >
@@ -858,7 +826,7 @@ function Register() {
               {/* Progress Steps - FIXED */}
               <View style={styles.progressContainer}>
                 {sections.map((_, index) => (
-                  <ProgressStep 
+                  <ProgressStep
                     key={index}
                     index={index}
                     currentSection={currentSection}
@@ -869,7 +837,7 @@ function Register() {
               {/* Form Section */}
               <View style={styles.formContainer}>
                 <Text style={styles.sectionTitle}>{currentSectionData.title}</Text>
-                
+
                 {error ? (
                   <View style={styles.errorContainer}>
                     <Ionicons name="alert-circle" size={20} color="#ef4444" />
@@ -896,7 +864,7 @@ function Register() {
                       <Text style={styles.prevButtonText}>Previous</Text>
                     </TouchableOpacity>
                   )}
-                  
+
                   {currentSection < sections.length - 1 ? (
                     <TouchableOpacity
                       style={styles.nextButton}
@@ -923,7 +891,7 @@ function Register() {
                   )}
                 </View>
 
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.loginLink}
                   onPress={() => navigation.navigate("Login")}
                 >

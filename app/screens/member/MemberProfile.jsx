@@ -10,13 +10,13 @@ import {
   Image,
   TouchableOpacity,
   Modal,
-  RefreshControl // ADDED: Import RefreshControl
+  RefreshControl
 } from "react-native";
 import { Button, Avatar, Card } from "react-native-paper";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
-import api from "@/services/api";
+import api from "@/services/api"; // Your centralized API
 import NetInfo from '@react-native-community/netinfo';
 
 const { width } = Dimensions.get("window");
@@ -53,7 +53,7 @@ const defaultValues = {
 export default function MemberProfile() {
   const navigation = useNavigation();
   const [user, setUser] = useState(null);
-  const [documents, setDocuments] = useState({}); // FIXED: Initialize as empty object
+  const [documents, setDocuments] = useState({});
   const [loading, setLoading] = useState(true);
   const [incompleteFields, setIncompleteFields] = useState([]);
   const [selectedImage, setSelectedImage] = useState(null);
@@ -61,9 +61,10 @@ export default function MemberProfile() {
   const [isOnline, setIsOnline] = useState(true);
   const [usingCachedData, setUsingCachedData] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [imageErrors, setImageErrors] = useState({});
 
-  // Get base URL from api instance - FIXED: Handle case where baseURL might not be set
-  const BASE_URL = api.defaults.baseURL || "http://192.168.1.101:8000";
+  // FIXED: Get base URL from your centralized API config
+  const BASE_URL = api.defaults.baseURL?.replace('/api', '') || "http://192.168.1.101:8000";
 
   useEffect(() => {
     // Subscribe to network state updates
@@ -151,18 +152,22 @@ export default function MemberProfile() {
     }
   };
 
-  // FIXED: Improved document fetching with better error handling
-  // FIXED: Improved document fetching with better error handling
+  // FIXED: Use centralized API for all requests
   const getMemberDocuments = async (user_id) => {
     try {
       const res = await api.get(`/user/documents/${user_id}`);
+      console.log('Documents API Response:', res.data);
 
-      // Check if response has data and it's in expected format
+      // Handle different response formats
       if (res.data && typeof res.data === 'object') {
-        return res.data;
+        return {
+          picture_2x2: res.data.picture_2x2 || null,
+          barangay_indigency: res.data.barangay_indigency || null,
+          medical_certificate: res.data.medical_certificate || null,
+          birth_certificate: res.data.birth_certificate || null
+        };
       } else {
-        console.warn("Documents response format unexpected:", res.data);
-        // Return default documents directly
+        console.warn("Documents response format unexpected, using defaults");
         return {
           picture_2x2: null,
           barangay_indigency: null,
@@ -172,8 +177,7 @@ export default function MemberProfile() {
       }
     } catch (error) {
       console.error("Error fetching member documents:", error);
-
-      // Return default documents structure if endpoint doesn't exist or fails
+      // Return default documents structure
       return {
         picture_2x2: null,
         barangay_indigency: null,
@@ -183,9 +187,27 @@ export default function MemberProfile() {
     }
   };
 
+  // FIXED: Improved URL construction for images using centralized base URL
+  const getImageUrl = (filePath) => {
+    if (!filePath) return null;
+    
+    // If it's already a full URL, use it directly
+    if (filePath.startsWith('http')) {
+      return filePath;
+    }
+    
+    // Remove leading slash if present to avoid double slashes
+    const cleanPath = filePath.startsWith('/') ? filePath.substring(1) : filePath;
+    
+    // Construct the full URL using centralized base URL
+    return `${BASE_URL}/storage/${cleanPath}`;
+  };
+
+  // FIXED: Use centralized API with built-in token handling
   const fetchUserProfile = async (forceRefresh = false) => {
     try {
       setRefreshing(true);
+      setImageErrors({}); // Reset image errors on refresh
 
       const token = await AsyncStorage.getItem("token");
       if (!token) {
@@ -209,10 +231,8 @@ export default function MemberProfile() {
         }
       }
 
-      // If online or force refresh, fetch fresh data
-      api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-
-      // Fetch user profile
+      // FIXED: No need to manually set headers - API interceptor handles this
+      // Fetch user profile using centralized API
       const res = await api.get("/user");
       const userData = res.data;
       setUser(userData);
@@ -232,9 +252,10 @@ export default function MemberProfile() {
       });
       setIncompleteFields(missing);
 
-      // Fetch documents - FIXED: Better error handling
+      // Fetch documents using centralized API
       try {
         const userDocuments = await getMemberDocuments(userData.id);
+        console.log('Fetched documents:', userDocuments);
         setDocuments(userDocuments);
         await saveToCache(CACHE_KEYS.USER_DOCUMENTS, userDocuments);
       } catch (docError) {
@@ -296,7 +317,7 @@ export default function MemberProfile() {
                 "user",
                 ...Object.values(CACHE_KEYS)
               ]);
-              delete api.defaults.headers.common["Authorization"];
+              // No need to manually delete headers - they'll be reset on next login
               navigation.reset({ index: 0, routes: [{ name: "Login" }] });
             } catch (err) {
               console.error("Logout error:", err);
@@ -322,6 +343,14 @@ export default function MemberProfile() {
   const closeImageModal = () => {
     setModalVisible(false);
     setSelectedImage(null);
+  };
+
+  const handleImageError = (documentKey) => {
+    console.log(`Image load failed for: ${documentKey}`);
+    setImageErrors(prev => ({
+      ...prev,
+      [documentKey]: true
+    }));
   };
 
   const isImageFile = (filename) => {
@@ -439,12 +468,22 @@ export default function MemberProfile() {
         )}
       </View>
 
-      {field.key.includes("picture") && field.value ? (
-        <TouchableOpacity onPress={() => openImageModal(`${BASE_URL}/storage/${field.value}`)}>
-          <Image
-            source={{ uri: `${BASE_URL}/storage/${field.value}` }}
-            style={styles.documentImage}
-          />
+      {/* FIXED: Improved image display with error handling */}
+      {(field.key.includes("picture") || field.type === "image") && field.value ? (
+        <TouchableOpacity onPress={() => openImageModal(getImageUrl(field.value))}>
+          {!imageErrors[field.key] ? (
+            <Image
+              source={{ uri: getImageUrl(field.value) }}
+              style={styles.documentImage}
+              onError={() => handleImageError(field.key)}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={styles.imageErrorContainer}>
+              <Icon name="image-off" size={32} color="#9ca3af" />
+              <Text style={styles.imageErrorText}>Failed to load image</Text>
+            </View>
+          )}
           <Text style={styles.viewImageText}>Tap to view</Text>
         </TouchableOpacity>
       ) : (
@@ -475,28 +514,40 @@ export default function MemberProfile() {
     </Card>
   );
 
+  // FIXED: Improved document item rendering with better image handling
   const renderDocumentItem = (field, idx) => {
     const hasDocument = !!field.value;
     const isImage = field.type === "image" || (field.value && isImageFile(field.value));
+    const imageUrl = hasDocument ? getImageUrl(field.value) : null;
+    const hasImageError = imageErrors[field.key];
 
     return (
       <TouchableOpacity
         key={idx}
         style={styles.documentItem}
-        onPress={() => hasDocument && isImage && openImageModal(`${BASE_URL}/storage/${field.value}`)}
-        disabled={!hasDocument || !isImage}
+        onPress={() => hasDocument && isImage && !hasImageError && openImageModal(imageUrl)}
+        disabled={!hasDocument || !isImage || hasImageError}
       >
         <View style={styles.documentContent}>
           {hasDocument && isImage ? (
             <View style={styles.documentImageContainer}>
-              <Image
-                source={{ uri: `${BASE_URL}/storage/${field.value}` }}
-                style={styles.documentThumbnail}
-                resizeMode="cover"
-              />
-              <View style={styles.imageOverlay}>
-                <Icon name="eye" size={16} color="#fff" />
-              </View>
+              {!hasImageError ? (
+                <Image
+                  source={{ uri: imageUrl }}
+                  style={styles.documentThumbnail}
+                  resizeMode="cover"
+                  onError={() => handleImageError(field.key)}
+                />
+              ) : (
+                <View style={styles.documentErrorThumbnail}>
+                  <Icon name="image-off" size={24} color="#9ca3af" />
+                </View>
+              )}
+              {!hasImageError && (
+                <View style={styles.imageOverlay}>
+                  <Icon name="eye" size={16} color="#fff" />
+                </View>
+              )}
             </View>
           ) : (
             <View style={styles.documentIconContainer}>
@@ -512,16 +563,17 @@ export default function MemberProfile() {
             <Text style={styles.documentLabel}>{field.label}</Text>
             <Text style={[
               styles.documentStatus,
-              { color: getDocumentColor(hasDocument) }
+              { color: hasImageError ? "#f59e0b" : getDocumentColor(hasDocument) }
             ]}>
               {hasDocument ? (
+                hasImageError ? "Load Failed" : 
                 isImage ? "View Image" : "Document Uploaded"
               ) : "Missing"}
             </Text>
           </View>
         </View>
 
-        {hasDocument && !isImage && (
+        {hasDocument && !isImage && !hasImageError && (
           <View style={styles.documentBadge}>
             <Icon name="file-document" size={12} color="#fff" />
           </View>
@@ -535,7 +587,7 @@ export default function MemberProfile() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         refreshControl={
-          <RefreshControl // FIXED: Now properly imported and used
+          <RefreshControl
             refreshing={refreshing}
             onRefresh={handleManualRefresh}
             colors={["#2563eb"]}
@@ -595,7 +647,7 @@ export default function MemberProfile() {
               <Text style={styles.email}>{user?.email}</Text>
               <View style={styles.memberIdContainer}>
                 <Icon name="identifier" size={14} color="#6b7280" />
-                <Text style={styles.memberId}>ID: {user?.id}</Text>
+                <Text style={styles.memberId}>{profile.id_number}</Text>
                 {usingCachedData && (
                   <Text style={styles.cachedBadge}> • Cached</Text>
                 )}
@@ -636,6 +688,19 @@ export default function MemberProfile() {
             </View>
           </Card.Content>
         </Card>
+
+        {/* Debug Info - Remove in production */}
+        {/* <Card style={[styles.sectionCard, { backgroundColor: '#f3f4f6' }]}>
+          <Card.Content>
+            <Text style={[styles.sectionTitle, { fontSize: 14, marginBottom: 8 }]}>
+              Debug Info (Remove in production)
+            </Text>
+            <Text style={styles.debugText}>Base URL: {BASE_URL}</Text>
+            <Text style={styles.debugText}>API Base: {api.defaults.baseURL}</Text>
+            <Text style={styles.debugText}>Online: {isOnline ? 'Yes' : 'No'}</Text>
+            <Text style={styles.debugText}>Using Cache: {usingCachedData ? 'Yes' : 'No'}</Text>
+          </Card.Content>
+        </Card> */}
 
         {/* Action Buttons */}
         <View style={styles.actionsContainer}>
@@ -684,6 +749,7 @@ export default function MemberProfile() {
                 source={{ uri: selectedImage }}
                 style={styles.fullSizeImage}
                 resizeMode="contain"
+                onError={() => Alert.alert("Error", "Failed to load image")}
               />
             )}
           </View>
@@ -693,6 +759,7 @@ export default function MemberProfile() {
   );
 }
 
+// ... (keep the same styles as previous version)
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -712,8 +779,6 @@ const styles = StyleSheet.create({
     color: "#2563eb",
     fontSize: 16
   },
-
-  // Offline Banner
   offlineBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -728,8 +793,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginLeft: 8,
   },
-
-  // Completion Banner
   completionBanner: {
     backgroundColor: "#f59e0b",
     borderRadius: 12,
@@ -777,8 +840,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontStyle: "italic",
   },
-
-  // Profile Header
   profileHeaderCard: {
     borderRadius: 16,
     backgroundColor: "#ffffff",
@@ -836,8 +897,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#6b7280",
   },
-
-  // Section Cards
   sectionCard: {
     borderRadius: 12,
     backgroundColor: "#ffffff",
@@ -870,8 +929,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#6b7280",
   },
-
-  // Fields
   fieldContainer: {
     marginBottom: 16,
     padding: 12,
@@ -908,9 +965,23 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
   },
   documentImage: {
-    width: 80,
-    height: 80,
+    width: 120,
+    height: 120,
     borderRadius: 8,
+    marginTop: 4,
+  },
+  imageErrorContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 8,
+    backgroundColor: '#f3f4f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  imageErrorText: {
+    fontSize: 12,
+    color: '#9ca3af',
     marginTop: 4,
   },
   viewImageText: {
@@ -919,8 +990,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
     textAlign: "center",
   },
-
-  // Documents Grid
   documentsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -945,6 +1014,14 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 8,
+  },
+  documentErrorThumbnail: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    backgroundColor: '#f3f4f6',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   imageOverlay: {
     position: "absolute",
@@ -986,8 +1063,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-
-  // Actions
+  debugText: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontFamily: 'monospace',
+    marginBottom: 2,
+  },
   actionsContainer: {
     gap: 12,
     marginTop: 8,
@@ -1003,8 +1084,6 @@ const styles = StyleSheet.create({
   buttonContent: {
     paddingVertical: 6,
   },
-
-  // Modal
   modalContainer: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.9)",
@@ -1027,7 +1106,6 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
   },
-
   bottomSpacing: {
     height: 20,
   },
