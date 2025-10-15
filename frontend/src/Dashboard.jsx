@@ -66,22 +66,22 @@ const cache = {
     try {
       const item = localStorage.getItem(key);
       if (!item) return null;
-      
+
       const { data, timestamp } = JSON.parse(item);
-      
+
       // Check if cache is still valid
       if (Date.now() - timestamp > CACHE_DURATION) {
         cache.clear(key);
         return null;
       }
-      
+
       return data;
     } catch (error) {
       console.error('Error reading from cache:', error);
       return null;
     }
   },
-  
+
   // Set data in cache
   set: (key, data) => {
     try {
@@ -94,7 +94,7 @@ const cache = {
       console.error('Error writing to cache:', error);
     }
   },
-  
+
   // Clear specific cache
   clear: (key) => {
     try {
@@ -103,14 +103,14 @@ const cache = {
       console.error('Error clearing cache:', error);
     }
   },
-  
+
   // Clear all dashboard cache
   clearAll: () => {
     Object.values(CACHE_KEYS).forEach(key => {
       cache.clear(key);
     });
   },
-  
+
   // Check if cache is valid
   isValid: (key) => {
     const data = cache.get(key);
@@ -134,11 +134,11 @@ const debounce = (func, wait) => {
 // Performance optimization: Batch state updates
 const useBatchState = (initialState) => {
   const [state, setState] = useState(initialState);
-  
+
   const batchUpdate = useCallback((updates) => {
     setState(prev => ({ ...prev, ...updates }));
   }, []);
-  
+
   return [state, batchUpdate];
 };
 
@@ -152,7 +152,7 @@ function Dashboard() {
     attendance: [],
     benefitRecords: []
   });
-  
+
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [error, setError] = useState(null);
@@ -171,7 +171,7 @@ function Dashboard() {
         attendance: cache.get(CACHE_KEYS.ATTENDANCE) || [],
         benefitRecords: cache.get(CACHE_KEYS.BENEFIT_RECORDS) || []
       };
-      
+
       setData(cachedData);
     };
 
@@ -183,10 +183,10 @@ function Dashboard() {
     try {
       setLoading(true);
       setError(null);
-      
+
       // Check if we need to fetch fresh data
-      const shouldFetchFresh = forceRefresh || 
-        !cache.isValid(CACHE_KEYS.MEMBERS) || 
+      const shouldFetchFresh = forceRefresh ||
+        !cache.isValid(CACHE_KEYS.MEMBERS) ||
         !cache.isValid(CACHE_KEYS.CURRENT_USER);
 
       if (!shouldFetchFresh) {
@@ -196,11 +196,11 @@ function Dashboard() {
 
       // Batch all API calls
       const [
-        membersRes, 
-        userRes, 
-        benefitsRes, 
-        eventsRes, 
-        attendanceRes, 
+        membersRes,
+        userRes,
+        benefitsRes,
+        eventsRes,
+        attendanceRes,
         benefitRecordsRes
       ] = await Promise.allSettled([
         fetchMembersData(forceRefresh),
@@ -213,7 +213,7 @@ function Dashboard() {
 
       // Batch update all state
       const updates = {};
-      
+
       if (membersRes.status === 'fulfilled') updates.members = membersRes.value;
       if (userRes.status === 'fulfilled') updates.currentUser = userRes.value;
       if (benefitsRes.status === 'fulfilled') updates.benefits = benefitsRes.value;
@@ -228,7 +228,7 @@ function Dashboard() {
       const errors = [membersRes, userRes, benefitsRes, eventsRes, attendanceRes, benefitRecordsRes]
         .filter(result => result.status === 'rejected')
         .map(result => result.reason.message);
-      
+
       if (errors.length > 0) {
         console.warn('Some data failed to load:', errors);
         setError(`Some data may be outdated. ${errors.length} requests failed.`);
@@ -280,7 +280,7 @@ function Dashboard() {
     try {
       const res = await api.get("/benefits");
       const data = res.data || [];
-      
+
       // 🐛 DEBUG: Log the raw API response to see budget fields
       console.log('📊 Raw benefits API response:', data);
       data.forEach(benefit => {
@@ -294,7 +294,7 @@ function Dashboard() {
           total_budget: benefit.total_budget // Check if this exists
         });
       });
-      
+
       cache.set(CACHE_KEYS.BENEFITS, data);
       return data;
     } catch (err) {
@@ -309,8 +309,8 @@ function Dashboard() {
 
     try {
       const res = await api.get("/events");
-      const eventsData = res.data && res.data.data ? res.data.data : 
-                        Array.isArray(res.data) ? res.data : [];
+      const eventsData = res.data && res.data.data ? res.data.data :
+        Array.isArray(res.data) ? res.data : [];
       cache.set(CACHE_KEYS.EVENTS, eventsData);
       return eventsData;
     } catch (err) {
@@ -358,7 +358,7 @@ function Dashboard() {
   // ✅ Get members with disability data - Optimized with early return
   const getMembersWithDisabilities = useMemo(() => {
     if (!members.length) return [];
-    
+
     return members.filter(member =>
       member.member_profile &&
       member.member_profile.disability_type
@@ -434,7 +434,7 @@ function Dashboard() {
   const getDisabilityByStatus = useMemo(() => {
     const disabilityStats = getDisabilityStats;
     const membersWithDisabilities = getMembersWithDisabilities;
-    
+
     if (!disabilityStats.length || !membersWithDisabilities.length) {
       return {};
     }
@@ -447,13 +447,13 @@ function Dashboard() {
 
     for (const status of statuses) {
       disabilityByStatus[status] = {};
-      
+
       for (const disability of disabilityStats) {
         let count = 0;
-        
+
         for (const member of membersWithDisabilities) {
           if (member.status !== status) continue;
-          
+
           const profile = member.member_profile;
           if (!profile.disability_type) continue;
 
@@ -468,7 +468,7 @@ function Dashboard() {
             count++;
           }
         }
-        
+
         disabilityByStatus[status][disability.type] = count;
       }
     }
@@ -481,7 +481,7 @@ function Dashboard() {
     if (!benefits.length) return [];
 
     const benefitTypesCount = new Map();
-    
+
     for (const benefit of benefits) {
       const type = benefit.type || 'unknown';
       benefitTypesCount.set(type, (benefitTypesCount.get(type) || 0) + 1);
@@ -499,12 +499,12 @@ function Dashboard() {
     if (!members.length) return [];
 
     const monthlyCounts = new Map();
-    
+
     for (const member of members) {
       if (member.created_at) {
-        const month = new Date(member.created_at).toLocaleDateString('en-US', { 
-          year: 'numeric', 
-          month: 'short' 
+        const month = new Date(member.created_at).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'short'
         });
         monthlyCounts.set(month, (monthlyCounts.get(month) || 0) + 1);
       }
@@ -521,15 +521,15 @@ function Dashboard() {
     if (!Array.isArray(events) || !events.length || !Array.isArray(attendance)) {
       return [];
     }
-    
+
     const result = [];
-    
+
     for (let i = 0; i < Math.min(events.length, 5); i++) {
       const event = events[i];
-      const eventAttendance = attendance.filter(record => 
+      const eventAttendance = attendance.filter(record =>
         record.event_id === event.id
       ).length;
-      
+
       result.push({
         name: event.title?.substring(0, 20) + (event.title?.length > 20 ? '...' : '') || 'Untitled Event',
         participants: eventAttendance,
@@ -537,7 +537,7 @@ function Dashboard() {
         rate: Math.round((eventAttendance / (event.target_participants || 100)) * 100)
       });
     }
-    
+
     return result;
   }, [events, attendance]);
 
@@ -546,10 +546,10 @@ function Dashboard() {
     if (!Array.isArray(benefits) || !benefits.length) {
       return [];
     }
-    
+
     const distribution = [];
     const benefitRecordsMap = new Map();
-    
+
     // Pre-process benefit records for faster lookup
     if (Array.isArray(benefitRecords)) {
       for (const record of benefitRecords) {
@@ -557,12 +557,12 @@ function Dashboard() {
         benefitRecordsMap.set(benefitId, (benefitRecordsMap.get(benefitId) || 0) + 1);
       }
     }
-    
+
     for (let i = 0; i < Math.min(benefits.length, 6); i++) {
       const benefit = benefits[i];
       const claimed = benefitRecordsMap.get(benefit.id) || 0;
       const remaining = Math.max(0, (benefit.locked_member_count || 0) - claimed);
-      
+
       distribution.push({
         name: benefit.name || 'Unnamed Benefit',
         type: benefit.type || 'unknown',
@@ -582,16 +582,16 @@ function Dashboard() {
     if (!Array.isArray(events) || !events.length) {
       return [];
     }
-    
+
     const now = new Date();
     const upcoming = [];
-    
+
     for (const event of events) {
       if (event.event_date && new Date(event.event_date) >= now) {
         upcoming.push(event);
       }
     }
-    
+
     return upcoming
       .sort((a, b) => new Date(a.event_date) - new Date(b.event_date))
       .slice(0, 4);
@@ -611,7 +611,7 @@ function Dashboard() {
         otherBudget: 0
       };
     }
-    
+
     let totalBudget = 0;
     let allocatedBudget = 0;
     let cashBudget = 0;
@@ -621,7 +621,7 @@ function Dashboard() {
     let totalParticipants = 0;
 
     const benefitRecordsMap = new Map();
-    
+
     // Pre-process benefit records
     if (Array.isArray(benefitRecords)) {
       for (const record of benefitRecords) {
@@ -632,18 +632,18 @@ function Dashboard() {
 
     // 🐛 DEBUG: Log calculations to identify the issue
     console.log('=== RESOURCE ALLOCATION DEBUG ===');
-    
+
     for (const benefit of benefits) {
       const participants = benefit.locked_member_count || 0;
       const claimed = benefitRecordsMap.get(benefit.id) || 0;
-      
+
       totalParticipants += participants;
       if (benefit.status === 'active') activeBenefits++;
 
       if (benefit.type === 'cash') {
         const benefitTotal = (benefit.budget_amount || 0) * participants;
         const benefitAllocated = (benefit.budget_amount || 0) * claimed;
-        
+
         console.log(`Cash Benefit: ${benefit.name}`, {
           budget_amount: benefit.budget_amount,
           participants: participants,
@@ -651,14 +651,14 @@ function Dashboard() {
           claimed: claimed,
           allocated: benefitAllocated
         });
-        
+
         totalBudget += benefitTotal;
         allocatedBudget += benefitAllocated;
         cashBudget += benefitTotal;
       } else if (benefit.type === 'relief') {
         const benefitTotal = (benefit.budget_quantity || 0) * participants;
         const benefitAllocated = (benefit.budget_quantity || 0) * claimed;
-        
+
         console.log(`Relief Benefit: ${benefit.name}`, {
           budget_quantity: benefit.budget_quantity,
           participants: participants,
@@ -666,14 +666,14 @@ function Dashboard() {
           claimed: claimed,
           allocated: benefitAllocated
         });
-        
+
         // FIX: Only add to reliefBudget, NOT totalBudget
         reliefBudget += benefitTotal;
         // totalBudget += benefitTotal; // REMOVED - relief benefits don't count toward total budget
       } else if (benefit.type === 'other') {
         const benefitTotal = (benefit.item_quantity || 0) * participants;
         const benefitAllocated = (benefit.item_quantity || 0) * claimed;
-        
+
         console.log(`Other Benefit: ${benefit.name}`, {
           item_quantity: benefit.item_quantity,
           participants: participants,
@@ -681,7 +681,7 @@ function Dashboard() {
           claimed: claimed,
           allocated: benefitAllocated
         });
-        
+
         // FIX: Only add to otherBudget, NOT totalBudget
         otherBudget += benefitTotal;
         // totalBudget += benefitTotal; // REMOVED - other benefits don't count toward total budget
@@ -716,7 +716,7 @@ function Dashboard() {
     }
 
     const benefitRecordsMap = new Map();
-    
+
     // Pre-process benefit records
     if (Array.isArray(benefitRecords)) {
       for (const record of benefitRecords) {
@@ -726,7 +726,7 @@ function Dashboard() {
     }
 
     const breakdown = [];
-    
+
     for (let i = 0; i < Math.min(benefits.length, 5); i++) {
       const benefit = benefits[i];
       const participants = benefit.locked_member_count || 0;
@@ -789,16 +789,16 @@ function Dashboard() {
 
     // 🐛 DEBUG: Compare with resource allocation
     console.log('=== BENEFIT TYPE SUMMARY DEBUG ===');
-    
+
     for (const benefit of benefits) {
       const participants = benefit.locked_member_count || 0;
-      
+
       if (benefit.type === 'cash') {
         const benefitTotal = (benefit.budget_amount || 0) * participants;
         summary.cash.count += 1;
         summary.cash.totalBudget += benefitTotal;
         summary.cash.participants += participants;
-        
+
         console.log(`Cash Summary: ${benefit.name}`, {
           budget_amount: benefit.budget_amount,
           participants: participants,
@@ -971,7 +971,7 @@ function Dashboard() {
             <h2 className="text-2xl font-bold text-gray-800 mb-6 border-b pb-2">
               📊 Analytics Overview
             </h2>
-            
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
               {/* Benefit Type Distribution */}
               <div className={`${theme.cardBg} rounded-xl shadow p-6`}>
@@ -1020,11 +1020,11 @@ function Dashboard() {
                         <XAxis dataKey="month" />
                         <YAxis allowDecimals={false} />
                         <Tooltip />
-                        <Area 
-                          type="monotone" 
-                          dataKey="count" 
-                          stroke={theme.chartColors[0]} 
-                          fill={theme.chartColors[0]} 
+                        <Area
+                          type="monotone"
+                          dataKey="count"
+                          stroke={theme.chartColors[0]}
+                          fill={theme.chartColors[0]}
                           fillOpacity={0.3}
                           name="New Members"
                         />
@@ -1049,22 +1049,22 @@ function Dashboard() {
                   <ResponsiveContainer>
                     <BarChart data={getEventParticipation}>
                       <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis 
-                        dataKey="name" 
+                      <XAxis
+                        dataKey="name"
                         angle={-45}
                         textAnchor="end"
                         height={80}
                       />
                       <YAxis />
-                      <Tooltip 
-                        formatter={(value, name) => 
+                      <Tooltip
+                        formatter={(value, name) =>
                           name === 'rate' ? [`${value}%`, 'Participation Rate'] : [value, name]
                         }
                       />
                       <Legend />
-                      <Bar 
-                        dataKey="rate" 
-                        fill="#0ea5e9" 
+                      <Bar
+                        dataKey="rate"
+                        fill="#0ea5e9"
                         name="Participation Rate (%)"
                         radius={[4, 4, 0, 0]}
                       />
@@ -1177,7 +1177,7 @@ function Dashboard() {
                           </div>
                         )}
                         <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div 
+                          <div
                             className="bg-green-500 h-2 rounded-full transition-all duration-300"
                             style={{ width: `${benefit.completion}%` }}
                           ></div>
@@ -1244,7 +1244,7 @@ function Dashboard() {
                         </span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div 
+                        <div
                           className="bg-sky-600 h-2 rounded-full transition-all duration-300"
                           style={{ width: `${benefit.completion}%` }}
                         ></div>

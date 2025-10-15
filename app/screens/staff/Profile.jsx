@@ -12,7 +12,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import api from "@/services/api";
-import { LinearGradient } from "expo-linear-gradient"; // Import Expo's LinearGradient
+import { LinearGradient } from "expo-linear-gradient";
 
 export default function Profile() {
   const navigation = useNavigation();
@@ -52,6 +52,7 @@ export default function Profile() {
     fetchUser();
   }, []);
 
+  // ✅ FIXED: Enhanced logout function
   const handleLogout = async () => {
     Alert.alert(
       "Confirm Logout",
@@ -63,22 +64,35 @@ export default function Profile() {
           style: "destructive",
           onPress: async () => {
             try {
-              // Remove only the sensitive session data (token, user)
-              await AsyncStorage.removeItem("token");
-              await AsyncStorage.removeItem("user");
+              setLoading(true);
 
-              delete api.defaults.headers.common["Authorization"];
-              navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+              // Clear all authentication data
+              const keysToRemove = [
+                "token",
+                "user"
+              ];
+
+              await AsyncStorage.multiRemove(keysToRemove);
+
+              console.log("Logout successful, redirecting to login...");
+
+              // Use navigation.reset instead of replace
+              navigation.reset({
+                index: 0,
+                routes: [{ name: "Login" }],
+              });
+
             } catch (err) {
               console.error("Logout error:", err);
               Alert.alert("Error", "Failed to logout. Please try again.");
+            } finally {
+              setLoading(false);
             }
           }
         }
       ]
     );
   };
-
 
   if (loading) {
     return (
@@ -109,8 +123,8 @@ export default function Profile() {
 
   return (
     <LinearGradient
-      colors={["#6ee7b7", "#2563eb"]} // Gradient colors
-      style={styles.container} // Apply gradient to the container
+      colors={["#6ee7b7", "#2563eb"]}
+      style={styles.container}
     >
       <ScrollView contentContainerStyle={{ padding: 20, alignItems: "center" }}>
         {/* Profile Card */}
@@ -196,3 +210,4 @@ const styles = StyleSheet.create({
   editButton: { borderRadius: 10, marginTop: 10, width: "100%" },
   logoutButton: { borderRadius: 10, marginTop: 10, width: "100%" },
 });
+

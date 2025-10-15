@@ -13,7 +13,9 @@ import {
   Plus,
   Filter,
   ChevronDown,
-  RefreshCw
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import api from "./api";
 import Layout from "./Layout";
@@ -94,6 +96,8 @@ function MemberList() {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortOption, setSortOption] = useState("name-asc");
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage] = useState(10);
   const navigate = useNavigate();
 
   // Load initial data from cache
@@ -170,6 +174,7 @@ function MemberList() {
   const handleRefresh = () => {
     cache.clear(CACHE_KEYS.MEMBERS);
     fetchMembers(true);
+    setCurrentPage(1); // Reset to first page on refresh
   };
 
   // Memoized filtered members to prevent unnecessary recalculations
@@ -226,6 +231,17 @@ function MemberList() {
         return 0;
       });
   }, [members, statusFilter, barangayFilter, searchTerm, sortOption]);
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredMembers.length / rowsPerPage);
+  const indexOfLastRow = currentPage * rowsPerPage;
+  const indexOfFirstRow = indexOfLastRow - rowsPerPage;
+  const currentRows = filteredMembers.slice(indexOfFirstRow, indexOfLastRow);
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, barangayFilter, statusFilter, sortOption]);
 
   // Memoized status counts
   const statusCounts = useMemo(() => {
@@ -582,7 +598,7 @@ function MemberList() {
           <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex items-center gap-4">
               <span className="text-lg font-semibold text-gray-700">
-                {filteredMembers.length} of {members.length} members
+                Showing {Math.min(filteredMembers.length, rowsPerPage)} of {filteredMembers.length} members (Page {currentPage} of {totalPages})
               </span>
               {barangayFilter !== "All" && (
                 <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
@@ -632,8 +648,8 @@ function MemberList() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {filteredMembers.length > 0 ? (
-                    filteredMembers.map((member) => {
+                  {currentRows.length > 0 ? (
+                    currentRows.map((member) => {
                       const profile = member.member_profile || {};
                       const fullName = `${profile.first_name || ""} ${profile.middle_name || ""} ${profile.last_name || ""}`.trim();
 
@@ -720,9 +736,63 @@ function MemberList() {
                 </tbody>
               </table>
             </div>
+
+            {/* Pagination */}
+            {filteredMembers.length > rowsPerPage && (
+              <div className="bg-white/60 border-t border-gray-200 px-8 py-6">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-gray-700">
+                    Showing {indexOfFirstRow + 1} to {Math.min(indexOfLastRow, filteredMembers.length)} of {filteredMembers.length} results
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      disabled={currentPage === 1}
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                      Previous
+                    </button>
+                    
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                        <button
+                          key={page}
+                          onClick={() => setCurrentPage(page)}
+                          className={`px-3 py-1 text-sm font-medium rounded-lg transition-colors ${
+                            currentPage === page
+                              ? 'bg-blue-600 text-white'
+                              : 'text-gray-700 hover:bg-gray-100'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      ))}
+                    </div>
+                    
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                      disabled={currentPage === totalPages}
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Next
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </section>
         </div>
       </div>
+
+      <style jsx>{`
+        @keyframes pulse-slow {
+          0%, 100% { opacity: 0.3; }
+          50% { opacity: 0.5; }
+        }
+        .animate-pulse-slow { animation: pulse-slow 4s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+      `}</style>
     </Layout>
   );
 }

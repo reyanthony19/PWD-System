@@ -24,7 +24,9 @@ import {
   User,
   Scan,
   RefreshCw,
-  CheckCircle as CheckCircleIcon
+  CheckCircle as CheckCircleIcon,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import api from "./api";
 import Layout from "./Layout";
@@ -41,7 +43,6 @@ const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes in milliseconds
 
 // Cache utility functions
 const cache = {
-  // Get data from cache
   get: (key) => {
     try {
       const item = localStorage.getItem(key);
@@ -49,7 +50,6 @@ const cache = {
       
       const { data, timestamp } = JSON.parse(item);
       
-      // Check if cache is still valid
       if (Date.now() - timestamp > CACHE_DURATION) {
         cache.clear(key);
         return null;
@@ -62,7 +62,6 @@ const cache = {
     }
   },
   
-  // Set data in cache
   set: (key, data) => {
     try {
       const item = {
@@ -75,7 +74,6 @@ const cache = {
     }
   },
   
-  // Clear specific cache
   clear: (key) => {
     try {
       localStorage.removeItem(key);
@@ -84,9 +82,7 @@ const cache = {
     }
   },
   
-  // Clear all attendance cache
   clearAll: () => {
-    // Clear all keys that start with 'attendance_'
     Object.keys(localStorage).forEach(key => {
       if (key.startsWith('attendance_')) {
         cache.clear(key);
@@ -94,7 +90,6 @@ const cache = {
     });
   },
   
-  // Check if cache is valid
   isValid: (key) => {
     const data = cache.get(key);
     return data !== null;
@@ -111,9 +106,11 @@ function Attendances() {
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
 
-  // filters
+  // filters and pagination
   const [search, setSearch] = useState("");
   const [barangayFilter, setBarangayFilter] = useState("All");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage] = useState(10);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -201,25 +198,22 @@ function Attendances() {
     
     try {
       setRefreshing(true);
+      setCurrentPage(1); // Reset to first page on refresh
       
-      // Clear cache for this event
       cache.clear(CACHE_KEYS.EVENT(eventId));
       cache.clear(CACHE_KEYS.ATTENDANCES(eventId));
       cache.clear(CACHE_KEYS.MEMBERS);
       
-      // Fetch fresh data
       const [eventRes, membersRes, attendancesRes] = await Promise.all([
         api.get(`/events/${eventId}`),
         api.get("/users?role=member"),
         api.get(`/events/${eventId}/attendances`)
       ]);
 
-      // Update cache
       cache.set(CACHE_KEYS.EVENT(eventId), eventRes.data);
       cache.set(CACHE_KEYS.MEMBERS, membersRes.data.data || membersRes.data);
       cache.set(CACHE_KEYS.ATTENDANCES(eventId), attendancesRes.data.data || attendancesRes.data);
 
-      // Update state
       setEvent(eventRes.data);
       setMembers(membersRes.data.data || membersRes.data);
       setAttendances(attendancesRes.data.data || attendancesRes.data);
@@ -246,7 +240,6 @@ function Attendances() {
 
       let eventData, membersData, attendanceData;
 
-      // Check cache for event unless force refresh
       const eventCacheKey = CACHE_KEYS.EVENT(eventId);
       if (!forceRefresh && cache.isValid(eventCacheKey)) {
         console.log('📦 Using cached event data');
@@ -257,7 +250,6 @@ function Attendances() {
         cache.set(eventCacheKey, eventData);
       }
 
-      // Check cache for members unless force refresh
       const membersCacheKey = CACHE_KEYS.MEMBERS;
       if (!forceRefresh && cache.isValid(membersCacheKey)) {
         console.log('📦 Using cached members data');
@@ -268,7 +260,6 @@ function Attendances() {
         cache.set(membersCacheKey, membersData);
       }
 
-      // Check cache for attendances unless force refresh
       const attendancesCacheKey = CACHE_KEYS.ATTENDANCES(eventId);
       if (!forceRefresh && cache.isValid(attendancesCacheKey)) {
         console.log('📦 Using cached attendances data');
@@ -290,7 +281,6 @@ function Attendances() {
       console.error("Failed to fetch data:", err);
       setError("Failed to load event or attendance records.");
       
-      // Try to use cached data as fallback
       const cachedEvent = cache.get(CACHE_KEYS.EVENT(eventId));
       const cachedMembers = cache.get(CACHE_KEYS.MEMBERS);
       const cachedAttendances = cache.get(CACHE_KEYS.ATTENDANCES(eventId));
@@ -310,7 +300,6 @@ function Attendances() {
   useEffect(() => {
     fetchAllData();
     
-    // Set up refresh interval only after initial load
     const interval = setInterval(async () => {
       if (!eventId) return;
       
@@ -319,7 +308,6 @@ function Attendances() {
         const attRes = await api.get(`/events/${eventId}/attendances`);
         const attendanceData = attRes.data.data || attRes.data;
         
-        // Update cache and state
         cache.set(attendancesCacheKey, attendanceData);
         setAttendances(attendanceData);
         setLastUpdated(new Date());
@@ -331,7 +319,7 @@ function Attendances() {
     return () => clearInterval(interval);
   }, [eventId, fetchAllData]);
 
-  // Filter members based on event's target barangay - ONLY when data is loaded
+  // Filter members based on event's target barangay
   const filteredMembersByEventBarangay = dataLoaded ? members.filter(member => {
     if (!event?.target_barangay || event.target_barangay === "All") {
       return true;
@@ -339,7 +327,7 @@ function Attendances() {
     return member.member_profile?.barangay === event.target_barangay;
   }) : [];
 
-  // Combine members with attendance status - ONLY when data is loaded
+  // Combine members with attendance status - PRESENT MEMBERS FIRST
   const membersWithAttendance = dataLoaded ? filteredMembersByEventBarangay.map(member => {
     const isPresent = attendances.some(attendance =>
       attendance.user?.id === member.id ||
@@ -375,15 +363,25 @@ function Attendances() {
       status,
       statusVariant,
       scannedBy: attendanceRecord?.scanned_by_user || attendanceRecord?.scanned_by,
-      scannedAt: attendanceRecord?.scanned_at || attendanceRecord?.created_at
+      scannedAt: attendanceRecord?.scanned_at || attendanceRecord?.created_at,
+      // Add sort priority: present members first, then sort by name
+      sortPriority: isPresent ? 0 : 1,
+      fullName: `${member.member_profile?.first_name || ''} ${member.member_profile?.middle_name || ''} ${member.member_profile?.last_name || ''}`.trim() || member.username
     };
+  }).sort((a, b) => {
+    // First sort by present status (present first)
+    if (a.sortPriority !== b.sortPriority) {
+      return a.sortPriority - b.sortPriority;
+    }
+    // Then sort alphabetically by name
+    return a.fullName.localeCompare(b.fullName);
   }) : [];
 
   // Apply search filter
   const filteredMembers = dataLoaded ? membersWithAttendance.filter(member => {
     if (!search) return true;
 
-    const fullName = `${member.member_profile?.first_name || ''} ${member.member_profile?.middle_name || ''} ${member.member_profile?.last_name || ''}`.toLowerCase();
+    const fullName = member.fullName.toLowerCase();
     const barangay = member.member_profile?.barangay?.toLowerCase() || '';
     const username = member.username?.toLowerCase() || '';
     const guardianName = member.member_profile?.guardian_full_name?.toLowerCase() || '';
@@ -402,34 +400,41 @@ function Attendances() {
     : filteredMembers.filter(member => member.member_profile?.barangay === barangayFilter)
   ) : [];
 
-  // Statistics - ONLY when data is loaded
+  // Pagination
+  const totalPages = Math.ceil(finalFilteredMembers.length / rowsPerPage);
+  const indexOfLastRow = currentPage * rowsPerPage;
+  const indexOfFirstRow = indexOfLastRow - rowsPerPage;
+  const currentRows = finalFilteredMembers.slice(indexOfFirstRow, indexOfLastRow);
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, barangayFilter]);
+
+  // Statistics
   const totalMembers = dataLoaded ? filteredMembersByEventBarangay.length : 0;
   const presentCount = dataLoaded ? membersWithAttendance.filter(m => m.isPresent).length : 0;
   const expectedOrAbsentCount = dataLoaded ? totalMembers - presentCount : 0;
   const attendanceRate = dataLoaded && totalMembers > 0 ? (presentCount / totalMembers * 100).toFixed(1) : 0;
 
-  // Determine the label for the third statistic card
   const getThirdStatLabel = () => {
     if (isEventCompleted(event?.event_date)) return "Absent";
     if (isEventToday(event?.event_date)) return "Expected Today";
     return "Expected";
   };
 
-  // Barangay counts for filter (only from event's target barangay)
   const barangayCounts = dataLoaded ? filteredMembersByEventBarangay.reduce((acc, member) => {
     const barangay = member.member_profile?.barangay || "Unspecified";
     acc[barangay] = (acc[barangay] || 0) + 1;
     return acc;
   }, {}) : {};
 
-  // Get available barangays from the filtered members
   const availableBarangays = dataLoaded ? [...new Set(
     filteredMembersByEventBarangay
       .map(member => member.member_profile?.barangay)
       .filter(Boolean)
   )].sort() : [];
 
-  // Format birthdate
   const formatBirthdate = (birthdate) => {
     if (!birthdate) return "—";
     return new Date(birthdate).toLocaleDateString('en-US', {
@@ -439,7 +444,6 @@ function Attendances() {
     });
   };
 
-  // Calculate age from birthdate
   const calculateAge = (birthdate) => {
     if (!birthdate) return "—";
     const today = new Date();
@@ -452,9 +456,7 @@ function Attendances() {
     return age;
   };
 
-  // Generate PDF Report
   const generatePDF = () => {
-    // Store current data for printing
     const printData = {
       event,
       members: finalFilteredMembers,
@@ -471,7 +473,6 @@ function Attendances() {
       }
     };
 
-    // Navigate to print page
     navigate(`/events/${eventId}/attendance/print`, { 
       state: printData 
     });
@@ -519,7 +520,6 @@ function Attendances() {
   return (
     <Layout>
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-100 py-8 px-4">
-        {/* Background Decoration */}
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse-slow"></div>
           <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-indigo-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse-slow delay-1000"></div>
@@ -664,7 +664,6 @@ function Attendances() {
             </div>
           </div>
 
-          {/* Rest of your component remains the same */}
           {/* Search + Filters */}
           <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-white/20 p-6 mb-8">
             <div className="flex flex-col lg:flex-row lg:items-end gap-6">
@@ -807,7 +806,7 @@ function Attendances() {
           <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex items-center gap-4">
               <span className="text-lg font-semibold text-gray-700">
-                {finalFilteredMembers.length} of {totalMembers} members
+                Showing {Math.min(finalFilteredMembers.length, rowsPerPage)} of {finalFilteredMembers.length} members (Page {currentPage} of {totalPages})
               </span>
               {event?.target_barangay && event.target_barangay !== "All" && (
                 <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
@@ -867,8 +866,8 @@ function Attendances() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {finalFilteredMembers.length > 0 ? (
-                    finalFilteredMembers.map((member) => (
+                  {currentRows.length > 0 ? (
+                    currentRows.map((member) => (
                       <tr
                         key={member.id}
                         className="hover:bg-gray-50/80 transition-all duration-150 group"
@@ -880,7 +879,7 @@ function Attendances() {
                             </div>
                             <div>
                               <div className="font-semibold text-gray-900">
-                                {`${member.member_profile?.first_name || ''} ${member.member_profile?.middle_name || ''} ${member.member_profile?.last_name || ''}`.trim() || member.username}
+                                {member.fullName}
                               </div>
                               <div className="text-xs text-gray-500 mt-1">
                                 @{member.username}
@@ -1005,6 +1004,52 @@ function Attendances() {
                 </tbody>
               </table>
             </div>
+
+            {/* Pagination */}
+            {finalFilteredMembers.length > rowsPerPage && (
+              <div className="bg-white/60 border-t border-gray-200 px-8 py-6">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-gray-700">
+                    Showing {indexOfFirstRow + 1} to {Math.min(indexOfLastRow, finalFilteredMembers.length)} of {finalFilteredMembers.length} results
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      disabled={currentPage === 1}
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                      Previous
+                    </button>
+                    
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                        <button
+                          key={page}
+                          onClick={() => setCurrentPage(page)}
+                          className={`px-3 py-1 text-sm font-medium rounded-lg transition-colors ${
+                            currentPage === page
+                              ? 'bg-blue-600 text-white'
+                              : 'text-gray-700 hover:bg-gray-100'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      ))}
+                    </div>
+                    
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                      disabled={currentPage === totalPages}
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Next
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </section>
 
           {/* Back Button */}
@@ -1023,7 +1068,6 @@ function Attendances() {
         </div>
       </div>
 
-      {/* Add custom animations */}
       <style jsx>{`
         @keyframes pulse-slow {
           0%, 100% { opacity: 0.3; }

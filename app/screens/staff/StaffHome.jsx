@@ -25,7 +25,8 @@ const CACHE_KEYS = {
   MEMBERS: 'staff_home_members',
   EVENTS: 'staff_home_events',
   PAST_EVENTS: 'staff_home_past_events',
-  LAST_FETCH: 'staff_home_last_fetch'
+  LAST_FETCH: 'staff_home_last_fetch',
+  ALERTED_EVENTS: 'staff_home_alerted_events' // NEW: Track which events we've already alerted about
 };
 
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache
@@ -42,6 +43,7 @@ export default function StaffHome() {
   const [isOnline, setIsOnline] = useState(true);
 
   const isMountedRef = useRef(true);
+  const alertedEventsRef = useRef(new Set()); // NEW: Track alerted events in memory
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -50,6 +52,9 @@ export default function StaffHome() {
     const unsubscribeNetInfo = NetInfo.addEventListener(state => {
       setIsOnline(state.isConnected);
     });
+
+    // Load previously alerted events
+    loadAlertedEvents();
 
     return () => {
       isMountedRef.current = false;
@@ -62,6 +67,27 @@ export default function StaffHome() {
       fetchUserData();
     }, [])
   );
+
+  // NEW: Load previously alerted events from storage
+  const loadAlertedEvents = async () => {
+    try {
+      const alertedEvents = await getCache(CACHE_KEYS.ALERTED_EVENTS);
+      if (alertedEvents && Array.isArray(alertedEvents)) {
+        alertedEventsRef.current = new Set(alertedEvents);
+      }
+    } catch (error) {
+      console.error('Error loading alerted events:', error);
+    }
+  };
+
+  // NEW: Save alerted events to storage
+  const saveAlertedEvents = async () => {
+    try {
+      await setCache(CACHE_KEYS.ALERTED_EVENTS, Array.from(alertedEventsRef.current));
+    } catch (error) {
+      console.error('Error saving alerted events:', error);
+    }
+  };
 
   // Enhanced Cache utilities
   const setCache = async (key, data) => {
@@ -236,6 +262,7 @@ export default function StaffHome() {
         setPastEvents(pastEventsData);
       }
 
+      // UPDATED: Check upcoming events but don't show alerts on every visit
       checkUpcomingEvents(eventsData);
 
     } catch (error) {
@@ -244,15 +271,42 @@ export default function StaffHome() {
     }
   };
 
+  // UPDATED: Improved upcoming events check with alert prevention
   const checkUpcomingEvents = (list) => {
     const now = new Date();
+    let newAlerts = [];
+    
     list.forEach((event) => {
       const eventDate = new Date(event.event_date);
       const diffDays = Math.ceil((eventDate - now) / (1000 * 60 * 60 * 24));
-      if (diffDays === 3) {
-        Alert.alert("Upcoming Event", `The event "${event.title}" is in 3 days!`);
+      
+      // Only alert if event is in 3 days AND we haven't alerted about it before
+      if (diffDays === 3 && !alertedEventsRef.current.has(event.id)) {
+        newAlerts.push(event);
+        alertedEventsRef.current.add(event.id); // Mark as alerted
       }
     });
+
+    // Show consolidated alert if there are new events to alert about
+    if (newAlerts.length > 0) {
+      if (newAlerts.length === 1) {
+        Alert.alert(
+          "Upcoming Event", 
+          `The event "${newAlerts[0].title}" is in 3 days!`,
+          [{ text: "OK" }]
+        );
+      } else {
+        const eventTitles = newAlerts.map(event => `• ${event.title}`).join('\n');
+        Alert.alert(
+          "Upcoming Events", 
+          `The following events are in 3 days:\n\n${eventTitles}`,
+          [{ text: "OK" }]
+        );
+      }
+      
+      // Save the updated alerted events
+      saveAlertedEvents();
+    }
   };
 
   const onRefresh = async () => {
@@ -336,7 +390,7 @@ export default function StaffHome() {
   const renderEvent = ({ item }) => (
     <TouchableOpacity
       style={styles.eventCard}
-      onPress={() => navigation.navigate("EventDetails", { eventId: item.id })}
+      onPress={() => navigation.navigate("Attendance", { eventId: item.id })}
     >
       <View style={styles.eventHeader}>
         <Avatar.Icon
@@ -471,7 +525,7 @@ export default function StaffHome() {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Upcoming Events ({events.length})</Text>
-              <TouchableOpacity onPress={() => navigation.navigate('StaffEvents')}>
+              <TouchableOpacity onPress={() => navigation.navigate('Events')}>
                 <Text style={styles.seeAllText}>See All</Text>
               </TouchableOpacity>
             </View>
@@ -521,27 +575,27 @@ export default function StaffHome() {
             <View style={styles.actionsGrid}>
               <TouchableOpacity
                 style={styles.actionButton}
-                onPress={() => navigation.navigate('StaffMembers')}
+                onPress={() => navigation.navigate('Members')}
               >
                 <View style={[styles.actionIcon, { backgroundColor: '#3b82f6' }]}>
                   <Icon name="account-group" size={24} color="#fff" />
                 </View>
-                <Text style={styles.actionText}>Manage Members</Text>
+                <Text style={styles.actionText}>View Members in your Barangay</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={styles.actionButton}
-                onPress={() => navigation.navigate("StaffCreateEvent")}
+                onPress={() => navigation.navigate("Profile")}
               >
                 <View style={[styles.actionIcon, { backgroundColor: '#10b981' }]}>
-                  <Icon name="calendar-plus" size={24} color="#fff" />
+                  <Icon name="account" size={24} color="#fff" />
                 </View>
-                <Text style={styles.actionText}>Create Event</Text>
+                <Text style={styles.actionText}>Profile</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={styles.actionButton}
-                onPress={() => navigation.navigate("StaffEvents")}
+                onPress={() => navigation.navigate("Events")}
               >
                 <View style={[styles.actionIcon, { backgroundColor: '#8b5cf6' }]}>
                   <Icon name="calendar" size={24} color="#fff" />
@@ -551,12 +605,12 @@ export default function StaffHome() {
 
               <TouchableOpacity
                 style={styles.actionButton}
-                onPress={() => navigation.navigate("StaffAnalytics")}
+                onPress={() => navigation.navigate("Benefits")}
               >
                 <View style={[styles.actionIcon, { backgroundColor: '#f59e0b' }]}>
-                  <Icon name="chart-bar" size={24} color="#fff" />
+                  <Icon name="gift" size={24} color="#fff" />
                 </View>
-                <Text style={styles.actionText}>Analytics</Text>
+                <Text style={styles.actionText}>Benefits</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -569,6 +623,7 @@ export default function StaffHome() {
   );
 }
 
+// ... (styles remain the same)
 const styles = StyleSheet.create({
   container: {
     flex: 1

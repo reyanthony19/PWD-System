@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { Button, Avatar, Card, TextInput } from "react-native-paper";
 import { useNavigation } from "@react-navigation/native"; 
-import api from "../../services/api";
+import api from "@/services/api";
 
 export default function EditProfile() {
   const navigation = useNavigation(); // Use useNavigation here

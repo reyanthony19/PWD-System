@@ -237,9 +237,15 @@ class AuthController extends Controller
             }
         }
 
+        if ($role === 'member') {
+            $user->load(['memberProfile', 'memberProfile.documents']);
+        } else {
+            $user->load([$role . 'Profile']);
+        }
+
         return response()->json([
             'message' => 'User and profile updated successfully!',
-            'user'    => $user->load([$role . 'Profile', $role . 'Profile.documents'])
+            'user'    => $user
         ]);
     }
     /**
