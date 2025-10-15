@@ -76,15 +76,136 @@ export default function MemberEvents() {
     };
   }, []);
 
-  // Update event indicator when events change
+  // NEW: Enhanced datetime combination function
+  const combineEventDateTime = (event) => {
+    if (!event) return null;
+    
+    try {
+      let dateTimeString = event.event_date;
+      
+      // If event_time exists, combine with event_date
+      if (event.event_time) {
+        // Handle different time formats
+        const timePart = event.event_time.includes(':') 
+          ? event.event_time.split(':').slice(0, 2).join(':') // Take only HH:mm
+          : '00:00';
+        
+        dateTimeString = `${event.event_date}T${timePart}:00`;
+      } else {
+        // If no time, set to end of day for proper date comparison
+        dateTimeString = `${event.event_date}T23:59:59`;
+      }
+      
+      const combinedDate = new Date(dateTimeString);
+      return isNaN(combinedDate.getTime()) ? null : combinedDate;
+    } catch (error) {
+      console.error('Error combining event datetime:', error);
+      return null;
+    }
+  };
+
+  // NEW: Enhanced event filtering with "All" support
+  const filterEventsByBarangay = (events, barangay) => {
+    if (!barangay || !events || !Array.isArray(events)) return [];
+
+    return events.filter(event =>
+      event &&
+      event.target_barangay &&
+      (
+        event.target_barangay.toLowerCase() === barangay.toLowerCase() ||
+        event.target_barangay.toLowerCase() === "all"
+      )
+    );
+  };
+
+  // NEW: Enhanced event status calculation with combined datetime
+  const getEventStatus = (event, isPresent) => {
+    if (!event) return { status: "Unknown", color: "#6b7280", icon: "help-circle" };
+    
+    const eventDateTime = combineEventDateTime(event);
+    if (!eventDateTime) return { status: "Unknown", color: "#6b7280", icon: "help-circle" };
+
+    const currentDateTime = new Date();
+
+    if (eventDateTime > currentDateTime) {
+      return { status: "Upcoming", color: "#3b82f6", icon: "calendar-clock" };
+    } else if (isPresent === "Present") {
+      return { status: "Attended", color: "#10b981", icon: "check-circle" };
+    } else if (isPresent === "Absent") {
+      return { status: "Missed", color: "#ef4444", icon: "close-circle" };
+    } else {
+      return { status: "Completed", color: "#6b7280", icon: "archive" };
+    }
+  };
+
+  // NEW: Enhanced event sorting with combined datetime
+  const sortEvents = (events) => {
+    if (!events || !Array.isArray(events)) return [];
+
+    const currentDateTime = new Date();
+
+    return events.sort((a, b) => {
+      if (!a || !b) return 0;
+
+      const dateTimeA = combineEventDateTime(a);
+      const dateTimeB = combineEventDateTime(b);
+
+      // Handle invalid dates by putting them at the end
+      if (!dateTimeA && !dateTimeB) return 0;
+      if (!dateTimeA) return 1;
+      if (!dateTimeB) return -1;
+
+      const isAUpcoming = dateTimeA > currentDateTime;
+      const isBUpcoming = dateTimeB > currentDateTime;
+
+      // Upcoming events first
+      if (isAUpcoming && !isBUpcoming) return -1;
+      if (!isAUpcoming && isBUpcoming) return 1;
+
+      // For upcoming events: sort by date ascending (soonest first)
+      if (isAUpcoming && isBUpcoming) {
+        return dateTimeA - dateTimeB;
+      }
+
+      // For past events: sort by date descending (most recent first)
+      return dateTimeB - dateTimeA;
+    });
+  };
+
+  // NEW: Enhanced upcoming event check with combined datetime
+  const isEventUpcoming = (event) => {
+    if (!event) return false;
+
+    const eventDateTime = combineEventDateTime(event);
+    if (!eventDateTime) return false;
+
+    const currentDateTime = new Date();
+    const sevenDaysFromNow = new Date();
+    sevenDaysFromNow.setDate(currentDateTime.getDate() + 7);
+
+    return eventDateTime > currentDateTime && eventDateTime <= sevenDaysFromNow;
+  };
+
+  // NEW: Enhanced today event check with combined datetime
+  const isEventToday = (event) => {
+    if (!event) return false;
+
+    const eventDateTime = combineEventDateTime(event);
+    if (!eventDateTime) return false;
+
+    const currentDateTime = new Date();
+
+    return eventDateTime.toDateString() === currentDateTime.toDateString();
+  };
+
+  // NEW: Enhanced event indicator with combined datetime
   useEffect(() => {
     const updateIndicator = async () => {
       if (events && events.length > 0) {
         const upcomingEvents = events.filter(event => {
-          if (!event || !event.event_date) return false;
-          const eventDate = new Date(event.event_date);
-          const currentDate = new Date();
-          return eventDate > currentDate;
+          if (!event) return false;
+          const eventDateTime = combineEventDateTime(event);
+          return eventDateTime && eventDateTime > new Date();
         });
 
         if (upcomingEvents.length > 0) {
@@ -138,21 +259,17 @@ export default function MemberEvents() {
     }
   };
 
-  // NEW: Smart cache merging function
   const mergeEventsCache = async (newEvents) => {
     try {
       if (!Array.isArray(newEvents)) return newEvents || [];
 
-      // Get existing cached events
       const cachedEvents = await getFromCache(CACHE_KEYS.EVENTS);
       const existingEvents = cachedEvents?.data || [];
 
       if (!Array.isArray(existingEvents) || existingEvents.length === 0) {
-        // No existing cache, just save the new events
         return newEvents;
       }
 
-      // Create a map of existing events by ID for efficient lookup
       const existingEventsMap = new Map();
       existingEvents.forEach(event => {
         if (event && event.id) {
@@ -160,24 +277,20 @@ export default function MemberEvents() {
         }
       });
 
-      // Merge strategy: new events override existing ones, keep unique events
       const mergedEventsMap = new Map();
 
-      // First add all existing events
       existingEvents.forEach(event => {
         if (event && event.id) {
           mergedEventsMap.set(event.id.toString(), event);
         }
       });
 
-      // Then add/update with new events (new events take precedence)
       newEvents.forEach(event => {
         if (event && event.id) {
           mergedEventsMap.set(event.id.toString(), event);
         }
       });
 
-      // Convert back to array
       const mergedEvents = Array.from(mergedEventsMap.values());
 
       console.log(`Cache merge: ${existingEvents.length} existing + ${newEvents.length} new = ${mergedEvents.length} merged`);
@@ -189,7 +302,6 @@ export default function MemberEvents() {
     }
   };
 
-  // Save complete app state for offline use
   const saveAppState = async (state) => {
     try {
       await saveToCache(CACHE_KEYS.APP_STATE, state);
@@ -200,7 +312,6 @@ export default function MemberEvents() {
     }
   };
 
-  // Load complete app state for offline use
   const loadAppState = async () => {
     try {
       const appState = await getFromCache(CACHE_KEYS.APP_STATE);
@@ -249,62 +360,6 @@ export default function MemberEvents() {
     }
   };
 
-  // Filter events by user's barangay
-  const filterEventsByBarangay = (events, barangay) => {
-    if (!barangay || !events || !Array.isArray(events)) return [];
-
-    return events.filter(event =>
-      event &&
-      event.target_barangay &&
-      event.target_barangay.toLowerCase() === barangay.toLowerCase()
-    );
-  };
-
-  // Sort events: upcoming first, then by date
-  const sortEvents = (events) => {
-    if (!events || !Array.isArray(events)) return [];
-
-    const currentDate = new Date();
-
-    return events.sort((a, b) => {
-      if (!a || !b) return 0;
-
-      const dateA = a.event_date ? new Date(a.event_date) : new Date(0);
-      const dateB = b.event_date ? new Date(b.event_date) : new Date(0);
-
-      const isAUpcoming = dateA > currentDate;
-      const isBUpcoming = dateB > currentDate;
-
-      if (isAUpcoming && !isBUpcoming) return -1;
-      if (!isAUpcoming && isBUpcoming) return 1;
-
-      return dateA - dateB;
-    });
-  };
-
-  // Check if event is upcoming (within next 7 days)
-  const isEventUpcoming = (eventDate) => {
-    if (!eventDate) return false;
-
-    const currentDate = new Date();
-    const eventDateObj = new Date(eventDate);
-    const sevenDaysFromNow = new Date();
-    sevenDaysFromNow.setDate(currentDate.getDate() + 7);
-
-    return eventDateObj > currentDate && eventDateObj <= sevenDaysFromNow;
-  };
-
-  // Check if event is today
-  const isEventToday = (eventDate) => {
-    if (!eventDate) return false;
-
-    const currentDate = new Date();
-    const eventDateObj = new Date(eventDate);
-
-    return eventDateObj.toDateString() === currentDate.toDateString();
-  };
-
-  // Get user data with barangay information
   const fetchUserData = async () => {
     try {
       const token = await AsyncStorage.getItem("token");
@@ -313,7 +368,6 @@ export default function MemberEvents() {
         return null;
       }
 
-      // Try cache first
       const cachedUser = await getFromCache(CACHE_KEYS.USER_DATA);
       if (cachedUser && cachedUser.data) {
         setCurrentUserId(cachedUser.data.id);
@@ -321,7 +375,6 @@ export default function MemberEvents() {
         return cachedUser.data;
       }
 
-      // Fetch fresh data if online
       if (isOnline) {
         const userRes = await api.get("/user", {
           headers: { Authorization: `Bearer ${token}` },
@@ -345,11 +398,10 @@ export default function MemberEvents() {
     }
   };
 
-  // UPDATED: Optimized event fetching with smart cache merging
+  // UPDATED: Enhanced event fetching with combined datetime processing
   const fetchEvents = async (forceRefresh = false, silentRefresh = false) => {
-    // Prevent multiple simultaneous fetches
     const now = Date.now();
-    if (!forceRefresh && now - lastFetchRef.current < 2000) { // 2 second debounce
+    if (!forceRefresh && now - lastFetchRef.current < 2000) {
       console.log('Skipping fetch - too recent');
       return;
     }
@@ -370,7 +422,6 @@ export default function MemberEvents() {
         return;
       }
 
-      // Try to load from cache first if not forcing refresh
       if (!forceRefresh && !silentRefresh) {
         const hasCachedData = await loadCachedData();
         if (hasCachedData) {
@@ -378,7 +429,6 @@ export default function MemberEvents() {
             setLoading(false);
             setRefreshing(false);
           }
-          // Even if we have cache, do a background refresh if online and cache is stale
           if (isOnline) {
             const cachedAppState = await getFromCache(CACHE_KEYS.APP_STATE);
             const isCacheStale = cachedAppState &&
@@ -386,14 +436,13 @@ export default function MemberEvents() {
 
             if (isCacheStale) {
               console.log('Cache is stale, performing background refresh');
-              fetchEvents(false, true); // Silent background refresh
+              fetchEvents(false, true);
             }
           }
           return;
         }
       }
 
-      // If offline and no cache, show error
       if (!isOnline && !forceRefresh && !silentRefresh) {
         const hasCachedData = await loadCachedData();
         if (!hasCachedData) {
@@ -404,7 +453,6 @@ export default function MemberEvents() {
         }
       }
 
-      // Get user data first to know the barangay
       const userData = await fetchUserData();
       if (!userData) {
         if (!silentRefresh) {
@@ -425,7 +473,6 @@ export default function MemberEvents() {
         return;
       }
 
-      // Fetch events if online
       let eventsData = [];
       if (isOnline) {
         try {
@@ -434,15 +481,13 @@ export default function MemberEvents() {
           });
           eventsData = res.data.data || res.data || [];
 
-          // UPDATED: Merge with existing cache instead of replacing
           const mergedEvents = await mergeEventsCache(eventsData);
           await saveToCache(CACHE_KEYS.EVENTS, mergedEvents);
-          eventsData = mergedEvents; // Use merged data for processing
+          eventsData = mergedEvents;
 
           console.log(`Fetched ${eventsData.length} events (merged with cache)`);
         } catch (err) {
           console.error("Events fetch error:", err);
-          // If online fetch fails, try to use cached events
           const cachedEvents = await getFromCache(CACHE_KEYS.EVENTS);
           if (cachedEvents && cachedEvents.data) {
             eventsData = cachedEvents.data;
@@ -452,7 +497,6 @@ export default function MemberEvents() {
           }
         }
       } else {
-        // Offline - use cached events
         const cachedEvents = await getFromCache(CACHE_KEYS.EVENTS);
         if (cachedEvents && cachedEvents.data) {
           eventsData = cachedEvents.data;
@@ -461,23 +505,22 @@ export default function MemberEvents() {
         }
       }
 
-      // Ensure eventsData is an array
       if (!Array.isArray(eventsData)) {
         eventsData = [];
       }
 
-      // FILTER EVENTS BY USER'S BARANGAY
+      // ENHANCED: Filter events with "All" support
       const filteredEvents = filterEventsByBarangay(eventsData, userBarangay);
 
-      // SORT EVENTS: UPCOMING FIRST
+      // ENHANCED: Sort events with combined datetime
       const sortedEvents = sortEvents(filteredEvents);
 
-      // Process attendance and stats for filtered events only
+      // ENHANCED: Process attendance and stats with combined datetime
       const attendanceStatuses = {};
       let attendedCount = 0;
       let upcomingCount = 0;
       let completedCount = 0;
-      const currentDate = new Date();
+      const currentDateTime = new Date();
 
       if (sortedEvents && Array.isArray(sortedEvents)) {
         for (const event of sortedEvents) {
@@ -496,8 +539,9 @@ export default function MemberEvents() {
             attendanceStatuses[event.id] = "Unknown";
           }
 
-          const eventDate = event.event_date ? new Date(event.event_date) : new Date(0);
-          if (eventDate > currentDate) {
+          // ENHANCED: Use combined datetime for status calculation
+          const eventDateTime = combineEventDateTime(event);
+          if (eventDateTime && eventDateTime > currentDateTime) {
             upcomingCount++;
           } else {
             completedCount++;
@@ -505,7 +549,6 @@ export default function MemberEvents() {
         }
       }
 
-      // Update state with filtered and sorted data
       if (isMountedRef.current) {
         setEvents(sortedEvents || []);
         setAttendanceStatus(attendanceStatuses);
@@ -520,7 +563,6 @@ export default function MemberEvents() {
         setStats(newStats);
         setUsingCachedData(!isOnline && !forceRefresh);
 
-        // Save complete app state for offline use
         await saveAppState({
           events: sortedEvents || [],
           stats: newStats,
@@ -549,7 +591,6 @@ export default function MemberEvents() {
         } else {
           setError("Failed to load events. " + (err.message || ""));
 
-          // Try to load cached data as fallback
           const hasCachedData = await loadCachedData();
           if (!hasCachedData && !isOnline) {
             setError("No internet connection and no cached data available.");
@@ -564,7 +605,6 @@ export default function MemberEvents() {
     }
   };
 
-  // UPDATED: Improved focus effect with automatic refetch
   useFocusEffect(
     React.useCallback(() => {
       if (!isMountedRef.current) return;
@@ -572,25 +612,21 @@ export default function MemberEvents() {
       const initializeData = async () => {
         console.log('Screen focused - initializing data');
 
-        // First try to load from cache immediately for fast startup
         const cachedLoaded = await loadCachedData();
 
         if (cachedLoaded) {
           setLoading(false);
-          // Always try to refresh in background if online (even if we have cache)
           if (isOnline) {
-            // Check if cache is stale or we should force refresh
             const cachedAppState = await getFromCache(CACHE_KEYS.APP_STATE);
             const shouldRefresh = !cachedAppState ||
               (Date.now() - cachedAppState.timestamp > BACKGROUND_REFRESH_INTERVAL);
 
             if (shouldRefresh) {
               console.log('Auto-refreshing on screen focus');
-              fetchEvents(false, true); // Silent background refresh
+              fetchEvents(false, true);
             }
           }
         } else {
-          // No cache exists, do initial load
           console.log('No cache found - performing initial load');
           fetchEvents(false, false);
         }
@@ -598,13 +634,13 @@ export default function MemberEvents() {
 
       initializeData();
 
-      // Cleanup function
       return () => {
         console.log('Screen unfocused');
       };
     }, [isOnline])
   );
 
+  // PULL-TO-REFRESH FUNCTIONALITY
   const handleManualRefresh = () => {
     if (isOnline) {
       console.log('Manual refresh triggered');
@@ -624,22 +660,6 @@ export default function MemberEvents() {
     fetchEvents(true, false);
   };
 
-  // Improved status calculation
-  const getEventStatus = (eventDate, isPresent) => {
-    const currentDate = new Date();
-    const eventDateObj = eventDate ? new Date(eventDate) : new Date(0);
-
-    if (eventDateObj > currentDate) {
-      return { status: "Upcoming", color: "#3b82f6", icon: "calendar-clock" };
-    } else if (isPresent === "Present") {
-      return { status: "Attended", color: "#10b981", icon: "check-circle" };
-    } else if (isPresent === "Absent") {
-      return { status: "Missed", color: "#ef4444", icon: "close-circle" };
-    } else {
-      return { status: "Unknown", color: "#6b7280", icon: "help-circle" };
-    }
-  };
-
   const getEventTypeIcon = (eventType) => {
     if (!eventType) return "calendar";
 
@@ -657,6 +677,25 @@ export default function MemberEvents() {
     }
   };
 
+  // NEW: Enhanced datetime formatting for display
+  const formatEventDateTime = (event) => {
+    const eventDateTime = combineEventDateTime(event);
+    if (!eventDateTime) return { date: 'Date not set', time: 'Time not set' };
+
+    return {
+      date: eventDateTime.toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      }),
+      time: eventDateTime.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    };
+  };
+
   const renderStatsCard = () => (
     <View style={styles.statsContainer}>
       <View style={styles.statCard}>
@@ -666,7 +705,9 @@ export default function MemberEvents() {
         <Text style={styles.statNumber}>{stats.totalEvents}</Text>
         <Text style={styles.statLabel}>Total Events</Text>
         {currentUserBarangay && (
-          <Text style={styles.statSubtitle}>{currentUserBarangay}</Text>
+          <Text style={styles.statSubtitle}>
+            {currentUserBarangay} and All Barangay
+          </Text>
         )}
       </View>
 
@@ -701,10 +742,11 @@ export default function MemberEvents() {
 
     const attendance = attendanceStatus[item.id];
     const isPresent = attendance === "Present";
-    const eventStatus = getEventStatus(item.event_date, attendance);
+    const eventStatus = getEventStatus(item, attendance);
     const eventTypeIcon = getEventTypeIcon(item.type);
-    const isUpcoming = isEventUpcoming(item.event_date);
-    const isToday = isEventToday(item.event_date);
+    const isUpcoming = isEventUpcoming(item);
+    const isToday = isEventToday(item);
+    const { date, time } = formatEventDateTime(item);
 
     return (
       <TouchableOpacity
@@ -760,9 +802,21 @@ export default function MemberEvents() {
                 </Text>
               </View>
               {item.target_barangay && (
-                <View style={styles.barangayBadge}>
-                  <Ionicons name="map" size={12} color="#3b82f6" />
-                  <Text style={styles.barangayText}>{item.target_barangay}</Text>
+                <View style={[
+                  styles.barangayBadge,
+                  item.target_barangay.toLowerCase() === "all" && styles.allBarangayBadge
+                ]}>
+                  <Ionicons 
+                    name={item.target_barangay.toLowerCase() === "all" ? "earth" : "map"} 
+                    size={12} 
+                    color={item.target_barangay.toLowerCase() === "all" ? "#10b981" : "#3b82f6"} 
+                  />
+                  <Text style={[
+                    styles.barangayText,
+                    item.target_barangay.toLowerCase() === "all" && styles.allBarangayText
+                  ]}>
+                    {item.target_barangay}
+                  </Text>
                 </View>
               )}
             </View>
@@ -787,22 +841,14 @@ export default function MemberEvents() {
             <View style={styles.dateTimeItem}>
               <Ionicons name="calendar" size={16} color="#6b7280" />
               <Text style={styles.dateTimeText}>
-                {item.event_date ? new Date(item.event_date).toLocaleDateString('en-US', {
-                  weekday: 'short',
-                  month: 'short',
-                  day: 'numeric',
-                  year: 'numeric'
-                }) : 'Date not set'}
+                {date}
               </Text>
             </View>
 
             <View style={styles.dateTimeItem}>
               <Ionicons name="time" size={16} color="#6b7280" />
               <Text style={styles.dateTimeText}>
-                {item.event_date ? new Date(item.event_date).toLocaleTimeString('en-US', {
-                  hour: '2-digit',
-                  minute: '2-digit'
-                }) : 'Time not set'}
+                {time}
               </Text>
             </View>
           </View>
@@ -876,7 +922,7 @@ export default function MemberEvents() {
               <Text style={styles.headerTitle}>Events</Text>
               <Text style={styles.headerSubtitle}>
                 Your event schedule and attendance
-                {currentUserBarangay && ` • ${currentUserBarangay}`}
+                {currentUserBarangay && ` • ${currentUserBarangay} + All Events`}
                 {!isOnline && " • Offline"}
                 {usingCachedData && ""}
               </Text>
@@ -915,10 +961,10 @@ export default function MemberEvents() {
           <View style={styles.eventsSection}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>
-                Events in {currentUserBarangay || 'Your Barangay'} ({events ? events.length : 0})
+                Events for {currentUserBarangay || 'Your Barangay'} ({events ? events.length : 0})
               </Text>
               <Text style={styles.sectionSubtitle}>
-                {stats.upcoming} upcoming events • Prioritized by date
+                {stats.upcoming} upcoming events • Prioritized by date and time
                 {usingCachedData && " • Cached"}
               </Text>
             </View>
@@ -927,11 +973,11 @@ export default function MemberEvents() {
               <View style={styles.emptyState}>
                 <Ionicons name="calendar-outline" size={64} color="#9ca3af" />
                 <Text style={styles.emptyTitle}>
-                  {isOnline ? 'No Events in Your Barangay' : 'No Cached Data'}
+                  {isOnline ? 'No Events Available' : 'No Cached Data'}
                 </Text>
                 <Text style={styles.emptyText}>
                   {isOnline
-                    ? `No events currently scheduled for ${currentUserBarangay || 'your barangay'}`
+                    ? `No events currently scheduled for ${currentUserBarangay || 'your barangay'} or All events`
                     : 'Connect to internet to load events'
                   }
                 </Text>
@@ -961,7 +1007,6 @@ export default function MemberEvents() {
     </LinearGradient>
   );
 }
-
 
 const styles = StyleSheet.create({
   container: {
@@ -1246,11 +1291,17 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 12
   },
+  allBarangayBadge: {
+    backgroundColor: 'rgba(16, 185, 129, 0.1)'
+  },
   barangayText: {
     fontSize: 12,
     color: '#3b82f6',
     fontWeight: '500',
     marginLeft: 4
+  },
+  allBarangayText: {
+    color: '#10b981'
   },
   statusContainer: {
     alignSelf: 'flex-start'
@@ -1280,7 +1331,6 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     marginLeft: 6
   },
-  // New action row style
   actionRow: {
     flexDirection: 'row',
     justifyContent: 'flex-end',

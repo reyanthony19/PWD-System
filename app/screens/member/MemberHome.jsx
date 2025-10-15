@@ -18,16 +18,19 @@ import { LinearGradient } from "expo-linear-gradient";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import NetInfo from '@react-native-community/netinfo';
 
-// Cache configuration
+// Enhanced Cache configuration
 const CACHE_KEYS = {
   USER_DATA: 'member_home_user_data',
   EVENTS: 'member_home_events',
   BENEFITS: 'member_home_benefits',
   BENEFIT_RECORDS: 'member_home_benefit_records',
+  BENEFIT_PARTICIPANTS: 'member_home_benefit_participants',
+  PARTICIPANTS_MAP: 'member_home_participants_map',
   LAST_FETCH: 'member_home_last_fetch'
 };
 
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache
+const CACHE_DURATION_PARTICIPANTS = 30 * 60 * 1000; // 30 minutes for participants
 
 export default function MemberHome() {
   const navigation = useNavigation();
@@ -64,7 +67,60 @@ export default function MemberHome() {
     }, [])
   );
 
-  // Cache utilities
+  // NEW: Enhanced datetime combination function for events
+  const combineEventDateTime = (event) => {
+    if (!event) return null;
+    
+    try {
+      let dateTimeString = event.event_date;
+      
+      // If event_time exists, combine with event_date
+      if (event.event_time) {
+        // Handle different time formats
+        const timePart = event.event_time.includes(':') 
+          ? event.event_time.split(':').slice(0, 2).join(':') // Take only HH:mm
+          : '00:00';
+        
+        dateTimeString = `${event.event_date}T${timePart}:00`;
+      } else {
+        // If no time, set to end of day for proper date comparison
+        dateTimeString = `${event.event_date}T23:59:59`;
+      }
+      
+      const combinedDate = new Date(dateTimeString);
+      return isNaN(combinedDate.getTime()) ? null : combinedDate;
+    } catch (error) {
+      console.error('Error combining event datetime:', error);
+      return null;
+    }
+  };
+
+  // NEW: Format event time for display
+  const formatEventTime = (event) => {
+    if (!event) return 'Time not set';
+    
+    if (event.event_time) {
+      try {
+        // Handle different time formats
+        const timeParts = event.event_time.split(':');
+        const hours = parseInt(timeParts[0]);
+        const minutes = timeParts[1];
+        
+        // Format as 12-hour time with AM/PM
+        const period = hours >= 12 ? 'PM' : 'AM';
+        const displayHours = hours % 12 || 12;
+        
+        return `${displayHours}:${minutes} ${period}`;
+      } catch (error) {
+        console.error('Error formatting event time:', error);
+        return event.event_time;
+      }
+    }
+    
+    return 'Time not set';
+  };
+
+  // Enhanced Cache utilities
   const setCache = async (key, data) => {
     try {
       const cacheData = {
@@ -92,63 +148,109 @@ export default function MemberHome() {
     }
   };
 
-  // NEW: Fetch all benefit records for the current user
-  const fetchUserBenefitRecords = async (userId) => {
+  // NEW: Get cache with custom duration
+  const getCacheWithDuration = async (key, duration) => {
     try {
-      let records = [];
+      const cached = await AsyncStorage.getItem(key);
+      if (!cached) return null;
 
-      if (isOnline) {
-        try {
-          // Fetch all benefit records using the correct endpoint
-          const response = await api.get("/benefit-records");
-          const allRecords = response.data.data || response.data || [];
+      const cacheData = JSON.parse(cached);
+      const isExpired = Date.now() - cacheData.timestamp > duration;
 
-          // Filter records for current user only
-          records = allRecords.filter(record =>
-            record.user_id === userId ||
-            (record.user && record.user.id === userId)
-          );
-
-          // Cache the filtered records
-          await setCache(CACHE_KEYS.BENEFIT_RECORDS, records);
-        } catch (error) {
-          console.error('Error fetching benefit records:', error);
-          // If online fetch fails, try cached records
-          const cachedRecords = await getCache(CACHE_KEYS.BENEFIT_RECORDS);
-          if (cachedRecords) {
-            records = cachedRecords;
-          }
-        }
-      } else {
-        // Offline - use cached records
-        const cachedRecords = await getCache(CACHE_KEYS.BENEFIT_RECORDS);
-        if (cachedRecords) {
-          records = cachedRecords;
-        }
-      }
-
-      if (isMountedRef.current) {
-        setBenefitRecords(records);
-      }
-
-      return records;
+      return isExpired ? null : cacheData.data;
     } catch (error) {
-      console.error('Error in fetchUserBenefitRecords:', error);
+      console.error('Cache get error:', error);
+      return null;
+    }
+  };
+
+  // NEW: Add delay utility to prevent rate limiting
+  const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+  // NEW: Enhanced benefit participants caching
+  const fetchBenefitParticipantsWithCache = async (benefitId, userId) => {
+    const cacheKey = `${CACHE_KEYS.BENEFIT_PARTICIPANTS}_${benefitId}`;
+
+    try {
+      // Try cache first (with longer duration for participants)
+      const cachedParticipants = await getCacheWithDuration(cacheKey, CACHE_DURATION_PARTICIPANTS);
+      if (cachedParticipants) {
+        console.log(`✅ Using cached participants for benefit ${benefitId}`);
+        return cachedParticipants;
+      }
+
+      // If not cached or expired, fetch from API
+      if (isOnline) {
+        console.log(`🌐 Fetching participants for benefit ${benefitId}`);
+        const response = await api.get(`/benefits/${benefitId}/participants`);
+        const participants = response.data || [];
+
+        // Cache the result
+        await setCache(cacheKey, participants);
+
+        return participants;
+      } else {
+        console.log(`📶 Offline - no cached participants for benefit ${benefitId}`);
+        return [];
+      }
+    } catch (error) {
+      console.error(`❌ Error fetching participants for benefit ${benefitId}:`, error);
+
+      // On error, try to return cached data even if expired
+      const cachedParticipants = await getCache(cacheKey);
+      if (cachedParticipants) {
+        console.log(`🔄 Using expired cache due to error for benefit ${benefitId}`);
+        return cachedParticipants;
+      }
+
       return [];
     }
   };
 
-  // UPDATED: Check if user is in benefit participants
-  const isUserInBenefitParticipants = async (benefitId, userId) => {
-    try {
-      const token = await AsyncStorage.getItem("token");
-      if (!token) return false;
+  // NEW: Batch process benefit participants to avoid rate limiting
+  const batchProcessBenefitParticipants = async (benefitsData, userId) => {
+    if (!benefitsData || !Array.isArray(benefitsData)) return [];
 
-      const response = await api.get(`/benefits/${benefitId}/participants`, {
-        headers: { Authorization: `Bearer ${token}` },
+    const filteredBenefits = [];
+    const batchSize = 2; // Process 2 benefits at a time
+    const delayBetweenBatches = 1000; // 1 second between batches
+
+    for (let i = 0; i < benefitsData.length; i += batchSize) {
+      const batch = benefitsData.slice(i, i + batchSize);
+
+      const batchPromises = batch.map(async (benefit) => {
+        try {
+          const participants = await fetchBenefitParticipantsWithCache(benefit.id, userId);
+          const isParticipant = participants.some(participant =>
+            participant.user_id === userId ||
+            (participant.user && participant.user.id === userId)
+          );
+
+          return isParticipant ? benefit : null;
+        } catch (error) {
+          console.log(`Error processing benefit ${benefit.id}:`, error);
+          return null;
+        }
       });
 
-      const participants = response.data || [];
+      // Wait for current batch to complete
+      const batchResults = await Promise.all(batchPromises);
+      const validBenefits = batchResults.filter(benefit => benefit !== null);
+      filteredBenefits.push(...validBenefits);
+
+      // Add delay between batches to avoid rate limiting
+      if (i + batchSize < benefitsData.length) {
+        await delay(delayBetweenBatches);
+      }
+    }
+
+    return filteredBenefits;
+  };
+
+  // UPDATED: Check if user is in benefit participants with caching
+  const isUserInBenefitParticipants = async (benefitId, userId) => {
+    try {
+      const participants = await fetchBenefitParticipantsWithCache(benefitId, userId);
       return participants.some(participant =>
         participant.user_id === userId ||
         (participant.user && participant.user.id === userId)
@@ -159,24 +261,17 @@ export default function MemberHome() {
     }
   };
 
-  // UPDATED: Filter benefits where user is in participants
+  // UPDATED: Filter benefits where user is in participants with batching
   const filterBenefitsByUserParticipation = async (benefitsData, userId) => {
     if (!benefitsData || !Array.isArray(benefitsData)) return [];
 
-    const filteredBenefits = [];
+    // If no benefits, return empty array
+    if (benefitsData.length === 0) return [];
 
-    for (const benefit of benefitsData) {
-      try {
-        const isParticipant = await isUserInBenefitParticipants(benefit.id, userId);
-        if (isParticipant) {
-          filteredBenefits.push(benefit);
-        }
-      } catch (error) {
-        console.log(`Error checking participation for benefit ${benefit.id}:`, error);
-      }
-    }
+    console.log(`🔍 Filtering ${benefitsData.length} benefits for user participation`);
 
-    return filteredBenefits;
+    // Use batch processing to avoid rate limiting
+    return await batchProcessBenefitParticipants(benefitsData, userId);
   };
 
   // UPDATED: Check if user has claimed a benefit using benefit records
@@ -250,6 +345,52 @@ export default function MemberHome() {
     });
   };
 
+  // Fetch user benefit records
+  const fetchUserBenefitRecords = async (userId) => {
+    try {
+      let records = [];
+
+      if (isOnline) {
+        try {
+          // Fetch all benefit records using the correct endpoint
+          const response = await api.get("/benefit-records");
+          const allRecords = response.data.data || response.data || [];
+
+          // Filter records for current user only
+          records = allRecords.filter(record =>
+            record.user_id === userId ||
+            (record.user && record.user.id === userId)
+          );
+
+          // Cache the filtered records
+          await setCache(CACHE_KEYS.BENEFIT_RECORDS, records);
+        } catch (error) {
+          console.error('Error fetching benefit records:', error);
+          // If online fetch fails, try cached records
+          const cachedRecords = await getCache(CACHE_KEYS.BENEFIT_RECORDS);
+          if (cachedRecords) {
+            records = cachedRecords;
+          }
+        }
+      } else {
+        // Offline - use cached records
+        const cachedRecords = await getCache(CACHE_KEYS.BENEFIT_RECORDS);
+        if (cachedRecords) {
+          records = cachedRecords;
+        }
+      }
+
+      if (isMountedRef.current) {
+        setBenefitRecords(records);
+      }
+
+      return records;
+    } catch (error) {
+      console.error('Error in fetchUserBenefitRecords:', error);
+      return [];
+    }
+  };
+
   const fetchUserData = async () => {
     try {
       setLoading(true);
@@ -304,7 +445,7 @@ export default function MemberHome() {
     }
   };
 
-  // UPDATED: Fetch benefits with proper filtering and claim status
+  // UPDATED: Fetch benefits with enhanced caching and batching - LIMIT TO 5
   const fetchMemberBenefits = async (userId, records) => {
     try {
       let benefitsData = [];
@@ -337,7 +478,7 @@ export default function MemberHome() {
         }
       }
 
-      // STEP 1: Filter benefits where user is in participants
+      // STEP 1: Filter benefits where user is in participants (with batching)
       const userBenefits = await filterBenefitsByUserParticipation(benefitsData, userId);
 
       // STEP 2: Determine claim status using benefit records
@@ -346,8 +487,8 @@ export default function MemberHome() {
       // STEP 3: Sort benefits: available first, then claimed
       const sortedBenefits = sortBenefits(benefitsWithStatus);
 
-      // Take only recent 3 benefits for home screen
-      const recentBenefits = sortedBenefits.slice(0, 3);
+      // UPDATED: Take only recent 5 benefits for home screen
+      const recentBenefits = sortedBenefits.slice(0, 5);
 
       if (isMountedRef.current) {
         setBenefits(recentBenefits);
@@ -375,7 +516,7 @@ export default function MemberHome() {
       const benefitsWithStatus = filterBenefitsWithClaimStatus(userBenefits, userId, records);
 
       const barangayEvents = eventsData.filter(event =>
-        event.target_barangay === memberBarangay
+        event.target_barangay === memberBarangay || event.target_barangay === "All"
       );
 
       // UPDATED: Use userStatus for stats calculation
@@ -406,19 +547,28 @@ export default function MemberHome() {
     }
   };
 
+  // UPDATED: Fetch upcoming events with proper datetime handling - LIMIT TO 5
   const fetchUpcomingEvents = async (memberBarangay) => {
     try {
       const eventsData = await api.get("/events").then(res => res.data.data || res.data);
 
       const now = new Date();
       const barangayEvents = eventsData.filter(event =>
-        event.target_barangay === memberBarangay
+        event.target_barangay === memberBarangay || event.target_barangay === "All"
       );
 
+      // ENHANCED: Use combined datetime for proper filtering
       const upcomingEvents = barangayEvents
-        .filter(event => event.event_date && new Date(event.event_date) >= now)
-        .sort((a, b) => new Date(a.event_date) - new Date(b.event_date))
-        .slice(0, 3); // Only show 3 events on home
+        .filter(event => {
+          const eventDateTime = combineEventDateTime(event);
+          return eventDateTime && eventDateTime >= now;
+        })
+        .sort((a, b) => {
+          const dateTimeA = combineEventDateTime(a);
+          const dateTimeB = combineEventDateTime(b);
+          return dateTimeA - dateTimeB; // Sort by soonest first
+        })
+        .slice(0, 5); // UPDATED: Only show 5 events on home
 
       if (isMountedRef.current) {
         setEvents(upcomingEvents);
@@ -445,6 +595,17 @@ export default function MemberHome() {
   const onRefresh = async () => {
     setRefreshing(true);
     setError("");
+
+    // Clear participants cache on refresh to get fresh data
+    try {
+      const keys = await AsyncStorage.getAllKeys();
+      const participantKeys = keys.filter(key => key.includes(CACHE_KEYS.BENEFIT_PARTICIPANTS));
+      await AsyncStorage.multiRemove(participantKeys);
+      console.log('🧹 Cleared participants cache for refresh');
+    } catch (error) {
+      console.error('Error clearing participants cache:', error);
+    }
+
     await fetchUserData();
     setRefreshing(false);
   };
@@ -526,6 +687,7 @@ export default function MemberHome() {
     );
   };
 
+  // UPDATED: Render event with proper time display
   const renderEvent = ({ item }) => (
     <TouchableOpacity
       style={styles.eventCard}
@@ -546,10 +708,10 @@ export default function MemberHome() {
       </View>
       <View style={styles.eventDetails}>
         <Text style={styles.eventDetail}>
-          📅 {new Date(item.event_date).toLocaleDateString()}
+          📅 {item.event_date ? new Date(item.event_date).toLocaleDateString() : 'Date not set'}
         </Text>
         <Text style={styles.eventTime}>
-          ⏰ {new Date(item.event_date).toLocaleTimeString()}
+          ⏰ {formatEventTime(item)}
         </Text>
         <View style={styles.barangayBadge}>
           <Icon name="map-marker" size={12} color="#3b82f6" />
@@ -559,7 +721,6 @@ export default function MemberHome() {
     </TouchableOpacity>
   );
 
-  // UPDATED: Render benefit with claim status
   const renderRecentBenefit = ({ item }) => {
     const isClaimed = item.userStatus === 'claimed';
     const isAvailable = item.userStatus === 'available';
@@ -571,7 +732,7 @@ export default function MemberHome() {
           benefitId: item.id,
           benefitTitle: item.name || item.title,
           isClaimed: isClaimed,
-          benefitRecord: item.userRecord // Pass the record if claimed
+          benefitRecord: item.userRecord
         })}
       >
         <View style={styles.benefitHeader}>
@@ -614,7 +775,7 @@ export default function MemberHome() {
         )}
         {isAvailable && (
           <Text style={[styles.benefitDate, { color: '#3b82f6' }]}>
-            Tap to claim this benefit
+            Tap to View this benefit
           </Text>
         )}
       </TouchableOpacity>
@@ -625,7 +786,7 @@ export default function MemberHome() {
     return (
       <SafeAreaView style={styles.center}>
         <ActivityIndicator size="large" color="#2563eb" />
-        <Text style={styles.loadingText}>Loading your data...</Text>
+        <Text style={styles.loadingText}>Loading Home Page...</Text>
         {!isOnline && (
           <Text style={styles.offlineHint}>You're offline - using cached data</Text>
         )}
@@ -704,10 +865,10 @@ export default function MemberHome() {
             </View>
           )}
 
-          {/* Upcoming Events Section */}
+          {/* Upcoming Events Section - UPDATED: Show 5 events */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Upcoming Events in {memberBarangay}</Text>
+              <Text style={styles.sectionTitle}>Upcoming Events ({events.length})</Text>
               <TouchableOpacity onPress={() => navigation.navigate('Events')}>
                 <Text style={styles.seeAllText}>See All</Text>
               </TouchableOpacity>
@@ -715,8 +876,8 @@ export default function MemberHome() {
             {events.length === 0 ? (
               <View style={styles.emptyCard}>
                 <Icon name="calendar-remove" size={40} color="#9ca3af" />
-                <Text style={styles.emptyText}>No upcoming events in {memberBarangay}</Text>
-                <Text style={styles.emptySubtext}>Check back later for new events in your barangay</Text>
+                <Text style={styles.emptyText}>No upcoming events</Text>
+                <Text style={styles.emptySubtext}>Check back later for new events</Text>
               </View>
             ) : (
               <FlatList
@@ -728,10 +889,10 @@ export default function MemberHome() {
             )}
           </View>
 
-          {/* Recent Benefits Section */}
+          {/* Recent Benefits Section - UPDATED: Show 5 benefits */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Recent Benefits</Text>
+              <Text style={styles.sectionTitle}>Recent Benefits ({benefits.length})</Text>
               <TouchableOpacity onPress={() => navigation.navigate('MemberBenefits')}>
                 <Text style={styles.seeAllText}>See All</Text>
               </TouchableOpacity>
@@ -806,9 +967,8 @@ export default function MemberHome() {
   );
 }
 
-
+// ... (styles remain exactly the same as your original)
 const styles = StyleSheet.create({
-  // ... (your existing styles remain the same)
   container: {
     flex: 1
   },
@@ -1098,57 +1258,6 @@ const styles = StyleSheet.create({
     color: '#9ca3af'
   },
 
-  // Reports
-  reportCard: {
-    borderRadius: 12,
-    marginBottom: 12,
-    backgroundColor: '#fff',
-    elevation: 1
-  },
-  reportContent: {
-    padding: 16
-  },
-  reportHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 8
-  },
-  reportIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-    marginTop: 2
-  },
-  reportInfo: {
-    flex: 1
-  },
-  reportTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 2
-  },
-  reportType: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginBottom: 4
-  },
-  reportDescription: {
-    fontSize: 12,
-    color: '#374151',
-    lineHeight: 16
-  },
-  statusBadge: {
-    alignSelf: 'flex-start'
-  },
-  reportDate: {
-    fontSize: 12,
-    color: '#9ca3af'
-  },
-
   // Quick Actions
   actionsGrid: {
     flexDirection: 'row',
@@ -1196,17 +1305,6 @@ const styles = StyleSheet.create({
   emptySubtext: {
     fontSize: 12,
     color: '#9ca3af',
-    textAlign: 'center'
-  },
-
-  // Cache Info
-  cacheInfo: {
-    alignItems: 'center',
-    marginBottom: 16
-  },
-  cacheInfoText: {
-    fontSize: 10,
-    color: 'rgba(255, 255, 255, 0.5)',
     textAlign: 'center'
   },
 

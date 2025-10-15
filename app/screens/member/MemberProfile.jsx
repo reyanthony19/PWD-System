@@ -21,16 +21,6 @@ import NetInfo from '@react-native-community/netinfo';
 
 const { width } = Dimensions.get("window");
 
-// Cache keys
-const CACHE_KEYS = {
-  USER_PROFILE: 'cached_user_profile',
-  USER_DOCUMENTS: 'cached_user_documents',
-  LAST_UPDATED: 'cache_last_updated'
-};
-
-// Cache expiration time (10 minutes)
-const CACHE_EXPIRY_TIME = 10 * 60 * 1000;
-
 const defaultValues = {
   contact_number: "No contact yet",
   address: "Address not provided",
@@ -59,7 +49,6 @@ export default function MemberProfile() {
   const [selectedImage, setSelectedImage] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
-  const [usingCachedData, setUsingCachedData] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [imageErrors, setImageErrors] = useState({});
 
@@ -81,81 +70,48 @@ export default function MemberProfile() {
     }, [])
   );
 
-  // Cache management functions
-  const saveToCache = async (key, data) => {
-    try {
-      const cacheData = {
-        data: data,
-        timestamp: Date.now()
-      };
-      await AsyncStorage.setItem(key, JSON.stringify(cacheData));
-    } catch (error) {
-      console.log('Error saving to cache:', error);
-    }
+  // Extract incomplete fields calculation to reusable function
+  const calculateIncompleteFields = (profile) => {
+    const missing = [];
+    Object.entries(defaultValues).forEach(([key, defValue]) => {
+      if (
+        profile[key] === defValue ||
+        profile[key]?.toString().trim() === "" ||
+        profile[key] == null
+      ) {
+        missing.push(key);
+      }
+    });
+    return missing;
   };
 
-  const getFromCache = async (key) => {
-    try {
-      const cached = await AsyncStorage.getItem(key);
-      if (cached) {
-        const cacheData = JSON.parse(cached);
-        // Check if cache is still valid
-        if (Date.now() - cacheData.timestamp < CACHE_EXPIRY_TIME) {
-          return cacheData.data;
-        } else {
-          // Clear expired cache
-          await AsyncStorage.removeItem(key);
-        }
-      }
-      return null;
-    } catch (error) {
-      console.log('Error reading from cache:', error);
-      return null;
+  // Enhanced error handling without cache fallback
+  const handleFetchError = async (error) => {
+    if (error.response?.status === 401) {
+      await AsyncStorage.clear();
+      navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+      return;
     }
-  };
 
-  const loadCachedData = async () => {
-    try {
-      const [cachedProfile, cachedDocuments] = await Promise.all([
-        getFromCache(CACHE_KEYS.USER_PROFILE),
-        getFromCache(CACHE_KEYS.USER_DOCUMENTS)
-      ]);
-
-      if (cachedProfile) {
-        setUser(cachedProfile);
-
-        // Use cached documents or empty object if none
-        const documentsData = cachedDocuments || {};
-        setDocuments(documentsData);
-
-        // Calculate incomplete fields for cached data
-        const profile = cachedProfile?.member_profile || {};
-        const missing = [];
-        Object.entries(defaultValues).forEach(([key, defValue]) => {
-          if (
-            profile[key] === defValue ||
-            profile[key]?.toString().trim() === "" ||
-            profile[key] == null
-          ) {
-            missing.push(key);
-          }
-        });
-        setIncompleteFields(missing);
-
-        setUsingCachedData(true);
-        return true;
-      }
-      return false;
-    } catch (error) {
-      console.log('Error loading cached data:', error);
-      return false;
+    if (isOnline) {
+      Alert.alert("Error", "Failed to load profile. Please try again.");
+    } else {
+      Alert.alert("Offline", "No internet connection. Please check your connection and try again.");
     }
   };
 
   // FIXED: Use centralized API for all requests
   const getMemberDocuments = async (user_id) => {
     try {
-      const res = await api.get(`/user/documents/${user_id}`);
+      const res = await api.get(`/user/documents/${user_id}`, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+        },
+        params: {
+          _t: Date.now() // Add timestamp to bust cache
+        }
+      });
       console.log('Documents API Response:', res.data);
 
       // Handle different response formats
@@ -203,11 +159,11 @@ export default function MemberProfile() {
     return `${BASE_URL}/storage/${cleanPath}`;
   };
 
-  // FIXED: Use centralized API with built-in token handling
+  // Enhanced fetch function without cache
   const fetchUserProfile = async (forceRefresh = false) => {
     try {
       setRefreshing(true);
-      setImageErrors({}); // Reset image errors on refresh
+      setImageErrors({});
 
       const token = await AsyncStorage.getItem("token");
       if (!token) {
@@ -216,50 +172,32 @@ export default function MemberProfile() {
         return;
       }
 
-      // Try to load from cache first if not forcing refresh and offline
-      if (!forceRefresh && !isOnline) {
-        const hasCachedData = await loadCachedData();
-        if (hasCachedData) {
-          setLoading(false);
-          setRefreshing(false);
-          return;
-        } else {
-          Alert.alert("Offline", "No internet connection and no cached data available.");
-          setLoading(false);
-          setRefreshing(false);
-          return;
-        }
-      }
-
-      // FIXED: No need to manually set headers - API interceptor handles this
-      // Fetch user profile using centralized API
-      const res = await api.get("/user");
-      const userData = res.data;
-      setUser(userData);
-      await saveToCache(CACHE_KEYS.USER_PROFILE, userData);
-
-      // Calculate incomplete fields
-      const profile = userData?.member_profile || {};
-      const missing = [];
-      Object.entries(defaultValues).forEach(([key, defValue]) => {
-        if (
-          profile[key] === defValue ||
-          profile[key]?.toString().trim() === "" ||
-          profile[key] == null
-        ) {
-          missing.push(key);
+      // STRATEGY: Always fetch fresh data from API with cache-busting
+      console.log('🌐 Fetching fresh data from API');
+      const res = await api.get("/user", {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+        },
+        params: {
+          _t: Date.now() // Add timestamp to bust cache
         }
       });
+      const userData = res.data;
+      setUser(userData);
+
+      // Calculate incomplete fields for fresh data
+      const profile = userData?.member_profile || {};
+      const missing = calculateIncompleteFields(profile);
       setIncompleteFields(missing);
 
-      // Fetch documents using centralized API
+      // Fetch documents
       try {
         const userDocuments = await getMemberDocuments(userData.id);
-        console.log('Fetched documents:', userDocuments);
+        console.log('📄 Fetched documents:', userDocuments);
         setDocuments(userDocuments);
-        await saveToCache(CACHE_KEYS.USER_DOCUMENTS, userDocuments);
       } catch (docError) {
-        console.error("Documents fetch failed, using empty documents:", docError);
+        console.error("Documents fetch failed:", docError);
         const emptyDocuments = {
           picture_2x2: null,
           barangay_indigency: null,
@@ -267,29 +205,11 @@ export default function MemberProfile() {
           birth_certificate: null
         };
         setDocuments(emptyDocuments);
-        await saveToCache(CACHE_KEYS.USER_DOCUMENTS, emptyDocuments);
       }
-
-      setUsingCachedData(false);
 
     } catch (err) {
       console.error("Profile fetch error:", err.response?.data || err.message);
-
-      // If online fetch fails, try to load cached data
-      if (isOnline) {
-        const hasCachedData = await loadCachedData();
-        if (!hasCachedData) {
-          Alert.alert("Error", "Failed to load profile. Please try again.");
-        }
-      } else {
-        Alert.alert("Offline", "No internet connection. Using cached data if available.");
-        await loadCachedData();
-      }
-
-      if (err.response?.status === 401) {
-        await AsyncStorage.clear();
-        navigation.reset({ index: 0, routes: [{ name: "Login" }] });
-      }
+      await handleFetchError(err);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -313,22 +233,21 @@ export default function MemberProfile() {
             try {
               setLoading(true);
 
-              // Clear all authentication data and cache
+              // Clear all authentication data
               const keysToRemove = [
                 "token",
-                "user",
-                ...Object.values(CACHE_KEYS)
+                "user"
               ];
 
               await AsyncStorage.multiRemove(keysToRemove);
 
-              // Optional: Clear any API headers if needed
-              // delete api.defaults.headers.common['Authorization'];
-
               console.log("Logout successful, redirecting to login...");
 
-              // Use replace instead of reset for cleaner transition
-              navigation.replace("Login");
+              // Use navigation.reset instead of replace
+              navigation.reset({
+                index: 0,
+                routes: [{ name: "Login" }],
+              });
 
             } catch (err) {
               console.error("Logout error:", err);
@@ -614,7 +533,7 @@ export default function MemberProfile() {
           <View style={styles.offlineBanner}>
             <Icon name="cloud-offline" size={16} color="#fff" />
             <Text style={styles.offlineText}>
-              You're offline. Showing cached data.
+              You're offline. Please connect to the internet to load data.
             </Text>
           </View>
         )}
@@ -628,9 +547,6 @@ export default function MemberProfile() {
             <View style={styles.completionHeader}>
               <Icon name="alert-circle" size={20} color="#ffffff" />
               <Text style={styles.completionTitle}>Profile Incomplete</Text>
-              {usingCachedData && (
-                <Text style={styles.cachedIndicator}> • Cached</Text>
-              )}
             </View>
             <View style={styles.progressContainer}>
               <View style={styles.progressBar}>
@@ -661,9 +577,6 @@ export default function MemberProfile() {
               <View style={styles.memberIdContainer}>
                 <Icon name="identifier" size={14} color="#6b7280" />
                 <Text style={styles.memberId}>{profile.id_number}</Text>
-                {usingCachedData && (
-                  <Text style={styles.cachedBadge}> • Cached</Text>
-                )}
               </View>
             </View>
             <View style={styles.profileStats}>
@@ -691,9 +604,11 @@ export default function MemberProfile() {
         <Card style={styles.sectionCard}>
           <Card.Content>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Documents</Text>
+              <View style={styles.documentsHeader}>
+                <Text style={styles.sectionTitle}>Documents</Text>
+              </View>
               <Text style={styles.documentsSubtitle}>
-                Uploaded Files {usingCachedData && "• Cached"}
+                Uploaded Files
               </Text>
             </View>
             <View style={styles.documentsGrid}>
@@ -701,19 +616,6 @@ export default function MemberProfile() {
             </View>
           </Card.Content>
         </Card>
-
-        {/* Debug Info - Remove in production */}
-        {/* <Card style={[styles.sectionCard, { backgroundColor: '#f3f4f6' }]}>
-          <Card.Content>
-            <Text style={[styles.sectionTitle, { fontSize: 14, marginBottom: 8 }]}>
-              Debug Info (Remove in production)
-            </Text>
-            <Text style={styles.debugText}>Base URL: {BASE_URL}</Text>
-            <Text style={styles.debugText}>API Base: {api.defaults.baseURL}</Text>
-            <Text style={styles.debugText}>Online: {isOnline ? 'Yes' : 'No'}</Text>
-            <Text style={styles.debugText}>Using Cache: {usingCachedData ? 'Yes' : 'No'}</Text>
-          </Card.Content>
-        </Card> */}
 
         {/* Action Buttons */}
         <View style={styles.actionsContainer}>
@@ -772,7 +674,6 @@ export default function MemberProfile() {
   );
 }
 
-// ... (keep the same styles as previous version)
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -822,11 +723,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     marginLeft: 8,
-  },
-  cachedIndicator: {
-    color: "rgba(255, 255, 255, 0.8)",
-    fontSize: 14,
-    fontStyle: "italic",
   },
   progressContainer: {
     marginBottom: 8,
@@ -890,11 +786,6 @@ const styles = StyleSheet.create({
     color: "#9ca3af",
     marginLeft: 4,
   },
-  cachedBadge: {
-    fontSize: 10,
-    color: "#f59e0b",
-    fontStyle: "italic",
-  },
   profileStats: {
     alignItems: "flex-end",
   },
@@ -917,15 +808,27 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionHeader: {
+    marginBottom: 16,
+  },
+  documentsHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: 4,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: "bold",
     color: "#111827",
+  },
+  editDocumentsButton: {
+    backgroundColor: "#10b981",
+    borderRadius: 8,
+  },
+  editDocumentsButtonContent: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    height: 32,
   },
   incompleteBadge: {
     backgroundColor: "#fef2f2",
@@ -1075,12 +978,6 @@ const styles = StyleSheet.create({
     height: 16,
     justifyContent: "center",
     alignItems: "center",
-  },
-  debugText: {
-    fontSize: 12,
-    color: '#6b7280',
-    fontFamily: 'monospace',
-    marginBottom: 2,
   },
   actionsContainer: {
     gap: 12,

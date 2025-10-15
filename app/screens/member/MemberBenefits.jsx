@@ -740,7 +740,7 @@ export default function MemberBenefits() {
               color="#fff"
             />
             <Text style={styles.bannerText}>
-              {isNew ? "New Benefit" : "Available Now"}
+              {isNew ? "Available Now" : "Available Now"}
             </Text>
           </View>
         )}
@@ -786,12 +786,6 @@ export default function MemberBenefits() {
 
         <View style={styles.benefitDetails}>
           <View style={styles.detailsRow}>
-            <View style={styles.detailItem}>
-              <Ionicons name="calendar" size={16} color="#6b7280" />
-              <Text style={styles.detailText}>
-                {item.start_date ? new Date(item.start_date).toLocaleDateString() : 'Ongoing'}
-              </Text>
-            </View>
 
             {item.amount && (
               <View style={styles.detailItem}>

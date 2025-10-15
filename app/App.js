@@ -33,9 +33,10 @@ import MemberBenefitsRecord from "./screens/member/MemberBenefitsRecord";
 import Terms from "./screens/member/Terms";
 import ContactUs from "./screens/member/ContactUs";
 import RegistrationSuccess from "./screens/RegistrationSuccess";
+import MemberEditDocument from "./screens/member/MemberEditDocument";
 
 import { EventIndicator } from "./utils/eventIndicator";
-import { BenefitIndicator } from "./utils/benefitIndicator"; 
+import { BenefitIndicator } from "./utils/benefitIndicator";
 
 const Tab = createBottomTabNavigator();
 
@@ -50,10 +51,10 @@ const useEventIndicator = () => {
     };
 
     loadIndicator();
-    
+
     // Set up an interval to check for updates
     const interval = setInterval(loadIndicator, 3000); // Check every 3 seconds
-    
+
     return () => clearInterval(interval);
   }, []);
 
@@ -71,10 +72,10 @@ const useBenefitIndicator = () => {
     };
 
     loadIndicator();
-    
+
     // Set up an interval to check for updates
     const interval = setInterval(loadIndicator, 3000); // Check every 3 seconds
-    
+
     return () => clearInterval(interval);
   }, []);
 
@@ -124,7 +125,7 @@ const TabBarIcon = ({ focused, iconName, label, type = 'ionicons', hasIndicator 
 const StaffMainTabs = () => {
   const eventIndicator = useEventIndicator();
   const benefitIndicator = useBenefitIndicator(); // Add benefit indicator
-  
+
   return (
     <Tab.Navigator
       initialRouteName="Home"
@@ -250,7 +251,7 @@ const StaffFlow = () => {
 const MemberMainTabs = () => {
   const eventIndicator = useEventIndicator();
   const benefitIndicator = useBenefitIndicator(); // Add benefit indicator
-  
+
   return (
     <Tab.Navigator
       initialRouteName="Home"
@@ -367,6 +368,7 @@ const MemberFlow = () => {
       <Tab.Screen name="MemberBenefitsRecord" component={MemberBenefitsRecord} />
       <Tab.Screen name="Terms" component={Terms} />
       <Tab.Screen name="ContactUs" component={ContactUs} />
+      <Tab.Screen name="MemberEditDocument" component={MemberEditDocument} />
     </Tab.Navigator>
   );
 };

@@ -24,6 +24,7 @@ export default function MemberBenefitRecord() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [currentUser, setCurrentUser] = useState(null);
+  const [userClaim, setUserClaim] = useState(null);
 
   useEffect(() => {
     fetchCurrentUser();
@@ -70,6 +71,15 @@ export default function MemberBenefitRecord() {
       const claimsRes = await api.get(`/benefits/${benefitId}/claims`);
       const data = claimsRes.data?.data || claimsRes.data || [];
       setClaims(data);
+
+      // Check if current user has claimed this benefit
+      if (currentUser?.id) {
+        const userClaimRecord = data.find(claim =>
+          claim.user_id === currentUser.id ||
+          claim.user?.id === currentUser.id
+        );
+        setUserClaim(userClaimRecord || null);
+      }
     } catch (err) {
       console.error("Claims fetch error:", err);
       throw new Error("Failed to load claims data");
@@ -86,49 +96,32 @@ export default function MemberBenefitRecord() {
     }
   };
 
-  // Budget & Claim Calculations
-  const calculateBenefitStats = () => {
-    if (!benefit) return {
-      totalBudget: 0,
-      perUnit: 0,
-      claimedCount: 0,
-      remainingCount: 0,
-      completionPercentage: 0,
-      usedAmount: 0,
-      remainingAmount: 0
-    };
+  const getUserClaimStatus = () => {
+    if (!currentUser) {
+      return {
+        status: "unknown",
+        message: "User information not available",
+        color: "#6b7280",
+        icon: "help-circle"
+      };
+    }
 
-    const lockedCount = Number(benefit?.locked_member_count ?? 0);
-    const isCash = benefit?.type === "cash";
-
-    // Determine per unit value based on benefit type
-    const perUnit = isCash
-      ? Number(benefit?.budget_amount ?? 0)
-      : Number(benefit?.budget_quantity ?? 0);
-
-    // Calculate claimed members
-    const claimedMembers = Array.isArray(claims)
-      ? claims.filter((c) => c.claimed_at || c.status === "claimed").length
-      : 0;
-
-    const totalBudget = perUnit * lockedCount;
-    const claimedCount = Math.min(claimedMembers, lockedCount);
-    const remainingCount = Math.max(0, lockedCount - claimedCount);
-    const completionPercentage = lockedCount > 0 ? (claimedCount / lockedCount) * 100 : 0;
-
-    const usedAmount = claimedCount * perUnit;
-    const remainingAmount = Math.max(0, totalBudget - usedAmount);
-
-    return {
-      totalBudget,
-      perUnit,
-      claimedCount,
-      remainingCount,
-      completionPercentage,
-      usedAmount,
-      remainingAmount,
-      lockedCount
-    };
+    if (userClaim) {
+      return {
+        status: "received",
+        message: "You have successfully received this benefit",
+        color: "#10b981",
+        icon: "checkmark-circle",
+        claimDate: userClaim.claimed_at || userClaim.created_at
+      };
+    } else {
+      return {
+        status: "not_received",
+        message: "You have not yet received this benefit",
+        color: "#ef4444",
+        icon: "close-circle"
+      };
+    }
   };
 
   const getBenefitColor = (type) => {
@@ -159,261 +152,142 @@ export default function MemberBenefitRecord() {
     }
   };
 
+  const renderUserClaimStatus = () => {
+    const claimStatus = getUserClaimStatus();
+
+    return (
+      <View style={styles.attendanceCard}>
+        <Text style={styles.attendanceTitle}>Your Benefit Status</Text>
+
+        <View style={styles.attendanceStatus}>
+          <View style={[styles.statusBadge, { backgroundColor: `${claimStatus.color}20` }]}>
+            <Ionicons name={claimStatus.icon} size={24} color={claimStatus.color} />
+            <Text style={[styles.statusText, { color: claimStatus.color }]}>
+              {claimStatus.status === "received" ? "Received" :
+                claimStatus.status === "not_received" ? "Not Received" : "Unknown"}
+            </Text>
+          </View>
+
+          <Text style={styles.statusMessage}>{claimStatus.message}</Text>
+        </View>
+
+        {userClaim && (
+          <View style={styles.attendanceDetails}>
+            <Text style={styles.detailsTitle}>Claim Details</Text>
+
+            <View style={styles.detailRow}>
+              <View style={styles.detailItem}>
+                <Ionicons name="time" size={16} color="#6b7280" />
+                <Text style={styles.detailLabel}>Received on:</Text>
+                <Text style={styles.detailValue}>
+                  {claimStatus.claimDate
+                    ? new Date(claimStatus.claimDate).toLocaleDateString('en-US', {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric'
+                    })
+                    : "Date not recorded"
+                  }
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.detailRow}>
+              <View style={styles.detailItem}>
+                <Ionicons name="time" size={16} color="#6b7280" />
+                <Text style={styles.detailLabel}>Time:</Text>
+                <Text style={styles.detailValue}>
+                  {claimStatus.claimDate
+                    ? new Date(claimStatus.claimDate).toLocaleTimeString('en-US', {
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })
+                    : "Time not recorded"
+                  }
+                </Text>
+              </View>
+            </View>
+
+            {userClaim.scanned_by && (
+              <View style={styles.detailRow}>
+                <View style={styles.detailItem}>
+                  <Ionicons name="person" size={16} color="#6b7280" />
+                  <Text style={styles.detailLabel}>Distributed by:</Text>
+                  <Text style={styles.detailValue}>
+                    {userClaim.scanned_by?.staff_profile
+                      ? `${userClaim.scanned_by.staff_profile.first_name || ""} ${userClaim.scanned_by.staff_profile.last_name || ""}`.trim()
+                      : userClaim.scanned_by?.username || "Staff member"
+                    }
+                  </Text>
+                </View>
+              </View>
+            )}
+          </View>
+        )}
+
+        {claimStatus.status === "not_received" && (
+          <View style={styles.infoNotice}>
+            <Ionicons name="information-circle" size={20} color="#3b82f6" />
+            <Text style={styles.infoText}>
+              If this is marked as "Received" but you haven't actually received the benefit, please contact your local barangay office for assistance.
+            </Text>
+          </View>
+        )}
+      </View>
+    );
+  };
+
   const renderBenefitDetails = () => {
     if (!benefit) return null;
 
-    const stats = calculateBenefitStats();
     const benefitColor = getBenefitColor(benefit.type);
+    const isCash = benefit?.type === "cash";
+    const perUnit = isCash
+      ? Number(benefit?.budget_amount ?? 0)
+      : Number(benefit?.budget_quantity ?? 0);
 
     return (
-      <View style={styles.benefitCard}>
-        <View style={styles.benefitHeader}>
-          <View style={[styles.benefitIcon, { backgroundColor: benefitColor }]}>
+      <View style={styles.eventCard}>
+        <View style={styles.eventHeader}>
+          <View style={[styles.eventIcon, { backgroundColor: `${benefitColor}20` }]}>
             <MaterialCommunityIcons
               name={getBenefitIcon(benefit.type)}
               size={28}
-              color="#fff"
+              color={benefitColor}
             />
           </View>
-          <View style={styles.benefitInfo}>
-            <Text style={styles.benefitTitle}>{benefit.name}</Text>
-            <View style={styles.benefitMeta}>
-              <Text style={[styles.benefitType, { color: benefitColor }]}>
-                {benefit.type}
-              </Text>
-              <Text style={styles.benefitAmount}>
-                • {formatAmount(stats.perUnit, benefit.type, benefit.unit)} per member
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.benefitStats}>
-          <View style={styles.statRow}>
-            <View style={styles.statItem}>
-              <Text style={styles.statLabel}>Target Members</Text>
-              <Text style={styles.statValue}>{stats.lockedCount}</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statLabel}>Claimed</Text>
-              <Text style={[styles.statValue, { color: '#10b981' }]}>{stats.claimedCount}</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statLabel}>Remaining</Text>
-              <Text style={[styles.statValue, { color: '#ef4444' }]}>{stats.remainingCount}</Text>
-            </View>
-          </View>
-
-          {/* Progress Bar */}
-          <View style={styles.progressContainer}>
-            <View style={styles.progressBar}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: `${stats.completionPercentage}%`, backgroundColor: benefitColor }
-                ]}
-              />
-            </View>
-            <Text style={styles.progressText}>
-              {Math.round(stats.completionPercentage)}% Complete ({stats.claimedCount} of {stats.lockedCount} members)
+          <View style={styles.eventInfo}>
+            <Text style={styles.eventTitle}>{benefit.name}</Text>
+            <Text style={styles.eventStatus}>
+              {benefit.type?.charAt(0).toUpperCase() + benefit.type?.slice(1)} Benefit
             </Text>
           </View>
         </View>
-      </View>
-    );
-  };
 
-  const renderBudgetOverview = () => {
-    if (!benefit) return null;
-
-    const stats = calculateBenefitStats();
-    const isCash = benefit.type === "cash";
-
-    return (
-      <View style={styles.budgetCard}>
-        <View style={styles.budgetHeader}>
-          <Ionicons name="wallet" size={24} color="#2563eb" />
-          <Text style={styles.budgetTitle}>Budget Overview</Text>
-        </View>
-
-        <View style={styles.budgetDetails}>
-          <View style={styles.budgetRow}>
-            <View style={styles.budgetItem}>
-              <Text style={styles.budgetLabel}>Total Budget</Text>
-              <Text style={styles.budgetValue}>
-                {formatAmount(stats.totalBudget, benefit.type, benefit.unit)}
-              </Text>
-            </View>
-
-            <View style={styles.budgetItem}>
-              <Text style={styles.budgetLabel}>Per Member</Text>
-              <Text style={styles.budgetValue}>
-                {formatAmount(stats.perUnit, benefit.type, benefit.unit)}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.budgetRow}>
-            <View style={styles.budgetItem}>
-              <Text style={styles.budgetLabel}>Used</Text>
-              <Text style={[styles.budgetValue, { color: '#ef4444' }]}>
-                {formatAmount(stats.usedAmount, benefit.type, benefit.unit)}
-              </Text>
-            </View>
-
-            <View style={styles.budgetItem}>
-              <Text style={styles.budgetLabel}>Remaining</Text>
-              <Text style={[styles.budgetValue, { color: '#10b981' }]}>
-                {formatAmount(stats.remainingAmount, benefit.type, benefit.unit)}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {benefit.status && (
-          <View style={styles.statusContainer}>
-            <Text style={styles.statusLabel}>Status:</Text>
-            <View style={[styles.statusBadge, { backgroundColor: `${getBenefitColor(benefit.type)}20` }]}>
-              <Text style={[styles.statusText, { color: getBenefitColor(benefit.type) }]}>
-                {benefit.status.toUpperCase()}
-              </Text>
-            </View>
-          </View>
-        )}
-      </View>
-    );
-  };
-
-  const renderClaimItem = ({ item, index }) => {
-    const fullName = item.user?.member_profile
-      ? `${item.user.member_profile.first_name || ""} ${item.user.member_profile.middle_name || ""} ${item.user.member_profile.last_name || ""}`.trim()
-      : item.user?.name || "—";
-
-    const scannedBy = item.scanned_by?.staff_profile
-      ? `${item.scanned_by.staff_profile.first_name || ""} ${item.scanned_by.staff_profile.middle_name || ""} ${item.scanned_by.staff_profile.last_name || ""}`.trim()
-      : item.scanned_by?.name || "—";
-
-    const getTimeAgo = (dateString) => {
-      if (!dateString) return "";
-      const date = new Date(dateString);
-      const now = new Date();
-      const diffInMinutes = Math.floor((now - date) / (1000 * 60));
-
-      if (diffInMinutes < 1) return "Just now";
-      if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
-      if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
-      return `${Math.floor(diffInMinutes / 1440)}d ago`;
-    };
-
-    const isClaimed = item.claimed_at || item.status === "claimed";
-
-    return (
-      <View style={[
-        styles.claimItem,
-        index === 0 && styles.firstItem
-      ]}>
-        <View style={styles.avatarContainer}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {fullName.split(' ').map(n => n[0]).join('').toUpperCase()}
-            </Text>
-          </View>
-          {isClaimed && index < 3 && (
-            <View style={styles.rankBadge}>
-              <Ionicons name="trophy" size={12} color="#fff" />
-            </View>
-          )}
-        </View>
-
-        <View style={styles.claimInfo}>
-          <View style={styles.nameRow}>
-            <Text style={styles.claimName} numberOfLines={1}>
-              {fullName}
-            </Text>
-            {isClaimed ? (
-              <Text style={styles.timeAgo}>
-                {getTimeAgo(item.claimed_at)}
-              </Text>
-            ) : (
-              <Text style={styles.pendingText}>Pending</Text>
-            )}
-          </View>
-
-          <View style={styles.detailsRow}>
+        <View style={styles.eventDetails}>
+          <View style={styles.detailRow}>
             <View style={styles.detailItem}>
-              <Ionicons name="location" size={14} color="#6b7280" />
-              <Text style={styles.detailText}>
-                {item.user?.member_profile?.barangay || "—"}
-              </Text>
-            </View>
-
-            {isClaimed && (
-              <View style={styles.detailItem}>
-                <Ionicons name="calendar" size={14} color="#6b7280" />
-                <Text style={styles.detailText}>
-                  {new Date(item.claimed_at).toLocaleDateString()}
+              <Ionicons name="gift" size={20} color="#6b7280" />
+              <View style={styles.detailTextContainer}>
+                <Text style={styles.detailLabel}>Benefit Value</Text>
+                <Text style={styles.detailValue}>
+                  {formatAmount(perUnit, benefit.type, benefit.unit)}
                 </Text>
               </View>
-            )}
+            </View>
           </View>
 
-          {isClaimed && (
-            <View style={styles.scanInfo}>
-              <Ionicons name="person" size={12} color="#9ca3af" />
-              <Text style={styles.scanInfoText}>
-                Scanned by {scannedBy}
-              </Text>
-              <Text style={styles.scanTime}>
-                {new Date(item.claimed_at).toLocaleTimeString()}
-              </Text>
+          {benefit.description && (
+            <View style={styles.descriptionContainer}>
+              <Text style={styles.descriptionLabel}>Description</Text>
+              <Text style={styles.descriptionText}>{benefit.description}</Text>
             </View>
           )}
+
+
+
         </View>
-
-        {isClaimed ? (
-          <View style={styles.statusBadge}>
-            <Ionicons name="checkmark-circle" size={20} color="#10b981" />
-          </View>
-        ) : (
-          <View style={styles.pendingBadge}>
-            <Ionicons name="time" size={20} color="#f59e0b" />
-          </View>
-        )}
-      </View>
-    );
-  };
-
-  const renderClaimsList = () => {
-    const stats = calculateBenefitStats();
-
-    return (
-      <View style={styles.claimsSection}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>
-            Claimants ({claims.length})
-          </Text>
-          <Text style={styles.sectionSubtitle}>
-            {stats.claimedCount} successfully claimed • {stats.remainingCount} remaining
-          </Text>
-        </View>
-
-        {claims.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="people-outline" size={64} color="#9ca3af" />
-            <Text style={styles.emptyTitle}>No Claimants Yet</Text>
-            <Text style={styles.emptyText}>
-              Claimants will appear here once they scan the QR code and claim their benefit
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.claimsList}>
-            {claims.map((item, index) => (
-              <View key={item.id}>
-                {renderClaimItem({ item, index })}
-              </View>
-            ))}
-          </View>
-        )}
       </View>
     );
   };
@@ -464,25 +338,21 @@ export default function MemberBenefitRecord() {
           >
             <Ionicons name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Benefit Details</Text>
+          <Text style={styles.headerTitle}>Benefit Status</Text>
           <View style={styles.headerRight} />
         </View>
 
+        {/* User Claim Status Card */}
+        {renderUserClaimStatus()}
+
         {/* Benefit Details Card */}
         {renderBenefitDetails()}
-
-        {/* Budget Overview Card */}
-        {renderBudgetOverview()}
-
-        {/* Claims List */}
-        {renderClaimsList()}
 
         <View style={styles.bottomSpacing} />
       </ScrollView>
     </LinearGradient>
   );
 }
-
 
 const styles = StyleSheet.create({
   container: {
@@ -503,8 +373,29 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600'
   },
-
-  // Header
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20
+  },
+  errorText: {
+    color: "#fff",
+    fontSize: 16,
+    textAlign: 'center',
+    marginTop: 16,
+    marginBottom: 20
+  },
+  retryButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8
+  },
+  retryText: {
+    color: '#fff',
+    fontWeight: '600'
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -523,9 +414,7 @@ const styles = StyleSheet.create({
   headerRight: {
     width: 40
   },
-
-  // Benefit Card
-  benefitCard: {
+  eventCard: {
     backgroundColor: '#fff',
     borderRadius: 20,
     padding: 20,
@@ -536,339 +425,179 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 12
   },
-  benefitHeader: {
+  eventHeader: {
     flexDirection: 'row',
-    alignItems: 'center'
+    alignItems: 'flex-start',
+    marginBottom: 16
   },
-  benefitIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+  eventIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16
   },
-  benefitInfo: {
+  eventInfo: {
     flex: 1
   },
-  benefitTitle: {
+  eventTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#111827',
-    marginBottom: 8
-  },
-  benefitType: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap'
-  },
-  typeText: {
-    fontSize: 16,
-    fontWeight: '600',
-    textTransform: 'capitalize'
-  },
-  amountText: {
-    fontSize: 16,
-    color: '#059669',
-    fontWeight: '600',
-    marginLeft: 8
-  },
-
-  // Scan Button
-  scanButton: {
-    borderRadius: 16,
-    marginBottom: 20,
-    overflow: 'hidden'
-  },
-  scanButtonDisabled: {
-    opacity: 0.7
-  },
-  scanButtonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 24
-  },
-  scanButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
-    marginLeft: 12
-  },
-  scanBadge: {
-    position: 'absolute',
-    right: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 12,
-    padding: 4
-  },
-
-  // Statistics
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-    flexWrap: 'wrap'
-  },
-  statCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
-    width: '48%',
-    marginBottom: 12,
-    backdropFilter: 'blur(10px)'
-  },
-  statIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8
-  },
-  statNumber: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#fff',
     marginBottom: 4
   },
-  statLabel: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.8)',
-    textAlign: 'center'
-  },
-
-  // Budget Card
-  budgetCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 20,
-    elevation: 2
-  },
-  budgetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16
-  },
-  budgetTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginLeft: 12
-  },
-  budgetRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12
-  },
-  budgetItem: {
-    flex: 1
-  },
-  budgetLabel: {
+  eventStatus: {
     fontSize: 14,
     color: '#6b7280',
-    marginBottom: 4
+    fontStyle: 'italic'
   },
-  budgetValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#111827'
+  eventDetails: {
+    gap: 16
   },
-  progressContainer: {
-    marginTop: 8
-  },
-  progressBar: {
-    height: 8,
-    backgroundColor: '#e5e7eb',
-    borderRadius: 4,
-    overflow: 'hidden',
-    marginBottom: 8
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#10b981',
-    borderRadius: 4
-  },
-  progressText: {
-    fontSize: 12,
-    color: '#6b7280',
-    textAlign: 'center'
-  },
-
-  // Sort Section
-  sortSection: {
-    marginBottom: 20
-  },
-  sortLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-    marginBottom: 12
-  },
-  sortContainer: {
-    flexDirection: 'row'
-  },
-  sortButton: {
+  detailRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginRight: 8
+    justifyContent: 'space-between'
   },
-  sortButtonActive: {
-    backgroundColor: '#2563eb'
-  },
-  sortButtonText: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginLeft: 6
-  },
-  sortButtonTextActive: {
-    color: '#fff'
-  },
-
-  // Claims Section
-  claimsSection: {
-    marginBottom: 20
-  },
-  sectionHeader: {
-    marginBottom: 16
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 4
-  },
-  sectionSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.8)'
-  },
-
-  // Claim Items
-  claimItem: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 8,
+  detailItem: {
     flexDirection: 'row',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8
-  },
-  firstItem: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#f59e0b'
-  },
-  avatarContainer: {
-    position: 'relative',
-    marginRight: 12
-  },
-  avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#3b82f6',
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  avatarText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 14
-  },
-  rankBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: '#f59e0b',
-    borderRadius: 10,
-    width: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  claimInfo: {
+    alignItems: 'flex-start',
     flex: 1
   },
-  nameRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8
-  },
-  claimName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
+  detailTextContainer: {
+    marginLeft: 12,
     flex: 1
   },
-  timeAgo: {
+  detailLabel: {
     fontSize: 12,
-    color: '#10b981',
+    color: '#9ca3af',
+    marginBottom: 2
+  },
+  detailValue: {
+    fontSize: 14,
+    color: '#374151',
     fontWeight: '500'
   },
-  detailsRow: {
+  descriptionContainer: {
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6'
+  },
+  descriptionLabel: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginBottom: 4
+  },
+  descriptionText: {
+    fontSize: 14,
+    color: '#374151',
+    lineHeight: 20
+  },
+  statusContainer: {
     flexDirection: 'row',
-    marginBottom: 8,
-    gap: 12
+    alignItems: 'center',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6'
+  },
+  statusLabel: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginRight: 8
+  },
+  statusBadgeSmall: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12
+  },
+  statusTextSmall: {
+    fontSize: 12,
+    fontWeight: '600'
+  },
+  attendanceCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 16,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12
+  },
+  attendanceTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#111827',
+    marginBottom: 16
+  },
+  attendanceStatus: {
+    alignItems: 'center',
+    marginBottom: 20
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 16,
+    marginBottom: 12
+  },
+  statusText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginLeft: 8
+  },
+  statusMessage: {
+    fontSize: 14,
+    color: '#6b7280',
+    textAlign: 'center',
+    lineHeight: 20
+  },
+  attendanceDetails: {
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6'
+  },
+  detailsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 12
+  },
+  detailRow: {
+    marginBottom: 12
   },
   detailItem: {
     flexDirection: 'row',
     alignItems: 'center'
   },
-  detailText: {
-    fontSize: 12,
+  detailLabel: {
+    fontSize: 14,
     color: '#6b7280',
-    marginLeft: 4
+    marginLeft: 8,
+    marginRight: 4
   },
-  scanInfo: {
-    flexDirection: 'row',
-    alignItems: 'center'
-  },
-  scanInfoText: {
-    fontSize: 11,
-    color: '#9ca3af',
-    marginLeft: 4,
-    marginRight: 8
-  },
-  scanTime: {
-    fontSize: 11,
-    color: '#9ca3af',
+  detailValue: {
+    fontSize: 14,
+    color: '#374151',
     fontWeight: '500'
   },
-  statusBadge: {
-    alignSelf: 'center'
+  infoNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 12
   },
-
-  // Empty State
-  emptyState: {
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: 16,
-    padding: 40,
-    alignItems: 'center'
+  infoText: {
+    fontSize: 12,
+    color: '#1e40af',
+    marginLeft: 8,
+    flex: 1,
+    lineHeight: 16
   },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#6b7280',
-    marginTop: 16,
-    marginBottom: 8
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#9ca3af',
-    textAlign: 'center',
-    lineHeight: 20
-  },
-
   bottomSpacing: {
     height: 20
   }

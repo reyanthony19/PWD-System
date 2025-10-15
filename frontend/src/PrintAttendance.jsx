@@ -10,8 +10,8 @@ function PrintAttendanceReport() {
   const hasPrintedRef = useRef(false);
 
   // Get data from location state (primary data source)
-  const { 
-    event: eventFromState, 
+  const {
+    event: eventFromState,
     members: membersFromState,
     filters = {},
     statistics = {}
@@ -71,7 +71,7 @@ function PrintAttendanceReport() {
             window.removeEventListener("afterprint", handleAfterPrint);
           };
         }
-        
+
       } catch (error) {
         console.error("Error loading print data:", error);
         setLoading(false);
@@ -141,12 +141,12 @@ function PrintAttendanceReport() {
   // Determine status label for third stat card
   const getThirdStatLabel = () => {
     if (!displayEvent?.event_date) return 'Expected/Absent';
-    
+
     const today = new Date();
     const eventDate = new Date(displayEvent.event_date);
     today.setHours(0, 0, 0, 0);
     eventDate.setHours(0, 0, 0, 0);
-    
+
     if (eventDate < today) return 'Absent';
     if (eventDate.getTime() === today.getTime()) return 'Expected Today';
     return 'Expected';
@@ -266,21 +266,12 @@ function PrintAttendanceReport() {
             <div><strong>Date:</strong> {displayEvent?.event_date ? new Date(displayEvent.event_date).toLocaleDateString() : 'N/A'}</div>
             <div><strong>Time:</strong> {displayEvent?.event_time || 'N/A'}</div>
             <div><strong>Location:</strong> {displayEvent?.location || 'N/A'}</div>
-            <div><strong>Target Barangay:</strong> {displayEvent?.target_barangay || 'All Barangays'}</div>
-            <div><strong>Status:</strong> 
-              <span className={`ml-1 font-medium ${
-                displayEvent?.status === 'active' ? 'text-green-600' : 
-                displayEvent?.status === 'inactive' ? 'text-red-600' : 
-                'text-gray-600'
-              }`}>
-                {displayEvent?.status || 'N/A'}
-                {displayEvent?.status === 'active' && ' (will be inactive after printing)'}
-              </span>
-            </div>
+            <div><strong>Event For Barangay:</strong> {displayEvent?.target_barangay || 'All Barangays'}</div>
+
           </div>
           {(filters.search || filters.barangayFilter !== "All") && (
             <div className="mt-3 pt-3 border-t border-gray-300">
-              <strong>Active Filters:</strong> 
+              <strong>Active Filters:</strong>
               {filters.search && ` Search: "${filters.search}"`}
               {filters.barangayFilter !== "All" && ` Barangay: ${filters.barangayFilter}`}
             </div>
@@ -293,7 +284,7 @@ function PrintAttendanceReport() {
         <h2 className="text-xl font-bold text-gray-800 mb-4 border-b-2 border-gray-300 pb-2">
           Attendance List ({displayMembers.length} records)
         </h2>
-        
+
         {displayMembers.length === 0 ? (
           <div className="text-center py-8 bg-yellow-50 rounded-lg">
             <p className="text-yellow-800 font-medium">No attendance records found for this event.</p>
@@ -315,7 +306,7 @@ function PrintAttendanceReport() {
               {displayMembers.map((member, index) => {
                 const profile = member.member_profile || {};
                 const fullName = `${profile.first_name || ''} ${profile.middle_name || ''} ${profile.last_name || ''}`.trim() || member.username || 'Unnamed Member';
-                
+
                 return (
                   <tr key={member.id || index}>
                     <td className="font-medium">{fullName}</td>
@@ -327,8 +318,8 @@ function PrintAttendanceReport() {
                     <td className="font-medium">
                       <span className={
                         member.statusVariant === 'present' ? 'text-green-600 font-bold' :
-                        member.statusVariant === 'expected' ? 'text-yellow-600 font-bold' :
-                        'text-red-600 font-bold'
+                          member.statusVariant === 'expected' ? 'text-yellow-600 font-bold' :
+                            'text-red-600 font-bold'
                       }>
                         {member.status}
                       </span>

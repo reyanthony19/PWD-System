@@ -3,10 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\MemberProfile;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log; // Import Log facade for logging
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use App\Models\MemberDocument;
+use Illuminate\Support\Str;
+
 use Carbon\Carbon;
 
 class MemberController extends Controller
@@ -120,6 +125,154 @@ class MemberController extends Controller
         }
     }
 
+    /**
+     * Update member documents
+     */
+    public function updateDocument(Request $request, $userId)
+    {
+        DB::beginTransaction();
+
+        try {
+            // Log incoming request for debugging
+            Log::info('Document update request received', [
+                'user_id' => $userId,
+                'files_received' => array_keys($request->allFiles()),
+                'all_input_keys' => array_keys($request->all())
+            ]);
+
+            // Validate user exists
+            $user = User::findOrFail($userId);
+
+            // Get member profile ID for this user
+            $memberProfile = MemberProfile::where('user_id', $userId)->first();
+
+            if (!$memberProfile) {
+                return response()->json([
+                    'message' => 'Member profile not found',
+                    'success' => false
+                ], 404);
+            }
+
+            // Validate request has at least one document
+            $request->validate([
+                'picture_2x2' => 'sometimes|file|mimes:jpeg,jpg,png,pdf|max:5120',
+                'barangay_indigency' => 'sometimes|file|mimes:jpeg,jpg,png,pdf|max:10240',
+                'medical_certificate' => 'sometimes|file|mimes:jpeg,jpg,png,pdf|max:10240',
+                'birth_certificate' => 'sometimes|file|mimes:jpeg,jpg,png,pdf|max:10240',
+            ]);
+
+            // Check if at least one file was uploaded
+            $hasFiles = false;
+            foreach (['picture_2x2', 'barangay_indigency', 'medical_certificate', 'birth_certificate'] as $field) {
+                if ($request->hasFile($field)) {
+                    $hasFiles = true;
+                    break;
+                }
+            }
+
+            if (!$hasFiles) {
+                return response()->json([
+                    'message' => 'No documents provided for upload',
+                    'success' => false
+                ], 400);
+            }
+
+            // Find or create member documents record
+            $memberDocument = MemberDocument::where('member_profile_id', $memberProfile->id)->first();
+
+            if (!$memberDocument) {
+                $memberDocument = new MemberDocument();
+                $memberDocument->member_profile_id = $memberProfile->id;
+                $memberDocument->hard_copy_submitted = false;
+                $memberDocument->remarks = null;
+            }
+
+            $updatedDocuments = [];
+            $storagePath = 'public/documents';
+
+            // Ensure storage directory exists
+            if (!Storage::exists($storagePath)) {
+                Storage::makeDirectory($storagePath);
+            }
+
+            // Process each document field
+            $documentFields = [
+                'picture_2x2',
+                'barangay_indigency',
+                'medical_certificate',
+                'birth_certificate'
+            ];
+
+            foreach ($documentFields as $field) {
+                if ($request->hasFile($field)) {
+                    $file = $request->file($field);
+
+                    Log::info("Processing file upload for {$field}", [
+                        'original_name' => $file->getClientOriginalName(),
+                        'mime_type' => $file->getClientMimeType(),
+                        'size' => $file->getSize(),
+                    ]);
+
+                    // Delete old file if exists
+                    $oldFilePath = $memberDocument->$field;
+                    if ($oldFilePath && Storage::exists('public/' . $oldFilePath)) {
+                        Storage::delete('public/' . $oldFilePath);
+                        Log::info("Deleted old file: {$oldFilePath}");
+                    }
+
+                    // Generate unique filename
+                    $originalName = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
+                    $extension = $file->getClientOriginalExtension();
+                    $filename = Str::slug($field) . '_' . $userId . '_' . time() . '.' . $extension;
+
+                    // Store file
+                    $filePath = $file->storeAs($storagePath, $filename);
+
+                    // Update database record - store relative path without 'public/'
+                    $relativePath = str_replace('public/', '', $filePath);
+                    $memberDocument->$field = $relativePath;
+                    $updatedDocuments[$field] = $relativePath;
+
+                    Log::info("File uploaded successfully for user {$userId}: {$field} -> {$relativePath}");
+                }
+            }
+
+            // Save the document record
+            $memberDocument->save();
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Documents updated successfully',
+                'success' => true,
+                'documents' => $updatedDocuments,
+                'member_document_id' => $memberDocument->id
+            ], 200);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            DB::rollBack();
+            Log::error('Document validation error: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Validation failed',
+                'success' => false,
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            DB::rollBack();
+            Log::error('User not found: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'User not found',
+                'success' => false
+            ], 404);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Document update error: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Failed to update documents',
+                'success' => false,
+                'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
     /**
      * Scan member by ID number
      */

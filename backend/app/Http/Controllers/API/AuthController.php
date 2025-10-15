@@ -132,6 +132,7 @@ class AuthController extends Controller
         // Return the documents as a response
         return response()->json($documents);
     }
+
     public function updateUser(Request $request, $id)
     {
         if ($request->user()->id !== (int)$id && $request->user()->role !== 'admin') {
@@ -147,22 +148,39 @@ class AuthController extends Controller
             'old_password' => 'nullable|string',
             'password'     => 'nullable|string|min:3',
 
-            // profile fields
-            'first_name'     => 'nullable|string|max:255',
-            'middle_name'    => 'nullable|string|max:255',
-            'last_name'      => 'nullable|string|max:255',
-            'contact_number' => 'nullable|string|max:50',
-            'birthdate'      => 'nullable|date',
-            'address'        => 'nullable|string|max:500',
+            // profile fields ONLY
+            'first_name'               => 'nullable|string|max:255',
+            'middle_name'              => 'nullable|string|max:255',
+            'last_name'                => 'nullable|string|max:255',
+            'contact_number'           => 'nullable|string|max:50',
+            'birthdate'                => 'nullable|date',
+            'address'                  => 'nullable|string|max:500',
+            'barangay'                 => 'nullable|string|max:255',
+            'blood_type'               => 'nullable|string|max:10',
+            'disability_type'          => 'nullable|string|max:255',
+            'sex'                      => 'nullable|string|max:10',
+            'id_number'                => 'nullable|string|max:50',
+            'sss_number'               => 'nullable|string|max:50',
+            'philhealth_number'        => 'nullable|string|max:50',
+            'guardian_full_name'       => 'nullable|string|max:255',
+            'guardian_relationship'    => 'nullable|string|max:50',
+            'guardian_contact_number'  => 'nullable|string|max:50',
+            'guardian_address'         => 'nullable|string|max:500',
+            'remarks'                  => 'nullable|string|max:1000',
+
+            // Document fields - CORRECTED for varchar storage (file paths)
+            'barangay_indigency'       => 'nullable|string|max:255',
+            'medical_certificate'      => 'nullable|string|max:255',
+            'picture_2x2'              => 'nullable|string|max:255',
+            'birth_certificate'        => 'nullable|string|max:255',
+            'hard_copy_submitted'      => 'nullable|boolean', // This one is tinyint(1) - boolean
         ];
 
         $validated = $request->validate($rules);
 
-        // Handle password update - ADMIN BYPASS
+        // Handle password update
         if (!empty($validated['password'])) {
-            // If admin is making the request, skip old password validation
             if ($request->user()->role !== 'admin') {
-                // For non-admin users (users updating their own password), require old password
                 if (empty($validated['old_password'])) {
                     return response()->json(['message' => 'Old password is required.'], 422);
                 }
@@ -170,7 +188,6 @@ class AuthController extends Controller
                     return response()->json(['message' => 'Old password is incorrect.'], 422);
                 }
             }
-            // Admin can set password without old password verification
             $user->password = Hash::make($validated['password']);
         }
 
@@ -179,14 +196,18 @@ class AuthController extends Controller
         $user->email    = $validated['email'];
         $user->save();
 
-        // Update profile table depending on role
-        $profileData = collect($validated)->only([
-            'first_name',
-            'middle_name',
-            'last_name',
-            'contact_number',
-            'birthdate',
-            'address'
+        // Update profile table
+        $profileData = collect($validated)->except([
+            'username',
+            'email',
+            'password',
+            'old_password',
+            // Exclude document fields from profile update
+            'barangay_indigency',
+            'medical_certificate',
+            'picture_2x2',
+            'birth_certificate',
+            'hard_copy_submitted'
         ])->toArray();
 
         if ($role === 'admin' && $user->adminProfile) {
@@ -195,75 +216,32 @@ class AuthController extends Controller
             $user->staffProfile->update($profileData);
         } elseif ($role === 'member' && $user->memberProfile) {
             $user->memberProfile->update($profileData);
+
+            // Handle document updates separately
+            $documentData = collect($validated)->only([
+                'barangay_indigency',
+                'medical_certificate',
+                'picture_2x2',
+                'birth_certificate',
+                'hard_copy_submitted',
+                'remarks'
+            ])->filter()->toArray(); // Only include non-empty values
+
+            // Update or create member documents if there's any document data
+            if (!empty($documentData)) {
+                if ($user->memberProfile->documents) {
+                    $user->memberProfile->documents()->update($documentData);
+                } else {
+                    $user->memberProfile->documents()->create($documentData);
+                }
+            }
         }
 
         return response()->json([
             'message' => 'User and profile updated successfully!',
-            'user'    => $user->load($role . 'Profile')
+            'user'    => $user->load([$role . 'Profile', $role . 'Profile.documents'])
         ]);
     }
-    //Hard Copy Checker kung na submit ba o wala 
-    public function updateHardCopyStatus(Request $request, $id)
-    {
-        // Find the user (member)
-        $user = User::findOrFail($id);
-
-        // Verify the user is a member
-        if ($user->role !== 'member') {
-            return response()->json([
-                'message' => 'This endpoint is only for members.'
-            ], 400);
-        }
-
-        // Verify the member has a profile
-        if (!$user->memberProfile) {
-            return response()->json([
-                'message' => 'Member profile not found.'
-            ], 404);
-        }
-
-        // Validate the request
-        $validated = $request->validate([
-            'hard_copy_submitted' => 'required|boolean',
-            'remarks' => 'nullable|string|max:500',
-        ]);
-
-        try {
-
-            // Update or create member documents record
-            $updateData = [
-                'hard_copy_submitted' => $validated['hard_copy_submitted'],
-                'remarks' => $validated['remarks'] ?? null,
-            ];
-
-            // Debug: Log the update data
-
-            if ($user->memberProfile->documents) {
-                // Update existing documents record
-                $user->memberProfile->documents()->update($updateData);
-            } else {
-                // Create new documents record
-                $updateData['member_profile_id'] = $user->memberProfile->id;
-                \App\Models\MemberDocument::create($updateData);
-            }
-
-            // Reload the user with fresh data
-            $user->load('memberProfile.documents');
-
-            // Debug: Log success
-
-            return response()->json([
-                'message' => 'Hard copy status updated successfully!',
-                'user' => $user
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'message' => 'Failed to update hard copy status.',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
-
     /**
      * Update status
      */

@@ -35,8 +35,6 @@ Route::get('/scanMember', [MemberController::class, 'scanMember']); // Scan memb
 |
 */
 
-// ✅ Member profile update (mobile app only)
-Route::middleware('auth:sanctum')->put('/member/profile', [MemberController::class, 'updateMemberProfile']);
 
 Route::middleware('auth:sanctum')->group(function () {
 
@@ -58,8 +56,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/user/{id}/status', [AuthController::class, 'updateStatus']); // Update user active/inactive status
     Route::delete('/user/{id}', [AuthController::class, 'deleteUser']); // Delete user account
     Route::post('/logout', [AuthController::class, 'logout']); // Logout current user
-
-    // 📄 Document hard copy check
+    Route::put('/member/{userId}/documents', [MemberController::class, 'updateDocument']);   
     Route::put('/member-documents/{id}/hard-copy-status', [AuthController::class, 'updateHardCopyStatus']); // Update member’s hard copy status
 
 
