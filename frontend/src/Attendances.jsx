@@ -47,21 +47,21 @@ const cache = {
     try {
       const item = localStorage.getItem(key);
       if (!item) return null;
-      
+
       const { data, timestamp } = JSON.parse(item);
-      
+
       if (Date.now() - timestamp > CACHE_DURATION) {
         cache.clear(key);
         return null;
       }
-      
+
       return data;
     } catch (error) {
       console.error('Error reading from cache:', error);
       return null;
     }
   },
-  
+
   set: (key, data) => {
     try {
       const item = {
@@ -73,7 +73,7 @@ const cache = {
       console.error('Error writing to cache:', error);
     }
   },
-  
+
   clear: (key) => {
     try {
       localStorage.removeItem(key);
@@ -81,7 +81,7 @@ const cache = {
       console.error('Error clearing cache:', error);
     }
   },
-  
+
   clearAll: () => {
     Object.keys(localStorage).forEach(key => {
       if (key.startsWith('attendance_')) {
@@ -89,7 +89,7 @@ const cache = {
       }
     });
   },
-  
+
   isValid: (key) => {
     const data = cache.get(key);
     return data !== null;
@@ -156,19 +156,19 @@ function Attendances() {
   // Format staff name
   const formatStaffName = (scannedBy) => {
     if (!scannedBy) return "—";
-    
+
     if (scannedBy.staff_profile) {
       const profile = scannedBy.staff_profile;
       return `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || scannedBy.username || "—";
     }
-    
+
     return scannedBy.username || "—";
   };
 
   // Format scanned at timestamp
   const formatScannedAt = (scannedAt) => {
     if (!scannedAt) return "—";
-    
+
     const date = new Date(scannedAt);
     return date.toLocaleString('en-US', {
       month: 'short',
@@ -183,7 +183,7 @@ function Attendances() {
   // Format time only for scanned at
   const formatScannedTime = (scannedAt) => {
     if (!scannedAt) return "—";
-    
+
     const date = new Date(scannedAt);
     return date.toLocaleTimeString('en-US', {
       hour: '2-digit',
@@ -195,15 +195,15 @@ function Attendances() {
   // Manual refresh function
   const handleRefresh = useCallback(async () => {
     if (!eventId) return;
-    
+
     try {
       setRefreshing(true);
       setCurrentPage(1); // Reset to first page on refresh
-      
+
       cache.clear(CACHE_KEYS.EVENT(eventId));
       cache.clear(CACHE_KEYS.ATTENDANCES(eventId));
       cache.clear(CACHE_KEYS.MEMBERS);
-      
+
       const [eventRes, membersRes, attendancesRes] = await Promise.all([
         api.get(`/events/${eventId}`),
         api.get("/users?role=member"),
@@ -218,7 +218,7 @@ function Attendances() {
       setMembers(membersRes.data.data || membersRes.data);
       setAttendances(attendancesRes.data.data || attendancesRes.data);
       setLastUpdated(new Date());
-      
+
     } catch (err) {
       console.error("Failed to refresh data:", err);
       setError("Failed to refresh attendance records.");
@@ -280,11 +280,11 @@ function Attendances() {
     } catch (err) {
       console.error("Failed to fetch data:", err);
       setError("Failed to load event or attendance records.");
-      
+
       const cachedEvent = cache.get(CACHE_KEYS.EVENT(eventId));
       const cachedMembers = cache.get(CACHE_KEYS.MEMBERS);
       const cachedAttendances = cache.get(CACHE_KEYS.ATTENDANCES(eventId));
-      
+
       if (cachedEvent && cachedMembers && cachedAttendances) {
         setEvent(cachedEvent);
         setMembers(cachedMembers);
@@ -299,15 +299,15 @@ function Attendances() {
 
   useEffect(() => {
     fetchAllData();
-    
+
     const interval = setInterval(async () => {
       if (!eventId) return;
-      
+
       try {
         const attendancesCacheKey = CACHE_KEYS.ATTENDANCES(eventId);
         const attRes = await api.get(`/events/${eventId}/attendances`);
         const attendanceData = attRes.data.data || attRes.data;
-        
+
         cache.set(attendancesCacheKey, attendanceData);
         setAttendances(attendanceData);
         setLastUpdated(new Date());
@@ -315,7 +315,7 @@ function Attendances() {
         console.error("Failed to refresh attendances:", err);
       }
     }, 5000);
-    
+
     return () => clearInterval(interval);
   }, [eventId, fetchAllData]);
 
@@ -473,8 +473,8 @@ function Attendances() {
       }
     };
 
-    navigate(`/events/${eventId}/attendance/print`, { 
-      state: printData 
+    navigate(`/events/${eventId}/attendance/print`, {
+      state: printData
     });
   };
 
@@ -529,9 +529,9 @@ function Attendances() {
           {/* Cache Status Indicator */}
           <div className="mb-4 flex justify-between items-center">
             <div className="text-sm text-gray-600">
-              {cache.isValid(CACHE_KEYS.EVENT(eventId)) && 
-               cache.isValid(CACHE_KEYS.MEMBERS) && 
-               cache.isValid(CACHE_KEYS.ATTENDANCES(eventId)) ? (
+              {cache.isValid(CACHE_KEYS.EVENT(eventId)) &&
+                cache.isValid(CACHE_KEYS.MEMBERS) &&
+                cache.isValid(CACHE_KEYS.ATTENDANCES(eventId)) ? (
                 <span className="text-green-600 flex items-center gap-2">
                   <CheckCircleIcon size={16} />
                   Using cached data
@@ -580,7 +580,7 @@ function Attendances() {
                         {event?.title || `Event #${eventId}`}
                       </h2>
                     </div>
-                    
+
                     {event && (
                       <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
                         <span className="flex items-center gap-2 bg-blue-50 px-3 py-1 rounded-full">
@@ -610,19 +610,18 @@ function Attendances() {
                           <Target className="w-4 h-4 text-orange-500" />
                           Barangay: {event.target_barangay || "All Barangays"}
                         </span>
-                        <span className={`flex items-center gap-2 px-3 py-1 rounded-full font-semibold ${
-                          isEventCompleted(event.event_date)
+                        <span className={`flex items-center gap-2 px-3 py-1 rounded-full font-semibold ${isEventCompleted(event.event_date)
                             ? "bg-gray-100 text-gray-700"
                             : isEventToday(event.event_date)
-                            ? "bg-orange-100 text-orange-700"
-                            : "bg-green-100 text-green-700"
-                        }`}>
+                              ? "bg-orange-100 text-orange-700"
+                              : "bg-green-100 text-green-700"
+                          }`}>
                           <CalendarClock className="w-4 h-4" />
                           {isEventCompleted(event.event_date)
                             ? "Event Completed"
                             : isEventToday(event.event_date)
-                            ? "Today"
-                            : "Upcoming"}
+                              ? "Today"
+                              : "Upcoming"}
                         </span>
                       </div>
                     )}
@@ -642,13 +641,12 @@ function Attendances() {
                   <div className="text-2xl font-bold">{presentCount}</div>
                   <div className="text-green-100 text-xs font-medium">Present</div>
                 </div>
-                <div className={`p-5 rounded-2xl shadow-lg text-center text-white ${
-                  isEventCompleted(event?.event_date)
+                <div className={`p-5 rounded-2xl shadow-lg text-center text-white ${isEventCompleted(event?.event_date)
                     ? "bg-gradient-to-br from-gray-500 to-gray-600"
                     : isEventToday(event?.event_date)
-                    ? "bg-gradient-to-br from-orange-500 to-orange-600"
-                    : "bg-gradient-to-br from-yellow-500 to-yellow-600"
-                }`}>
+                      ? "bg-gradient-to-br from-orange-500 to-orange-600"
+                      : "bg-gradient-to-br from-yellow-500 to-yellow-600"
+                  }`}>
                   <UserX className="w-7 h-7 mx-auto mb-3 opacity-90" />
                   <div className="text-2xl font-bold">{expectedOrAbsentCount}</div>
                   <div className="text-opacity-90 text-xs font-medium">
@@ -727,9 +725,9 @@ function Attendances() {
                     <Ban className="w-5 h-5" />
                     Printing Disabled
                     <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                        {isEventToday(event?.event_date) 
-                          ? "Printing available after event ends" 
-                          : "Printing available after event date"}
+                      {isEventToday(event?.event_date)
+                        ? "Printing available after event ends"
+                        : "Printing available after event date"}
                     </div>
                   </>
                 ) : (
@@ -752,8 +750,8 @@ function Attendances() {
                     Printing temporarily disabled
                   </p>
                   <p className="text-yellow-700 text-sm mt-1">
-                    {isEventToday(event?.event_date) 
-                      ? "Printing will be available after the event ends today. This ensures accurate attendance records." 
+                    {isEventToday(event?.event_date)
+                      ? "Printing will be available after the event ends today. This ensures accurate attendance records."
                       : "Printing will be available after the event date. This ensures accurate attendance records."}
                   </p>
                 </div>
@@ -764,12 +762,12 @@ function Attendances() {
             {(search || barangayFilter !== "All") && (
               <div className="flex flex-wrap items-center gap-3 mt-6 pt-6 border-t border-gray-100">
                 <span className="text-sm font-semibold text-gray-600">Active filters:</span>
-                
+
                 {search && (
                   <span className="bg-blue-100 text-blue-800 text-sm px-4 py-2 rounded-full flex items-center gap-2 font-medium">
                     Search: "{search}"
-                    <button 
-                      onClick={() => setSearch("")} 
+                    <button
+                      onClick={() => setSearch("")}
                       className="text-blue-600 hover:text-blue-800 font-bold text-lg leading-none"
                     >
                       ×
@@ -780,8 +778,8 @@ function Attendances() {
                 {barangayFilter !== "All" && (
                   <span className="bg-purple-100 text-purple-800 text-sm px-4 py-2 rounded-full flex items-center gap-2 font-medium">
                     Barangay: {barangayFilter}
-                    <button 
-                      onClick={() => setBarangayFilter("All")} 
+                    <button
+                      onClick={() => setBarangayFilter("All")}
                       className="text-purple-600 hover:text-purple-800 font-bold text-lg leading-none"
                     >
                       ×
@@ -819,7 +817,7 @@ function Attendances() {
                 </span>
               )}
             </div>
-            
+
             {finalFilteredMembers.length > 0 && (
               <div className="flex items-center gap-2 text-sm text-gray-600">
                 <div className="w-2 h-2 bg-green-500 rounded-full"></div>
@@ -847,9 +845,6 @@ function Attendances() {
                     </th>
                     <th className="px-8 py-5 font-semibold text-left text-sm uppercase tracking-wider">
                       Guardian
-                    </th>
-                    <th className="px-8 py-5 font-semibold text-left text-sm uppercase tracking-wider">
-                      Contact
                     </th>
                     <th className="px-8 py-5 font-semibold text-left text-sm uppercase tracking-wider">
                       Disability
@@ -909,16 +904,7 @@ function Attendances() {
                             {member.member_profile?.guardian_full_name || "—"}
                           </div>
                         </td>
-                        <td className="px-8 py-5">
-                          {member.member_profile?.guardian_contact_number ? (
-                            <div className="flex items-center gap-2 text-gray-700">
-                              <Phone className="w-4 h-4 text-gray-400" />
-                              {member.member_profile.guardian_contact_number}
-                            </div>
-                          ) : (
-                            "—"
-                          )}
-                        </td>
+
                         <td className="px-8 py-5">
                           {member.member_profile?.disability_type ? (
                             <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-800">
@@ -1021,23 +1007,22 @@ function Attendances() {
                       <ChevronLeft className="w-4 h-4" />
                       Previous
                     </button>
-                    
+
                     <div className="flex items-center gap-1">
                       {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
                         <button
                           key={page}
                           onClick={() => setCurrentPage(page)}
-                          className={`px-3 py-1 text-sm font-medium rounded-lg transition-colors ${
-                            currentPage === page
+                          className={`px-3 py-1 text-sm font-medium rounded-lg transition-colors ${currentPage === page
                               ? 'bg-blue-600 text-white'
                               : 'text-gray-700 hover:bg-gray-100'
-                          }`}
+                            }`}
                         >
                           {page}
                         </button>
                       ))}
                     </div>
-                    
+
                     <button
                       onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                       disabled={currentPage === totalPages}

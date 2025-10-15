@@ -94,12 +94,12 @@ export default function MemberList({ navigation }) {
     });
 
   const statusOptions = [
-    { key: "all", label: "All", icon: <Ionicons name="ios-person" size={18} color="#2563eb" />, color: "bg-gray-100 text-gray-700" },
-    { key: "approved", label: "Approved", icon: <Ionicons name="checkmark-circle" size={18} color="#34D399" />, color: "bg-green-100 text-green-700" },
-    { key: "pending", label: "Pending", icon: <Ionicons name="clock" size={18} color="#F59E0B" />, color: "bg-yellow-100 text-yellow-700" },
-    { key: "rejected", label: "Rejected", icon: <Ionicons name="close-circle" size={18} color="#EF4444" />, color: "bg-red-100 text-red-700" },
-    { key: "inactive", label: "Inactive", icon: <Ionicons name="pause-circle" size={18} color="#F97316" />, color: "bg-orange-100 text-orange-700" },
-    { key: "deceased", label: "Deceased", icon: <Ionicons name="skull" size={18} color="#9CA3AF" />, color: "bg-gray-200 text-gray-700" },
+    { key: "all", label: "All", icon: "ios-person", color: "#2563eb" },
+    { key: "approved", label: "Approved", icon: "checkmark-circle", color: "#34D399" },
+    { key: "pending", label: "Pending", icon: "clock", color: "#F59E0B" },
+    { key: "rejected", label: "Rejected", icon: "close-circle", color: "#EF4444" },
+    { key: "inactive", label: "Inactive", icon: "pause-circle", color: "#F97316" },
+    { key: "deceased", label: "Deceased", icon: "skull", color: "#9CA3AF" },
   ];
 
   if (loading) {
@@ -123,37 +123,72 @@ export default function MemberList({ navigation }) {
           <TouchableOpacity
             key={key}
             onPress={() => setStatusFilter(key)}
-            style={[styles.filterButton, statusFilter === key ? styles.selectedFilter : null]}
+            style={[styles.filterButton, statusFilter === key && styles.selectedFilter]}
           >
-            {icon} <Text>{label}</Text>
+            <Ionicons name={icon} size={18} color={statusFilter === key ? "#fff" : color} />
+            <Text style={[styles.filterText, statusFilter === key && styles.selectedFilterText]}>
+              {label}
+            </Text>
           </TouchableOpacity>
         ))}
       </View>
 
       {/* Search */}
-      <TextInput
-        placeholder="🔍 Search by username or email"
-        value={searchTerm}
-        onChangeText={(text) => setSearchTerm(text)}
-        style={styles.searchInput}
-      />
+      <View style={styles.searchContainer}>
+        <Ionicons name="search" size={20} color="#6b7280" style={styles.searchIcon} />
+        <TextInput
+          placeholder="Search by username or email"
+          value={searchTerm}
+          onChangeText={(text) => setSearchTerm(text)}
+          style={styles.searchInput}
+        />
+      </View>
 
       {/* Sorting */}
       <View style={styles.sorting}>
-        <Text>Sort By:</Text>
-        <TouchableOpacity onPress={() => setSortOption("firstname-asc")}>
-          <Text style={styles.sortButton}>Name Ascending</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setSortOption("firstname-desc")}>
-          <Text style={styles.sortButton}>Name Descending</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setSortOption("date-newest")}>
-          <Text style={styles.sortButton}>Date Newest</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setSortOption("date-oldest")}>
-          <Text style={styles.sortButton}>Date Oldest</Text>
-        </TouchableOpacity>
+        <Text style={styles.sortLabel}>Sort By:</Text>
+        <View style={styles.sortButtons}>
+          <TouchableOpacity 
+            onPress={() => setSortOption("firstname-asc")}
+            style={[styles.sortButton, sortOption === "firstname-asc" && styles.activeSortButton]}
+          >
+            <Text style={[styles.sortButtonText, sortOption === "firstname-asc" && styles.activeSortButtonText]}>
+              Name Asc
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            onPress={() => setSortOption("firstname-desc")}
+            style={[styles.sortButton, sortOption === "firstname-desc" && styles.activeSortButton]}
+          >
+            <Text style={[styles.sortButtonText, sortOption === "firstname-desc" && styles.activeSortButtonText]}>
+              Name Desc
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            onPress={() => setSortOption("date-newest")}
+            style={[styles.sortButton, sortOption === "date-newest" && styles.activeSortButton]}
+          >
+            <Text style={[styles.sortButtonText, sortOption === "date-newest" && styles.activeSortButtonText]}>
+              Newest
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            onPress={() => setSortOption("date-oldest")}
+            style={[styles.sortButton, sortOption === "date-oldest" && styles.activeSortButton]}
+          >
+            <Text style={[styles.sortButtonText, sortOption === "date-oldest" && styles.activeSortButtonText]}>
+              Oldest
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
+
+      {/* Error Message */}
+      {error ? (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      ) : null}
 
       {/* Member List */}
       <FlatList
@@ -165,20 +200,32 @@ export default function MemberList({ navigation }) {
 
           return (
             <View style={styles.memberCard}>
-              <Text style={styles.memberName}>{fullName}</Text>
+              <Text style={styles.memberName}>{fullName || "Unknown Member"}</Text>
               <Text style={styles.memberInfo}>{item.email}</Text>
-              <Text style={styles.memberInfo}>{profile.contact_number}</Text>
-              <Text style={styles.memberInfo}>{profile.address}</Text>
-
-              <TouchableOpacity
-                style={styles.statusButton}
-                onPress={() => handleStatusChange(item.id, item.status === "approved" ? "inactive" : "approved")}
-              >
-                <Text style={styles.statusText}>Change Status</Text>
-              </TouchableOpacity>
+              <Text style={styles.memberInfo}>{profile.contact_number || "No contact number"}</Text>
+              <Text style={styles.memberInfo}>{profile.address || "No address"}</Text>
+              
+              <View style={styles.statusContainer}>
+                <Text style={[styles.statusText, styles[`status${item.status?.charAt(0).toUpperCase() + item.status?.slice(1)}`]]}>
+                  Status: {item.status || "unknown"}
+                </Text>
+                <TouchableOpacity
+                  style={styles.statusButton}
+                  onPress={() => handleStatusChange(item.id, item.status === "approved" ? "inactive" : "approved")}
+                >
+                  <Text style={styles.statusButtonText}>
+                    {item.status === "approved" ? "Deactivate" : "Activate"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           );
         }}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No members found</Text>
+          </View>
+        }
       />
     </View>
   );
@@ -186,17 +233,146 @@ export default function MemberList({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#f9fafb", padding: 16 },
-  title: { fontSize: 24, fontWeight: "bold", color: "#2563eb", marginBottom: 16 },
-  subtitle: { color: "#6b7280", marginBottom: 16 },
-  filters: { flexDirection: "row", justifyContent: "space-between", marginBottom: 16 },
-  filterButton: { backgroundColor: "#e5e7eb", padding: 8, borderRadius: 8 },
-  selectedFilter: { backgroundColor: "#2563eb", color: "#fff" },
-  searchInput: { padding: 8, backgroundColor: "#fff", borderRadius: 8, marginBottom: 16 },
-  sorting: { marginBottom: 16 },
-  sortButton: { color: "#2563eb", marginBottom: 8 },
-  memberCard: { padding: 16, backgroundColor: "#fff", marginBottom: 12, borderRadius: 8, elevation: 2 },
-  memberName: { fontSize: 18, fontWeight: "bold", color: "#111827" },
-  memberInfo: { color: "#6b7280", marginBottom: 8 },
-  statusButton: { backgroundColor: "#2563eb", padding: 8, borderRadius: 8 },
-  statusText: { color: "#fff" },
+  center: { flex: 1, justifyContent: "center", alignItems: "center" },
+  title: { fontSize: 24, fontWeight: "bold", color: "#2563eb", marginBottom: 8 },
+  subtitle: { color: "#6b7280", marginBottom: 16, fontSize: 14 },
+  filters: { 
+    flexDirection: "row", 
+    flexWrap: "wrap", 
+    justifyContent: "space-between", 
+    marginBottom: 16,
+    gap: 8,
+  },
+  filterButton: { 
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#e5e7eb", 
+    paddingHorizontal: 12,
+    paddingVertical: 8, 
+    borderRadius: 8,
+    flex: 1,
+    minWidth: "30%",
+    margin: 2,
+    justifyContent: "center",
+  },
+  selectedFilter: { backgroundColor: "#2563eb" },
+  filterText: { marginLeft: 4, fontSize: 12, color: "#374151" },
+  selectedFilterText: { color: "#fff" },
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    marginBottom: 16,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 16,
+  },
+  sorting: { 
+    marginBottom: 16,
+    backgroundColor: "#fff",
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+  },
+  sortLabel: { 
+    fontWeight: "bold", 
+    marginBottom: 8, 
+    color: "#374151" 
+  },
+  sortButtons: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  sortButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: "#f3f4f6",
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+  },
+  activeSortButton: {
+    backgroundColor: "#2563eb",
+    borderColor: "#2563eb",
+  },
+  sortButtonText: {
+    fontSize: 12,
+    color: "#374151",
+  },
+  activeSortButtonText: {
+    color: "#fff",
+  },
+  memberCard: { 
+    padding: 16, 
+    backgroundColor: "#fff", 
+    marginBottom: 12, 
+    borderRadius: 8, 
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  memberName: { fontSize: 18, fontWeight: "bold", color: "#111827", marginBottom: 4 },
+  memberInfo: { color: "#6b7280", marginBottom: 4, fontSize: 14 },
+  statusContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#e5e7eb",
+  },
+  statusText: {
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  statusApproved: { color: "#34D399" },
+  statusPending: { color: "#F59E0B" },
+  statusRejected: { color: "#EF4444" },
+  statusInactive: { color: "#F97316" },
+  statusDeceased: { color: "#9CA3AF" },
+  statusButton: { 
+    backgroundColor: "#2563eb", 
+    paddingHorizontal: 12,
+    paddingVertical: 6, 
+    borderRadius: 6,
+  },
+  statusButtonText: { 
+    color: "#fff", 
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  errorContainer: {
+    backgroundColor: "#fee2e2",
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: "#ef4444",
+  },
+  errorText: {
+    color: "#dc2626",
+    fontSize: 14,
+  },
+  emptyContainer: {
+    padding: 20,
+    alignItems: "center",
+  },
+  emptyText: {
+    color: "#6b7280",
+    fontSize: 16,
+  },
 });
