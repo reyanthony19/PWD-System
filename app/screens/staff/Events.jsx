@@ -461,7 +461,7 @@ export default function Events() {
           {staffAssignedBarangay ? (
             <Text style={styles.assignedBarangayInfo}>Assigned barangay: {staffAssignedBarangay}</Text>
           ) : (
-            <Text style={styles.noAssignedBarangayInfo}>Viewing all events - no assigned barangay</Text>
+            <Text style={styles.noAssignedBarangayInfo}>Viewing all events</Text>
           )}
         </View>
 
