@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   CheckCircle,
@@ -7,63 +7,148 @@ import {
   Ban,
   UserX,
   Search,
-  MapPin,
   Users,
   UserCheck,
   Plus,
-  Filter,
   ChevronDown,
-  RefreshCw,
+  Award,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  RefreshCw
 } from "lucide-react";
 import api from "./api";
 import Layout from "./Layout";
 
-// Cache configuration
+// Cache configuration for incremental updates
 const CACHE_KEYS = {
   MEMBERS: 'memberlist_members',
-  TIMESTAMP: 'memberlist_cache_timestamp'
+  BENEFIT_RECORDS: 'benefit_records_all',
+  LAST_SYNC_TIMESTAMP: 'memberlist_last_sync',
+  MEMBERS_HASH: 'memberlist_members_hash',
+  BENEFITS_HASH: 'memberlist_benefits_hash'
 };
 
-const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes in milliseconds
+const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
 
-// Cache utility functions
-const cache = {
-  // Get data from cache
+// Simple hash function to detect changes
+const generateHash = (data) => {
+  return JSON.stringify(data).split('').reduce((a, b) => {
+    a = ((a << 5) - a) + b.charCodeAt(0);
+    return a & a;
+  }, 0);
+};
+
+// Incremental cache utility
+const incrementalCache = {
+  // Get cached data
   get: (key) => {
     try {
       const item = localStorage.getItem(key);
       if (!item) return null;
-      
       const { data, timestamp } = JSON.parse(item);
-      
-      // Check if cache is still valid
       if (Date.now() - timestamp > CACHE_DURATION) {
-        cache.clear(key);
+        localStorage.removeItem(key);
         return null;
       }
-      
       return data;
     } catch (error) {
       console.error('Error reading from cache:', error);
       return null;
     }
   },
-  
-  // Set data in cache
+
+  // Set cached data with hash
   set: (key, data) => {
     try {
       const item = {
         data,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        hash: generateHash(data)
       };
       localStorage.setItem(key, JSON.stringify(item));
     } catch (error) {
       console.error('Error writing to cache:', error);
     }
   },
-  
+
+  // Merge new data with existing cache (incremental update)
+  mergeMembers: (newMembers) => {
+    try {
+      const existing = incrementalCache.get(CACHE_KEYS.MEMBERS) || [];
+      const existingMap = new Map(existing.map(member => [member.id, member]));
+
+      let hasChanges = false;
+
+      // Merge new members with existing ones
+      newMembers.forEach(newMember => {
+        const existingMember = existingMap.get(newMember.id);
+
+        if (!existingMember) {
+          // New member - add to cache
+          existingMap.set(newMember.id, newMember);
+          hasChanges = true;
+        } else if (existingMember.updated_at !== newMember.updated_at) {
+          // Existing member with updates - replace
+          existingMap.set(newMember.id, newMember);
+          hasChanges = true;
+        }
+        // If member exists and hasn't changed, keep the existing one
+      });
+
+      if (hasChanges) {
+        const mergedMembers = Array.from(existingMap.values());
+        incrementalCache.set(CACHE_KEYS.MEMBERS, mergedMembers);
+        return mergedMembers;
+      }
+
+      return existing;
+    } catch (error) {
+      console.error('Error merging members:', error);
+      return newMembers; // Fallback to new data
+    }
+  },
+
+  // Merge benefit records
+  mergeBenefitRecords: (newRecords) => {
+    try {
+      const existing = incrementalCache.get(CACHE_KEYS.BENEFIT_RECORDS) || [];
+      const existingMap = new Map(existing.map(record => [record.id, record]));
+
+      let hasChanges = false;
+
+      newRecords.forEach(newRecord => {
+        const existingRecord = existingMap.get(newRecord.id);
+
+        if (!existingRecord) {
+          // New record - add to cache
+          existingMap.set(newRecord.id, newRecord);
+          hasChanges = true;
+        }
+        // Benefit records are usually immutable, so we don't check for updates
+      });
+
+      if (hasChanges) {
+        const mergedRecords = Array.from(existingMap.values());
+        incrementalCache.set(CACHE_KEYS.BENEFIT_RECORDS, mergedRecords);
+        return mergedRecords;
+      }
+
+      return existing;
+    } catch (error) {
+      console.error('Error merging benefit records:', error);
+      return newRecords;
+    }
+  },
+
+  // Check if data has changed on server
+  hasDataChanged: (newData, cacheKey) => {
+    const cached = incrementalCache.get(cacheKey);
+    if (!cached) return true;
+
+    const newHash = generateHash(newData);
+    return cached.hash !== newHash;
+  },
+
   // Clear specific cache
   clear: (key) => {
     try {
@@ -72,178 +157,330 @@ const cache = {
       console.error('Error clearing cache:', error);
     }
   },
-  
-  // Clear all member list cache
-  clearAll: () => {
+
+  // Invalidate all cache
+  invalidateAll: () => {
     Object.values(CACHE_KEYS).forEach(key => {
-      cache.clear(key);
+      incrementalCache.clear(key);
     });
-  },
-  
-  // Check if cache is valid
-  isValid: (key) => {
-    const data = cache.get(key);
-    return data !== null;
   }
 };
 
 function MemberList() {
   const [members, setMembers] = useState([]);
+  const [benefitRecords, setBenefitRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [statusFilter, setStatusFilter] = useState("approved");
-  const [barangayFilter, setBarangayFilter] = useState("All");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [sortOption, setSortOption] = useState("name-asc");
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [filters, setFilters] = useState({
+    status: "approved",
+    barangay: "All",
+    benefits: "all",
+    dateRange: "all",
+    sort: "name-asc",
+    customDateRange: { start: "", end: "" }
+  });
+  const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage] = useState(10);
   const navigate = useNavigate();
 
-  // Load initial data from cache
-  useEffect(() => {
-    const cachedMembers = cache.get(CACHE_KEYS.MEMBERS);
-    if (cachedMembers) {
-      setMembers(cachedMembers);
-      setLoading(false);
-    }
-  }, []);
+  // Handle filter changes
+  const handleFilterChange = (filterType, value) => {
+    setFilters(prev => ({
+      ...prev,
+      [filterType]: value
+    }));
+  };
 
-  const fetchMembers = useCallback(async (forceRefresh = false) => {
+  // Algorithm: Count benefits from benefit_records table
+  const calculateMemberBenefits = (membersData, recordsData) => {
+    const benefitsCountMap = {};
+
+    recordsData.forEach(record => {
+      if (record.user_id) {
+        benefitsCountMap[record.user_id] = (benefitsCountMap[record.user_id] || 0) + 1;
+      }
+    });
+
+    return membersData.map(member => ({
+      ...member,
+      benefits_received: benefitsCountMap[member.id] || 0,
+      benefit_records: recordsData.filter(record => record.user_id === member.id)
+    }));
+  };
+
+  // Load data with incremental caching
+  const loadData = async (forceRefresh = false) => {
     try {
-      if (forceRefresh) {
-        setRefreshing(true);
+      setLoading(true);
+      setRefreshing(true);
+
+      // Try to get cached data first
+      let cachedMembers = incrementalCache.get(CACHE_KEYS.MEMBERS);
+      let cachedBenefitRecords = incrementalCache.get(CACHE_KEYS.BENEFIT_RECORDS);
+
+      // If we have cached data and not forcing refresh, use it while fetching updates
+      if (cachedMembers && cachedBenefitRecords && !forceRefresh) {
+        setMembers(cachedMembers);
+        setBenefitRecords(cachedBenefitRecords);
+
+        // Fetch updates in background
+        fetchUpdates();
       } else {
-        setLoading(true);
+        // No cache or force refresh - do full load
+        await fetchFullData();
       }
 
-      // Check cache first unless force refresh
-      const cachedMembers = !forceRefresh && cache.get(CACHE_KEYS.MEMBERS);
-      if (cachedMembers && !forceRefresh) {
-        setMembers(cachedMembers);
-        setLastUpdated(new Date());
-        return;
-      }
-
-      const response = await api.get("/users?role=member");
-      const membersData = response.data.data || response.data;
-      
-      setMembers(membersData);
-      cache.set(CACHE_KEYS.MEMBERS, membersData);
-      setLastUpdated(new Date());
     } catch (err) {
-      console.error(err);
-      // If API fails, try to use cached data as fallback
-      const cachedMembers = cache.get(CACHE_KEYS.MEMBERS);
-      if (cachedMembers) {
-        setMembers(cachedMembers);
-      }
+      console.error("Error loading data:", err);
+      // Fallback to cached data if available
+      const cachedMembers = incrementalCache.get(CACHE_KEYS.MEMBERS);
+      const cachedBenefitRecords = incrementalCache.get(CACHE_KEYS.BENEFIT_RECORDS);
+
+      if (cachedMembers) setMembers(cachedMembers);
+      if (cachedBenefitRecords) setBenefitRecords(cachedBenefitRecords);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  };
 
+  // Fetch full data (initial load or force refresh)
+  const fetchFullData = async () => {
+    const [membersResponse, recordsResponse] = await Promise.all([
+      api.get("/users?role=member"),
+      api.get("/benefit-records")
+    ]);
+
+    const membersData = membersResponse.data.data || membersResponse.data;
+    const recordsData = recordsResponse.data || [];
+
+    // Use incremental cache to store data
+    const mergedMembers = incrementalCache.mergeMembers(membersData);
+    const mergedRecords = incrementalCache.mergeBenefitRecords(recordsData);
+
+    // Calculate benefits and update state
+    const membersWithBenefits = calculateMemberBenefits(mergedMembers, mergedRecords);
+
+    setMembers(membersWithBenefits);
+    setBenefitRecords(mergedRecords);
+    setLastUpdated(new Date());
+  };
+
+  // Fetch only updates (incremental)
+  const fetchUpdates = async () => {
+    try {
+      const [membersResponse, recordsResponse] = await Promise.all([
+        api.get("/users?role=member"),
+        api.get("/benefit-records")
+      ]);
+
+      const membersData = membersResponse.data.data || membersResponse.data;
+      const recordsData = recordsResponse.data || [];
+
+      // Merge new data with existing cache
+      const mergedMembers = incrementalCache.mergeMembers(membersData);
+      const mergedRecords = incrementalCache.mergeBenefitRecords(recordsData);
+
+      // Only update state if there are actual changes
+      const currentMembersHash = generateHash(members);
+      const newMembersHash = generateHash(mergedMembers);
+
+      if (currentMembersHash !== newMembersHash) {
+        const membersWithBenefits = calculateMemberBenefits(mergedMembers, mergedRecords);
+        setMembers(membersWithBenefits);
+        setBenefitRecords(mergedRecords);
+        setLastUpdated(new Date());
+      }
+    } catch (err) {
+      console.error("Error fetching updates:", err);
+      // Silently fail - we already have cached data
+    }
+  };
+
+  // Load data on component mount
   useEffect(() => {
-    fetchMembers();
-    // Increase interval since we have caching now
-    const interval = setInterval(() => fetchMembers(), 300000); // 5 minutes
-    return () => clearInterval(interval);
-  }, [fetchMembers]);
+    loadData();
+
+    // Set up periodic updates (every 1 minute)
+    const updateInterval = setInterval(() => {
+      fetchUpdates();
+    }, 60 * 1000);
+
+    // Set up storage event listener for cross-tab sync
+    const handleStorageChange = (e) => {
+      if (e.key === CACHE_KEYS.MEMBERS || e.key === CACHE_KEYS.BENEFIT_RECORDS) {
+        if (e.newValue) {
+          const newData = JSON.parse(e.newValue);
+          if (newData.data) {
+            // Data was updated in another tab, refresh our state
+            if (e.key === CACHE_KEYS.MEMBERS) {
+              const membersWithBenefits = calculateMemberBenefits(newData.data, benefitRecords);
+              setMembers(membersWithBenefits);
+            } else if (e.key === CACHE_KEYS.BENEFIT_RECORDS) {
+              const membersWithBenefits = calculateMemberBenefits(members, newData.data);
+              setBenefitRecords(newData.data);
+              setMembers(membersWithBenefits);
+            }
+            setLastUpdated(new Date());
+          }
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+
+    return () => {
+      clearInterval(updateInterval);
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
 
   const handleStatusChange = async (id, newStatus) => {
     const oldMembers = [...members];
     try {
-      setMembers((prev) =>
-        prev.map((m) => (m.id === id ? { ...m, status: newStatus } : m))
+      const updatedMembers = members.map((m) =>
+        m.id === id ? { ...m, status: newStatus, updated_at: new Date().toISOString() } : m
       );
+      setMembers(updatedMembers);
+
+      // Update cache with the changed member
+      incrementalCache.mergeMembers(updatedMembers);
+
       await api.patch(`/user/${id}/status`, { status: newStatus });
-      
-      // Update cache after successful status change
-      const updatedMembers = members.map((m) => 
-        m.id === id ? { ...m, status: newStatus } : m
-      );
-      cache.set(CACHE_KEYS.MEMBERS, updatedMembers);
     } catch (err) {
       console.error("Failed to update status", err);
       setMembers(oldMembers);
+      incrementalCache.set(CACHE_KEYS.MEMBERS, oldMembers);
     }
   };
 
   // Manual refresh function
   const handleRefresh = () => {
-    cache.clear(CACHE_KEYS.MEMBERS);
-    fetchMembers(true);
-    setCurrentPage(1); // Reset to first page on refresh
+    loadData(true);
   };
 
-  // Memoized filtered members to prevent unnecessary recalculations
+  // Navigate to member registration
+  const handleAddMember = () => {
+    navigate("/member/register");
+  };
+
+  // Navigate to member details
+  const handleViewMember = (memberId) => {
+    navigate(`/members/${memberId}`); // Changed from /user/{id} to /members/{id}
+  };
+
+  // Clear all cache (useful for debugging)
+  const handleClearCache = () => {
+    incrementalCache.invalidateAll();
+    loadData(true);
+  };
+
+  // Calculate benefits statistics
+  const benefitsStats = useMemo(() => {
+    const totalBenefits = benefitRecords.length;
+    const membersWithBenefits = members.filter(m => m.benefits_received > 0).length;
+
+    const averageBenefits = totalBenefits > 0 && membersWithBenefits > 0
+      ? (totalBenefits / membersWithBenefits).toFixed(1)
+      : 0;
+
+    const topBeneficiaries = members
+      .filter(m => m.benefits_received > 0)
+      .sort((a, b) => b.benefits_received - a.benefits_received)
+      .slice(0, 5)
+      .map(member => ({
+        member,
+        count: member.benefits_received
+      }));
+
+    return {
+      totalBenefits,
+      membersWithBenefits,
+      averageBenefits,
+      topBeneficiaries,
+      hasBenefits: totalBenefits > 0
+    };
+  }, [members, benefitRecords]);
+
+  // Filtering and sorting
   const filteredMembers = useMemo(() => {
-    return members
-      .filter((m) =>
-        statusFilter === "all"
-          ? true
-          : m.status?.toLowerCase() === statusFilter.toLowerCase()
-      )
-      .filter((m) => {
-        // Barangay filter
-        if (barangayFilter !== "All") {
-          if (m.member_profile?.barangay !== barangayFilter) {
-            return false;
-          }
-        }
+    let filtered = members.filter((m) => {
+      // Status filter
+      if (filters.status !== "all" && m.status?.toLowerCase() !== filters.status.toLowerCase()) {
+        return false;
+      }
 
-        // Search filter
-        const term = searchTerm.toLowerCase();
-        const fullName = `${m.member_profile?.first_name || ''} ${m.member_profile?.middle_name || ''} ${m.member_profile?.last_name || ''}`.toLowerCase();
-        const barangay = m.member_profile?.barangay?.toLowerCase() || '';
+      // Barangay filter
+      if (filters.barangay !== "All" && m.member_profile?.barangay !== filters.barangay) {
+        return false;
+      }
 
-        return (
-          m.username?.toLowerCase().includes(term) ||
-          m.email?.toLowerCase().includes(term) ||
-          fullName.includes(term) ||
-          barangay.includes(term)
-        );
-      })
-      .sort((a, b) => {
-        const profileA = a.member_profile || {};
-        const profileB = b.member_profile || {};
+      // Search filter
+      const term = searchTerm.toLowerCase();
+      const fullName = `${m.member_profile?.first_name || ''} ${m.member_profile?.middle_name || ''} ${m.member_profile?.last_name || ''}`.toLowerCase();
+      const barangay = m.member_profile?.barangay?.toLowerCase() || '';
 
-        if (sortOption === "name-asc") {
-          const nameA = `${profileA.first_name || ""} ${profileA.last_name || ""}`.toLowerCase();
-          const nameB = `${profileB.first_name || ""} ${profileB.last_name || ""}`.toLowerCase();
-          return nameA.localeCompare(nameB);
+      if (!(m.username?.toLowerCase().includes(term) ||
+        m.email?.toLowerCase().includes(term) ||
+        fullName.includes(term) ||
+        barangay.includes(term))) {
+        return false;
+      }
+
+      // Benefits filter
+      if (filters.benefits !== "all") {
+        const benefitsCount = m.benefits_received || 0;
+        switch (filters.benefits) {
+          case "none": if (benefitsCount > 0) return false; break;
+          case "1-5": if (benefitsCount < 1 || benefitsCount > 5) return false; break;
+          case "6-10": if (benefitsCount < 6 || benefitsCount > 10) return false; break;
+          case "10+": if (benefitsCount <= 10) return false; break;
+          default: break;
         }
-        if (sortOption === "name-desc") {
-          const nameA = `${profileA.first_name || ""} ${profileA.last_name || ""}`.toLowerCase();
-          const nameB = `${profileB.first_name || ""} ${profileB.last_name || ""}`.toLowerCase();
-          return nameB.localeCompare(nameA);
-        }
-        if (sortOption === "date-newest") {
+      }
+
+      return true;
+    });
+
+    // Sorting
+    return filtered.sort((a, b) => {
+      const profileA = a.member_profile || {};
+      const profileB = b.member_profile || {};
+
+      switch (filters.sort) {
+        case "name-asc":
+          return `${profileA.first_name} ${profileA.last_name}`.localeCompare(`${profileB.first_name} ${profileB.last_name}`);
+        case "name-desc":
+          return `${profileB.first_name} ${profileB.last_name}`.localeCompare(`${profileA.first_name} ${profileA.last_name}`);
+        case "date-newest":
           return new Date(b.created_at) - new Date(a.created_at);
-        }
-        if (sortOption === "date-oldest") {
+        case "date-oldest":
           return new Date(a.created_at) - new Date(b.created_at);
-        }
-        if (sortOption === "barangay-asc") {
+        case "barangay-asc":
           return (profileA.barangay || "").localeCompare(profileB.barangay || "");
-        }
-        return 0;
-      });
-  }, [members, statusFilter, barangayFilter, searchTerm, sortOption]);
+        case "benefits-desc":
+          return (b.benefits_received || 0) - (a.benefits_received || 0);
+        case "benefits-asc":
+          return (a.benefits_received || 0) - (b.benefits_received || 0);
+        default:
+          return 0;
+      }
+    });
+  }, [members, filters, searchTerm]);
 
-  // Pagination calculations
+  // Pagination
   const totalPages = Math.ceil(filteredMembers.length / rowsPerPage);
   const indexOfLastRow = currentPage * rowsPerPage;
   const indexOfFirstRow = indexOfLastRow - rowsPerPage;
   const currentRows = filteredMembers.slice(indexOfFirstRow, indexOfLastRow);
 
-  // Reset to first page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, barangayFilter, statusFilter, sortOption]);
+  }, [searchTerm, filters]);
 
-  // Memoized status counts
+  // Memoized counts
   const statusCounts = useMemo(() => {
     return members.reduce((acc, member) => {
       const status = member.status || "pending";
@@ -252,7 +489,6 @@ function MemberList() {
     }, {});
   }, [members]);
 
-  // Memoized barangay counts
   const barangayCounts = useMemo(() => {
     return members.reduce((acc, member) => {
       const barangay = member.member_profile?.barangay || "Unspecified";
@@ -261,64 +497,59 @@ function MemberList() {
     }, {});
   }, [members]);
 
-  // Memoized available barangays
   const availableBarangays = useMemo(() => {
-    return [...new Set(
-      members
-        .map(member => member.member_profile?.barangay)
-        .filter(Boolean)
-    )].sort();
+    return [...new Set(members.map(member => member.member_profile?.barangay).filter(Boolean))].sort();
   }, [members]);
 
-  // Status options
+  // Options
   const statusOptions = [
-    {
-      key: "approved",
-      label: "Active",
-      icon: <CheckCircle size={16} />,
-      color: "bg-green-500 text-white",
-      hoverColor: "hover:bg-green-600"
-    },
-    {
-      key: "pending",
-      label: "Pending Review",
-      icon: <Clock size={16} />,
-      color: "bg-yellow-500 text-white",
-      hoverColor: "hover:bg-yellow-600"
-    },
-    {
-      key: "rejected",
-      label: "Rejected",
-      icon: <XCircle size={16} />,
-      color: "bg-red-500 text-white",
-      hoverColor: "hover:bg-red-600"
-    },
-    {
-      key: "inactive",
-      label: "Inactive",
-      icon: <Ban size={16} />,
-      color: "bg-orange-500 text-white",
-      hoverColor: "hover:bg-orange-600"
-    },
-    {
-      key: "deceased",
-      label: "Deceased",
-      icon: <UserX size={16} />,
-      color: "bg-gray-500 text-white",
-      hoverColor: "hover:bg-gray-600"
-    },
+    { value: "approved", label: `Active (${statusCounts.approved || 0})` },
+    { value: "pending", label: `Pending Review (${statusCounts.pending || 0})` },
+    { value: "rejected", label: `Rejected (${statusCounts.rejected || 0})` },
+    { value: "inactive", label: `Inactive (${statusCounts.inactive || 0})` },
+    { value: "deceased", label: `Deceased (${statusCounts.deceased || 0})` },
   ];
 
-  if (loading) {
+  const benefitsOptions = [
+    { value: "all", label: "All Benefits" },
+    { value: "none", label: "No Benefits" },
+    { value: "1-5", label: "1-5 Benefits" },
+    { value: "6-10", label: "6-10 Benefits" },
+    { value: "10+", label: "10+ Benefits" }
+  ];
+
+  const sortOptions = [
+    { value: "name-asc", label: "Name (A-Z)" },
+    { value: "name-desc", label: "Name (Z-A)" },
+    { value: "date-newest", label: "Newest First" },
+    { value: "date-oldest", label: "Oldest First" },
+    { value: "barangay-asc", label: "Barangay (A-Z)" },
+    { value: "benefits-desc", label: "Most Benefits" },
+    { value: "benefits-asc", label: "Fewest Benefits" }
+  ];
+
+  const isAnyFilterActive = searchTerm || filters.barangay !== "All" || filters.status !== "approved" ||
+    filters.benefits !== "all" || filters.dateRange !== "all";
+
+  const clearAllFilters = () => {
+    setSearchTerm("");
+    setFilters({
+      status: "approved",
+      barangay: "All",
+      benefits: "all",
+      dateRange: "all",
+      sort: "name-asc",
+      customDateRange: { start: "", end: "" }
+    });
+  };
+
+  if (loading && !refreshing) {
     return (
       <Layout>
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-100 flex items-center justify-center">
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
           <div className="text-center">
-            <div className="w-20 h-20 border-8 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto"></div>
-            <p className="mt-4 text-xl font-semibold text-blue-600 animate-pulse">
-              Loading Members...
-            </p>
-            <p className="text-gray-600 text-sm mt-2">Please wait a moment 👥</p>
+            <div className="w-16 h-16 border-4 border-gray-300 border-t-blue-600 rounded-full animate-spin mx-auto"></div>
+            <p className="mt-4 text-lg font-medium text-gray-600">Loading Members...</p>
           </div>
         </div>
       </Layout>
@@ -327,147 +558,174 @@ function MemberList() {
 
   return (
     <Layout>
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-100 py-8 px-4">
-        {/* Background Decoration */}
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse-slow"></div>
-          <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-indigo-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse-slow delay-1000"></div>
-        </div>
-
-        <div className="max-w-7xl mx-auto relative">
-          {/* Cache Status Indicator */}
-          <div className="mb-4 flex justify-between items-center">
-            <div className="text-sm text-gray-600">
-              {cache.isValid(CACHE_KEYS.MEMBERS) ? (
-                <span className="text-green-600 flex items-center gap-2">
-                  <CheckCircle size={16} />
-                  Using cached data
-                </span>
-              ) : (
-                <span className="text-yellow-600 flex items-center gap-2">
-                  <RefreshCw size={16} />
-                  Fetching fresh data
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-4">
-              {lastUpdated && (
-                <span className="text-xs text-gray-500">
-                  Last updated: {lastUpdated.toLocaleTimeString()}
-                </span>
-              )}
-              <button
-                onClick={handleRefresh}
-                disabled={refreshing}
-                className="flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-700 
-                         rounded-lg text-sm font-medium hover:bg-blue-200 
-                         transition-colors disabled:opacity-50"
-              >
-                <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
-                {refreshing ? "Refreshing..." : "Refresh"}
-              </button>
-            </div>
-          </div>
+      <div className="min-h-screen bg-gray-50 py-6 px-4">
+        <div className="max-w-7xl mx-auto">
 
           {/* Header */}
-          <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 p-8 mb-8">
-            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-8">
-              <div className="flex items-start gap-6">
-                <div className="bg-gradient-to-br from-blue-500 to-purple-600 p-4 rounded-2xl shadow-lg">
-                  <Users className="w-8 h-8 text-white" />
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-6">
+            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+              <div className="flex items-start gap-4">
+                <div className="bg-blue-600 p-3 rounded-xl">
+                  <Users className="w-6 h-6 text-white" />
                 </div>
                 <div className="flex-1">
-                  <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                    Member Management
-                  </h1>
-                  <div className="mt-4 space-y-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                      <h2 className="text-lg font-semibold text-gray-800">
-                        Manage and review all registered members
-                      </h2>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
-                      <span className="flex items-center gap-2 bg-blue-50 px-3 py-1 rounded-full">
-                        <Users className="w-4 h-4 text-blue-500" />
-                        Total Members: {members.length}
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <h1 className="text-2xl font-bold text-gray-900">Member Management</h1>
+                    <button
+                      onClick={handleRefresh}
+                      disabled={refreshing}
+                      className={`flex items-center gap-2 px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors ${refreshing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                      {refreshing ? 'Refreshing...' : 'Refresh'}
+                    </button>
+                  </div>
+                  <p className="text-gray-600 mt-2">Manage and review all registered members</p>
+                  <div className="flex flex-wrap items-center gap-4 mt-4 text-sm text-gray-600">
+                    <span className="flex items-center gap-2 bg-gray-100 px-3 py-1 rounded-full">
+                      <Users className="w-4 h-4 text-gray-500" />
+                      Total Members: {members.length}
+                    </span>
+                    <span className="flex items-center gap-2 bg-green-100 px-3 py-1 rounded-full">
+                      <UserCheck className="w-4 h-4 text-green-600" />
+                      Active: {statusCounts.approved || 0}
+                    </span>
+                    <span className="flex items-center gap-2 bg-purple-100 px-3 py-1 rounded-full">
+                      <Award className="w-4 h-4 text-purple-600" />
+                      Total Benefits: {benefitsStats.totalBenefits}
+                    </span>
+                    {lastUpdated && (
+                      <span className="flex items-center gap-2 bg-blue-100 px-3 py-1 rounded-full">
+                        <RefreshCw className="w-4 h-4 text-blue-600" />
+                        Updated: {lastUpdated.toLocaleTimeString()}
                       </span>
-                      <span className="flex items-center gap-2 bg-green-50 px-3 py-1 rounded-full">
-                        <UserCheck className="w-4 h-4 text-green-500" />
-                        Active: {statusCounts.approved || 0}
-                      </span>
-                      <span className="flex items-center gap-2 bg-yellow-50 px-3 py-1 rounded-full">
-                        <Clock className="w-4 h-4 text-yellow-500" />
-                        Pending: {statusCounts.pending || 0}
-                      </span>
-                    </div>
+                    )}
                   </div>
                 </div>
               </div>
 
               {/* Statistics */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 min-w-[400px]">
-                <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white p-5 rounded-2xl shadow-lg text-center">
-                  <Users className="w-7 h-7 mx-auto mb-3 opacity-90" />
-                  <div className="text-2xl font-bold">{members.length}</div>
-                  <div className="text-blue-100 text-xs font-medium">Total Members</div>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 min-w-[300px]">
+                <div className="bg-white border border-gray-200 p-4 rounded-xl text-center">
+                  <Users className="w-5 h-5 text-blue-600 mx-auto mb-2" />
+                  <div className="text-lg font-bold text-gray-900">{members.length}</div>
+                  <div className="text-gray-500 text-xs">Total Members</div>
                 </div>
-                <div className="bg-gradient-to-br from-green-500 to-green-600 text-white p-5 rounded-2xl shadow-lg text-center">
-                  <UserCheck className="w-7 h-7 mx-auto mb-3 opacity-90" />
-                  <div className="text-2xl font-bold">{statusCounts.approved || 0}</div>
-                  <div className="text-green-100 text-xs font-medium">Active</div>
+                <div className="bg-white border border-gray-200 p-4 rounded-xl text-center">
+                  <UserCheck className="w-5 h-5 text-green-600 mx-auto mb-2" />
+                  <div className="text-lg font-bold text-gray-900">{statusCounts.approved || 0}</div>
+                  <div className="text-gray-500 text-xs">Active</div>
                 </div>
-                <div className="bg-gradient-to-br from-yellow-500 to-yellow-600 text-white p-5 rounded-2xl shadow-lg text-center">
-                  <Clock className="w-7 h-7 mx-auto mb-3 opacity-90" />
-                  <div className="text-2xl font-bold">{statusCounts.pending || 0}</div>
-                  <div className="text-yellow-100 text-xs font-medium">Pending</div>
+                <div className="bg-white border border-gray-200 p-4 rounded-xl text-center">
+                  <Award className="w-5 h-5 text-purple-600 mx-auto mb-2" />
+                  <div className="text-lg font-bold text-gray-900">{benefitsStats.membersWithBenefits}</div>
+                  <div className="text-gray-500 text-xs">With Benefits</div>
                 </div>
-                <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white p-5 rounded-2xl shadow-lg text-center">
-                  <MapPin className="w-7 h-7 mx-auto mb-3 opacity-90" />
-                  <div className="text-2xl font-bold">{Object.keys(barangayCounts).length}</div>
-                  <div className="text-purple-100 text-xs font-medium">Barangays</div>
+                <div className="bg-white border border-gray-200 p-4 rounded-xl text-center">
+                  <RefreshCw className="w-5 h-5 text-gray-600 mx-auto mb-2" />
+                  <div className="text-lg font-bold text-gray-900">Incremental</div>
+                  <div className="text-gray-500 text-xs">Smart Cache</div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Search + Filters */}
-          <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-white/20 p-6 mb-8">
-            <div className="flex flex-col lg:flex-row lg:items-end gap-6">
-              {/* Search */}
+          {/* Top Beneficiaries */}
+          {benefitsStats.hasBenefits && benefitsStats.topBeneficiaries.length > 0 && (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <Award className="w-5 h-5 text-purple-600" />
+                Top Beneficiaries
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {benefitsStats.topBeneficiaries.map(({ member, count }, index) => {
+                  const profile = member.member_profile || {};
+                  const fullName = `${profile.first_name || ""} ${profile.last_name || ""}`.trim();
+
+                  return (
+                    <div key={member.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center justify-center w-8 h-8 bg-purple-100 text-purple-600 rounded-full font-semibold text-sm">
+                        #{index + 1}
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-medium text-gray-900">{fullName || "Unnamed Member"}</div>
+                        <div className="text-sm text-gray-500">{profile.barangay || "—"}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-bold text-purple-600">{count}</div>
+                        <div className="text-xs text-gray-500">benefits</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-4 text-sm text-gray-600">
+                <span className="font-medium">Total Benefits Distributed:</span> {benefitsStats.totalBenefits} •
+                <span className="font-medium ml-2">Average per Member:</span> {benefitsStats.averageBenefits}
+              </div>
+            </div>
+          )}
+
+          {/* Search and Filters */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-6">
+            <div className="flex flex-col lg:flex-row lg:items-end gap-4 mb-6">
               <div className="flex-1">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Search Members
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Search Members</label>
                 <div className="relative">
-                  <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input
                     type="text"
                     placeholder="Search by name, username, email, or barangay..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-12 pr-4 py-4 border border-gray-200 rounded-2xl 
-                             bg-white/60 backdrop-blur-sm focus:ring-2 focus:ring-blue-500 
-                             focus:border-blue-500 transition-all duration-200 placeholder-gray-400
-                             shadow-sm hover:shadow-md focus:shadow-lg"
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
                   />
                 </div>
               </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleRefresh}
+                  disabled={refreshing}
+                  className={`flex items-center gap-2 px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl transition-all duration-200 font-medium ${refreshing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                  Refresh
+                </button>
+                <button
+                  onClick={handleAddMember}
+                  className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all duration-200 font-medium shadow-sm"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Member
+                </button>
+              </div>
+            </div>
 
-              {/* Barangay Filter */}
-              <div className="w-full lg:w-64">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Filter by Barangay
-                </label>
+            {/* Filter Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
                 <div className="relative">
-                  <Filter className="absolute left-4 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <select
-                    value={barangayFilter}
-                    onChange={(e) => setBarangayFilter(e.target.value)}
-                    className="w-full pl-12 pr-10 py-4 border border-gray-200 rounded-2xl 
-                             bg-white/60 backdrop-blur-sm focus:ring-2 focus:ring-blue-500 
-                             focus:border-blue-500 transition-all duration-200 appearance-none
-                             shadow-sm hover:shadow-md focus:shadow-lg"
+                    value={filters.status}
+                    onChange={(e) => handleFilterChange('status', e.target.value)}
+                    className="w-full pl-3 pr-10 py-3 border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 appearance-none"
+                  >
+                    {statusOptions.map(option => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Barangay</label>
+                <div className="relative">
+                  <select
+                    value={filters.barangay}
+                    onChange={(e) => handleFilterChange('barangay', e.target.value)}
+                    className="w-full pl-3 pr-10 py-3 border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 appearance-none"
                   >
                     <option value="All">All Barangays</option>
                     {availableBarangays.map(barangay => (
@@ -476,236 +734,162 @@ function MemberList() {
                       </option>
                     ))}
                   </select>
-                  <ChevronDown className="absolute right-4 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                  <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                 </div>
               </div>
 
-              {/* Sort Option */}
-              <div className="w-full lg:w-64">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Sort By
-                </label>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Benefits</label>
                 <select
-                  value={sortOption}
-                  onChange={(e) => setSortOption(e.target.value)}
-                  className="w-full px-4 py-4 border border-gray-200 rounded-2xl 
-                           bg-white/60 backdrop-blur-sm focus:ring-2 focus:ring-blue-500 
-                           focus:border-blue-500 transition-all duration-200 appearance-none
-                           shadow-sm hover:shadow-md focus:shadow-lg"
+                  value={filters.benefits}
+                  onChange={(e) => handleFilterChange('benefits', e.target.value)}
+                  className="w-full px-3 py-3 border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
                 >
-                  <option value="name-asc">Name (A-Z)</option>
-                  <option value="name-desc">Name (Z-A)</option>
-                  <option value="date-newest">Newest First</option>
-                  <option value="date-oldest">Oldest First</option>
-                  <option value="barangay-asc">Barangay (A-Z)</option>
+                  {benefitsOptions.map(option => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
                 </select>
               </div>
 
-              {/* Add Member Button */}
-              <button
-                onClick={() => navigate("/member/register")}
-                className="flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-green-500 to-green-600 
-                         hover:from-green-600 hover:to-green-700 text-white rounded-2xl 
-                         transition-all duration-200 font-semibold shadow-lg hover:shadow-xl 
-                         transform hover:-translate-y-0.5"
-              >
-                <Plus className="w-5 h-5" />
-                Add Member
-              </button>
-            </div>
-
-            {/* Status Filter Buttons */}
-            <div className="mt-6">
-              <label className="block text-sm font-semibold text-gray-700 mb-3">
-                Filter by Status
-              </label>
-              <div className="flex flex-wrap gap-3">
-                {statusOptions.map(({ key, label, icon, color, hoverColor }) => (
-                  <button
-                    key={key}
-                    onClick={() => setStatusFilter(key)}
-                    className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-semibold transition-all duration-200 ${statusFilter === key
-                        ? "ring-4 ring-blue-200 ring-offset-2 transform scale-105 shadow-lg"
-                        : `hover:scale-105 hover:shadow-lg ${hoverColor}`
-                      } ${color}`}
-                  >
-                    {icon}
-                    {label}
-                    <span className="bg-white bg-opacity-30 px-2 py-1 rounded-full text-xs font-bold">
-                      {statusCounts[key] || 0}
-                    </span>
-                  </button>
-                ))}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Sort By</label>
+                <select
+                  value={filters.sort}
+                  onChange={(e) => handleFilterChange('sort', e.target.value)}
+                  className="w-full px-3 py-3 border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                >
+                  {sortOptions.map(option => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
               </div>
             </div>
 
             {/* Active Filters Display */}
-            {(searchTerm || barangayFilter !== "All" || statusFilter !== "approved") && (
-              <div className="flex flex-wrap items-center gap-3 mt-6 pt-6 border-t border-gray-100">
-                <span className="text-sm font-semibold text-gray-600">Active filters:</span>
-
+            {isAnyFilterActive && (
+              <div className="flex flex-wrap items-center gap-2 mt-4 pt-4 border-t border-gray-200">
+                <span className="text-sm font-medium text-gray-700">Active filters:</span>
                 {searchTerm && (
-                  <span className="bg-blue-100 text-blue-800 text-sm px-4 py-2 rounded-full flex items-center gap-2 font-medium">
+                  <span className="bg-blue-100 text-blue-800 text-sm px-3 py-1 rounded-full flex items-center gap-2">
                     Search: "{searchTerm}"
-                    <button
-                      onClick={() => setSearchTerm("")}
-                      className="text-blue-600 hover:text-blue-800 font-bold text-lg leading-none"
-                    >
-                      ×
-                    </button>
+                    <button onClick={() => setSearchTerm("")} className="text-blue-600 hover:text-blue-800">×</button>
                   </span>
                 )}
-
-                {barangayFilter !== "All" && (
-                  <span className="bg-purple-100 text-purple-800 text-sm px-4 py-2 rounded-full flex items-center gap-2 font-medium">
-                    Barangay: {barangayFilter}
-                    <button
-                      onClick={() => setBarangayFilter("All")}
-                      className="text-purple-600 hover:text-purple-800 font-bold text-lg leading-none"
-                    >
-                      ×
-                    </button>
+                {filters.barangay !== "All" && (
+                  <span className="bg-green-100 text-green-800 text-sm px-3 py-1 rounded-full flex items-center gap-2">
+                    Barangay: {filters.barangay}
+                    <button onClick={() => handleFilterChange('barangay', 'All')} className="text-green-600 hover:text-green-800">×</button>
                   </span>
                 )}
-
-                {statusFilter !== "approved" && (
-                  <span className="bg-green-100 text-green-800 text-sm px-4 py-2 rounded-full flex items-center gap-2 font-medium">
-                    Status: {statusOptions.find(s => s.key === statusFilter)?.label}
-                    <button
-                      onClick={() => setStatusFilter("approved")}
-                      className="text-green-600 hover:text-green-800 font-bold text-lg leading-none"
-                    >
-                      ×
-                    </button>
+                {filters.status !== "approved" && (
+                  <span className="bg-purple-100 text-purple-800 text-sm px-3 py-1 rounded-full flex items-center gap-2">
+                    Status: {filters.status}
+                    <button onClick={() => handleFilterChange('status', 'approved')} className="text-purple-600 hover:text-purple-800">×</button>
                   </span>
                 )}
-
-                <button
-                  onClick={() => {
-                    setSearchTerm("");
-                    setBarangayFilter("All");
-                    setStatusFilter("approved");
-                  }}
-                  className="text-sm text-gray-600 hover:text-gray-800 font-semibold underline ml-auto"
-                >
-                  Clear all filters
-                </button>
+                {filters.benefits !== "all" && (
+                  <span className="bg-orange-100 text-orange-800 text-sm px-3 py-1 rounded-full flex items-center gap-2">
+                    Benefits: {filters.benefits}
+                    <button onClick={() => handleFilterChange('benefits', 'all')} className="text-orange-600 hover:text-orange-800">×</button>
+                  </span>
+                )}
+                <button onClick={clearAllFilters} className="text-sm text-gray-600 hover:text-gray-800 font-medium ml-auto">Clear all</button>
               </div>
             )}
           </div>
 
           {/* Results Summary */}
-          <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <span className="text-lg font-semibold text-gray-700">
-                Showing {Math.min(filteredMembers.length, rowsPerPage)} of {filteredMembers.length} members (Page {currentPage} of {totalPages})
-              </span>
-              {barangayFilter !== "All" && (
-                <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
-                  From {barangayFilter}
-                </span>
-              )}
-              {statusFilter !== "approved" && (
-                <span className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm font-medium">
-                  Status: {statusOptions.find(s => s.key === statusFilter)?.label}
-                </span>
-              )}
+          <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="text-gray-700">
+              Showing {Math.min(filteredMembers.length, rowsPerPage)} of {filteredMembers.length} members
+              {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
             </div>
-
             {filteredMembers.length > 0 && (
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span>Active: {statusCounts.approved || 0}</span>
-                <div className="w-2 h-2 bg-yellow-500 rounded-full ml-2"></div>
-                <span>Pending: {statusCounts.pending || 0}</span>
-                <div className="w-2 h-2 bg-red-500 rounded-full ml-2"></div>
-                <span>Rejected: {statusCounts.rejected || 0}</span>
+              <div className="flex items-center gap-4 text-sm text-gray-600">
+                <div className="flex items-center gap-2"><div className="w-2 h-2 bg-green-500 rounded-full"></div><span>Active: {statusCounts.approved || 0}</span></div>
+                <div className="flex items-center gap-2"><div className="w-2 h-2 bg-yellow-500 rounded-full"></div><span>Pending: {statusCounts.pending || 0}</span></div>
+                <div className="flex items-center gap-2"><div className="w-2 h-2 bg-red-500 rounded-full"></div><span>Rejected: {statusCounts.rejected || 0}</span></div>
+                <div className="flex items-center gap-2"><div className="w-2 h-2 bg-purple-500 rounded-full"></div><span>With Benefits: {benefitsStats.membersWithBenefits}</span></div>
               </div>
             )}
           </div>
 
           {/* Members Table */}
-          <section className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 overflow-hidden">
+          <section className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead>
-                  <tr className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
-                    <th className="px-8 py-5 font-semibold text-left text-sm uppercase tracking-wider">
-                      Member Information
-                    </th>
-                    <th className="px-8 py-5 font-semibold text-left text-sm uppercase tracking-wider">
-                      Username & Email
-                    </th>
-                    <th className="px-8 py-5 font-semibold text-left text-sm uppercase tracking-wider">
-                      Barangay
-                    </th>
-                    <th className="px-8 py-5 font-semibold text-left text-sm uppercase tracking-wider">
-                      Contact
-                    </th>
-                    <th className="px-8 py-5 font-semibold text-left text-sm uppercase tracking-wider">
-                      Status
-                    </th>
+                  <tr className="bg-gray-50 border-b border-gray-200">
+                    <th className="px-6 py-4 font-semibold text-left text-gray-900 text-sm uppercase tracking-wider">Member Information</th>
+                    <th className="px-6 py-4 font-semibold text-left text-gray-900 text-sm uppercase tracking-wider">Username & Email</th>
+                    <th className="px-6 py-4 font-semibold text-left text-gray-900 text-sm uppercase tracking-wider">Barangay</th>
+                    <th className="px-6 py-4 font-semibold text-left text-gray-900 text-sm uppercase tracking-wider">Benefits</th>
+                    <th className="px-6 py-4 font-semibold text-left text-gray-900 text-sm uppercase tracking-wider">Contact</th>
+                    <th className="px-6 py-4 font-semibold text-left text-gray-900 text-sm uppercase tracking-wider">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-200">
                   {currentRows.length > 0 ? (
                     currentRows.map((member) => {
                       const profile = member.member_profile || {};
                       const fullName = `${profile.first_name || ""} ${profile.middle_name || ""} ${profile.last_name || ""}`.trim();
+                      const benefitsCount = member.benefits_received || 0;
 
                       return (
                         <tr
                           key={member.id}
-                          onClick={() => navigate(`/members/${member.id}`)}
-                          className="hover:bg-gray-50/80 transition-all duration-150 group cursor-pointer"
+                          onClick={() => handleViewMember(member.id)}
+                          className="hover:bg-gray-50 transition-colors cursor-pointer"
                         >
-                          <td className="px-8 py-5">
+                          <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-purple-100 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                                <Users className="w-5 h-5 text-blue-600" />
+                              <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
+                                <Users className="w-4 h-4 text-gray-600" />
                               </div>
                               <div>
-                                <div className="font-semibold text-gray-900">
-                                  {fullName || "Unnamed Member"}
-                                </div>
-                                <div className="text-xs text-gray-500 mt-1">
-                                  ID: {member.id}
-                                </div>
+                                <div className="font-medium text-gray-900">{fullName || "Unnamed Member"}</div>
+                                <div className="text-xs text-gray-500 mt-1">ID: {member.id}</div>
                               </div>
                             </div>
                           </td>
-                          <td className="px-8 py-5">
+                          <td className="px-6 py-4">
                             <div className="flex flex-col">
-                              <div className="font-medium text-gray-900">
-                                @{member.username}
-                              </div>
-                              <div className="text-sm text-gray-500 mt-1">
-                                {member.email || "—"}
-                              </div>
+                              <div className="font-medium text-gray-900">@{member.username}</div>
+                              <div className="text-sm text-gray-500">{member.email || "—"}</div>
                             </div>
                           </td>
-                          <td className="px-8 py-5">
-                            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+                          <td className="px-6 py-4">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                               {profile.barangay || "—"}
                             </span>
                           </td>
-                          <td className="px-8 py-5 text-gray-700">
-                            {profile.contact_number ? (
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium">{profile.contact_number}</span>
-                              </div>
-                            ) : (
-                              "—"
-                            )}
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-2">
+                              <Award className={`w-4 h-4 ${benefitsCount === 0 ? 'text-gray-400' :
+                                  benefitsCount <= 5 ? 'text-yellow-500' :
+                                    benefitsCount <= 10 ? 'text-orange-500' : 'text-red-500'
+                                }`} />
+                              <span className={`font-medium ${benefitsCount === 0 ? 'text-gray-500' :
+                                  benefitsCount <= 5 ? 'text-yellow-600' :
+                                    benefitsCount <= 10 ? 'text-orange-600' : 'text-red-600'
+                                }`}>
+                                {benefitsCount}
+                              </span>
+                              {/* Safe percentage calculation */}
+                              {benefitsCount > 0 && benefitsStats.totalBenefits > 0 && (
+                                <span className="text-xs text-gray-400">
+                                  ({((benefitsCount / benefitsStats.totalBenefits) * 100).toFixed(1)}%)
+                                </span>
+                              )}
+                            </div>
                           </td>
-                          <td className="px-8 py-5">
+                          <td className="px-6 py-4 text-gray-700">{profile.contact_number || "—"}</td>
+                          <td className="px-6 py-4">
                             <select
                               value={member.status || "pending"}
                               onClick={(e) => e.stopPropagation()}
                               onChange={(e) => handleStatusChange(member.id, e.target.value)}
-                              className="border border-gray-300 rounded-xl px-4 py-2 bg-white/60 backdrop-blur-sm 
-                                       focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium
-                                       transition-all duration-200 hover:shadow-md"
+                              className="border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm transition-colors"
                             >
                               <option value="approved">Active</option>
                               <option value="pending">Pending Review</option>
@@ -719,16 +903,16 @@ function MemberList() {
                     })
                   ) : (
                     <tr>
-                      <td colSpan="5" className="px-8 py-16 text-center">
+                      <td colSpan="6" className="px-6 py-12 text-center">
                         <div className="flex flex-col items-center justify-center text-gray-400">
-                          <UserX className="w-20 h-20 mb-4 opacity-40" />
-                          <p className="text-xl font-semibold text-gray-500 mb-2">No members found</p>
+                          <UserX className="w-16 h-16 mb-4 opacity-40" />
+                          <p className="text-lg font-medium text-gray-500 mb-2">No members found</p>
                           <p className="text-sm max-w-md">
-                            {searchTerm || barangayFilter !== "All" || statusFilter !== "approved"
-                              ? "Try adjusting your search or filter criteria"
-                              : "No members have been registered yet"
-                            }
+                            {isAnyFilterActive ? "Try adjusting your search or filter criteria" : "No members have been registered yet"}
                           </p>
+                          {isAnyFilterActive && (
+                            <button onClick={clearAllFilters} className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm">Clear All Filters</button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -739,44 +923,24 @@ function MemberList() {
 
             {/* Pagination */}
             {filteredMembers.length > rowsPerPage && (
-              <div className="bg-white/60 border-t border-gray-200 px-8 py-6">
+              <div className="bg-gray-50 border-t border-gray-200 px-6 py-4">
                 <div className="flex items-center justify-between">
                   <div className="text-sm text-gray-700">
                     Showing {indexOfFirstRow + 1} to {Math.min(indexOfLastRow, filteredMembers.length)} of {filteredMembers.length} results
                   </div>
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                      disabled={currentPage === 1}
-                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                      Previous
+                    <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                      <ChevronLeft className="w-4 h-4" /> Previous
                     </button>
-                    
                     <div className="flex items-center gap-1">
                       {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                        <button
-                          key={page}
-                          onClick={() => setCurrentPage(page)}
-                          className={`px-3 py-1 text-sm font-medium rounded-lg transition-colors ${
-                            currentPage === page
-                              ? 'bg-blue-600 text-white'
-                              : 'text-gray-700 hover:bg-gray-100'
-                          }`}
-                        >
+                        <button key={page} onClick={() => setCurrentPage(page)} className={`px-3 py-1 text-sm font-medium rounded-lg transition-colors ${currentPage === page ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}>
                           {page}
                         </button>
                       ))}
                     </div>
-                    
-                    <button
-                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                      disabled={currentPage === totalPages}
-                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      Next
-                      <ChevronRight className="w-4 h-4" />
+                    <button onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages} className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                      Next <ChevronRight className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
@@ -785,14 +949,6 @@ function MemberList() {
           </section>
         </div>
       </div>
-
-      <style jsx>{`
-        @keyframes pulse-slow {
-          0%, 100% { opacity: 0.3; }
-          50% { opacity: 0.5; }
-        }
-        .animate-pulse-slow { animation: pulse-slow 4s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
-      `}</style>
     </Layout>
   );
 }

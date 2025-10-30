@@ -18,7 +18,7 @@ return new class extends Migration {
 
             // Relief-related fields
             $table->integer('budget_quantity')->nullable();   // total number of goods available
-            $table->string('unit')->nullable();               // e.g., "pack", "kg", "box"
+            $table->string('unit')->nullable();             // e.g., "pack", "kg", "box"
             $table->integer('locked_member_count')->nullable();            // number of members locked for this benefit
 
             $table->enum('status', ['active', 'inactive'])->default('active');

@@ -30,8 +30,8 @@ const CACHE_KEYS = {
   USER_DATA: 'cached_user_data',
   USER_BARANGAY: 'cached_user_barangay',
   BENEFIT_ATTENDANCE: 'cached_benefit_attendance',
-  STATS: 'cached_benefit_stats', 
-  LAST_UPDATED: 'cache_benefit_last_updated', 
+  STATS: 'cached_benefit_stats',
+  LAST_UPDATED: 'cache_benefit_last_updated',
   APP_STATE: 'cached_app_state_benefits'
 };
 
@@ -62,6 +62,7 @@ export default function MemberBenefits() {
 
   const lastFetchRef = useRef(0);
   const isMountedRef = useRef(true);
+  const benefitKeyCounterRef = useRef(0); // Counter for generating unique keys
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -667,6 +668,15 @@ export default function MemberBenefits() {
     }
   };
 
+  // Generate a stable key for benefits
+  const getBenefitKey = (benefit, index) => {
+    if (benefit && benefit.id) {
+      return benefit.id.toString();
+    }
+    // Fallback: use index with a prefix
+    return `benefit-${index}`;
+  };
+
   const renderStatsCard = () => (
     <View style={styles.statsContainer}>
       <View style={styles.statCard}>
@@ -953,7 +963,7 @@ export default function MemberBenefits() {
             ) : (
               <FlatList
                 data={benefits}
-                keyExtractor={(item) => item.id ? item.id.toString() : Math.random().toString()}
+                keyExtractor={(item, index) => getBenefitKey(item, index)}
                 renderItem={renderBenefitItem}
                 scrollEnabled={false}
                 showsVerticalScrollIndicator={false}
@@ -967,8 +977,6 @@ export default function MemberBenefits() {
     </LinearGradient>
   );
 }
-
-
 
 const styles = StyleSheet.create({
   container: {

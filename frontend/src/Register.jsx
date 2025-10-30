@@ -34,7 +34,7 @@ const FloatingInput = React.memo(function FloatingInput({
   return (
     <div className="relative group">
       {Icon && (
-        <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors duration-200 z-10">
+        <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-sky-500 transition-colors duration-200 z-10">
           <Icon size={18} />
         </div>
       )}
@@ -49,17 +49,17 @@ const FloatingInput = React.memo(function FloatingInput({
         className={`w-full border-2 rounded-xl bg-white/80 backdrop-blur-sm text-gray-900 
           transition-all duration-200 peer placeholder-transparent
           ${Icon ? "pl-12 pr-4 py-4" : "px-4 py-4"}
-          border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 hover:border-gray-300`}
+          border-gray-200 focus:border-sky-500 focus:ring-4 focus:ring-sky-100 hover:border-gray-300`}
       />
       <label
         className={`absolute transition-all duration-200 pointer-events-none
           ${Icon ? "left-12" : "left-4"}
           ${
             value || type === "date"
-              ? "top-2 text-xs font-medium text-blue-600"
+              ? "top-2 text-xs font-medium text-sky-600"
               : "top-1/2 transform -translate-y-1/2 text-base text-gray-500"
           }
-          peer-focus:top-2 peer-focus:text-xs peer-focus:font-medium peer-focus:text-blue-600 peer-focus:transform-none`}
+          peer-focus:top-2 peer-focus:text-xs peer-focus:font-medium peer-focus:text-sky-600 peer-focus:transform-none`}
       >
         {label} {required && <span className="text-red-500">*</span>}
       </label>
@@ -83,7 +83,7 @@ const FloatingSelect = React.memo(function FloatingSelect({
   return (
     <div className="relative group">
       {Icon && (
-        <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors duration-200 z-20">
+        <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-sky-500 transition-colors duration-200 z-20">
           <Icon size={18} />
         </div>
       )}
@@ -93,7 +93,7 @@ const FloatingSelect = React.memo(function FloatingSelect({
         onChange={onChange}
         required={required}
         className={`w-full border-2 border-gray-200 rounded-xl bg-white/80 backdrop-blur-sm 
-          transition-all duration-200 cursor-pointer hover:border-gray-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 relative z-10
+          transition-all duration-200 cursor-pointer hover:border-gray-300 focus:border-sky-500 focus:ring-4 focus:ring-sky-100 relative z-10
           ${hasValue ? "text-gray-900" : "text-gray-500"}
           ${Icon ? "pl-12 pr-4 py-4" : "px-4 py-4"}`}
       >
@@ -109,10 +109,10 @@ const FloatingSelect = React.memo(function FloatingSelect({
           ${Icon ? "left-12" : "left-4"}
           ${
             hasValue
-              ? "top-2 text-xs font-medium text-blue-600"
+              ? "top-2 text-xs font-medium text-sky-600"
               : "top-1/2 transform -translate-y-1/2 text-base text-gray-500"
           }
-          peer-focus:top-2 peer-focus:text-xs peer-focus:font-medium peer-focus:text-blue-600 peer-focus:transform-none`}
+          peer-focus:top-2 peer-focus:text-xs peer-focus:font-medium peer-focus:text-sky-600 peer-focus:transform-none`}
       >
         {label} {required && <span className="text-red-500">*</span>}
       </label>
@@ -196,11 +196,11 @@ function Register() {
   return (
     <>
       <Layout />
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 py-8 px-4">
+      <div className="min-h-screen bg-gradient-to-br from-sky-50 via-blue-50 to-sky-100 py-8 px-4">
         <div className="max-w-3xl mx-auto">
           {/* Header */}
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-full mb-4">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-sky-600 to-blue-600 rounded-full mb-4 shadow-lg">
               <Shield className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-4xl font-bold text-gray-900 mb-2">
@@ -218,7 +218,7 @@ function Register() {
 
           <form
             onSubmit={handleRegister}
-            className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-8 space-y-6"
+            className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-8 space-y-6"
           >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FloatingInput
@@ -336,8 +336,8 @@ function Register() {
               <button
                 type="submit"
                 disabled={loading}
-                className="inline-flex items-center px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 
-                  hover:from-blue-700 hover:to-purple-700 disabled:from-gray-400 disabled:to-gray-500 
+                className="inline-flex items-center px-8 py-4 bg-gradient-to-r from-sky-600 to-blue-600 
+                  hover:from-sky-700 hover:to-blue-700 disabled:from-gray-400 disabled:to-gray-500 
                   text-white font-bold text-lg rounded-2xl shadow-xl 
                   transform transition-all duration-200 hover:scale-105 active:scale-95 
                   disabled:cursor-not-allowed disabled:transform-none"
@@ -375,7 +375,7 @@ function Register() {
               </p>
               <button
                 onClick={closeModalAndRedirect}
-                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 
+                className="w-full bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700 
                   text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 transform hover:scale-105"
               >
                 Register Another Staff

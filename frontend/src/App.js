@@ -28,6 +28,7 @@ import BenefitsCreate from './BenefitsCreate';
 import BenefitsClaimRecord from './BenefitsClaimRecord';
 import PrintBenefitsReport from './PrintBenefitsReport';
 import PrintAttendanceReport from './PrintAttendance';
+import EditMemberProfile from './MemberEditProfile';
 
 // Route Guards
 const ProtectedRoute = () => {
@@ -59,6 +60,7 @@ function App() {
           <Route path="/member" element={<MemberList />} />
           <Route path="/member/register" element={<MemberRegister />} />
           <Route path="/members/:id" element={<MemberProfile />} />
+          <Route path="/members/:id/edit" element={<EditMemberProfile />} />
           <Route path="/print/:id" element={<Print />} />
 
           <Route path="/staff" element={<StaffList />} />

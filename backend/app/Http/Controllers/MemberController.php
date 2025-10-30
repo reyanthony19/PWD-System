@@ -273,6 +273,205 @@ class MemberController extends Controller
             ], 500);
         }
     }
+
+    // Update member profile by admin
+    public function updateMemberProfile(Request $request, $userId)
+    {
+        DB::beginTransaction();
+
+        try {
+            // Find the user
+            $user = User::findOrFail($userId);
+
+            // Validate the request data
+            $validated = $request->validate([
+                // User fields
+                'username' => 'sometimes|required|string|max:255|unique:users,username,' . $userId,
+                'email' => 'sometimes|required|string|email|unique:users,email,' . $userId,
+
+                // Member profile fields
+                'first_name' => 'sometimes|required|string|max:255',
+                'middle_name' => 'nullable|string|max:255',
+                'last_name' => 'sometimes|required|string|max:255',
+                'birthdate' => 'sometimes|required|date',
+                'sex' => 'sometimes|required|string|in:male,female',
+                'contact_number' => 'nullable|string|max:20',
+                'address' => 'sometimes|required|string|max:255',
+                'barangay' => 'sometimes|required|string|max:255',
+                'disability_type' => 'nullable|string|max:255',
+                'blood_type' => 'nullable|string|max:5',
+                'sss_number' => 'nullable|string|max:50',
+                'philhealth_number' => 'nullable|string|max:50',
+                'guardian_full_name' => 'nullable|string|max:255',
+                'guardian_relationship' => 'nullable|string|max:255',
+                'guardian_contact_number' => 'nullable|string|max:20',
+                'guardian_address' => 'nullable|string|max:255',
+            ]);
+
+            Log::info('Updating member profile', [
+                'user_id' => $userId,
+                'validated_data' => $validated
+            ]);
+
+            // Update user fields if provided
+            if (isset($validated['username'])) {
+                $user->username = $validated['username'];
+            }
+            if (isset($validated['email'])) {
+                $user->email = $validated['email'];
+            }
+            $user->save();
+
+            // Find or create member profile
+            $memberProfile = MemberProfile::where('user_id', $userId)->first();
+
+            if (!$memberProfile) {
+                // Create new member profile if it doesn't exist
+                $memberProfile = new MemberProfile();
+                $memberProfile->user_id = $userId;
+
+                // Generate ID number for new profiles
+                $idNumber = 'PDAO-' . str_pad($userId, 4, '0', STR_PAD_LEFT);
+                $memberProfile->id_number = $idNumber;
+            }
+
+            // Update member profile fields
+            $profileFields = [
+                'first_name',
+                'middle_name',
+                'last_name',
+                'birthdate',
+                'sex',
+                'contact_number',
+                'address',
+                'barangay',
+                'disability_type',
+                'blood_type',
+                'sss_number',
+                'philhealth_number',
+                'guardian_full_name',
+                'guardian_relationship',
+                'guardian_contact_number',
+                'guardian_address'
+            ];
+
+            foreach ($profileFields as $field) {
+                if (isset($validated[$field])) {
+                    $memberProfile->$field = $validated[$field];
+                }
+            }
+
+            $memberProfile->save();
+
+            DB::commit();
+
+            // Reload the user with relationships
+            $updatedUser = User::with(['memberProfile', 'memberProfile.documents'])->find($userId);
+
+            return response()->json([
+                'message' => 'Member profile updated successfully',
+                'user' => $updatedUser,
+                'success' => true
+            ], 200);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            DB::rollBack();
+            Log::error('Validation error in updateMemberProfile: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $e->errors(),
+                'success' => false
+            ], 422);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            DB::rollBack();
+            Log::error('User not found in updateMemberProfile: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'User not found',
+                'success' => false
+            ], 404);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error updating member profile: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Failed to update member profile',
+                'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal server error',
+                'success' => false
+            ], 500);
+        }
+    }
+
+    /**
+     * Update hard copy document status for a member
+     */
+    public function updateHardCopyStatus(Request $request, $id)
+    {
+        try {
+            DB::beginTransaction();
+
+            // Find the user
+            $user = User::findOrFail($id);
+
+            // Validate the request - only hard_copy_submitted and remarks
+            $validated = $request->validate([
+                'hard_copy_submitted' => 'required|boolean',
+                'remarks' => 'nullable|string|max:500'
+            ]);
+
+            // Get the member profile
+            $memberProfile = $user->memberProfile;
+
+            if (!$memberProfile) {
+                return response()->json([
+                    'message' => 'Member profile not found'
+                ], 404);
+            }
+
+            // Find or create member document record
+            $memberDocument = MemberDocument::where('member_profile_id', $memberProfile->id)->first();
+
+            if (!$memberDocument) {
+                // Create new document record if it doesn't exist
+                $memberDocument = MemberDocument::create([
+                    'member_profile_id' => $memberProfile->id,
+                    'hard_copy_submitted' => $validated['hard_copy_submitted'],
+                    'remarks' => $validated['remarks'] ?? null,
+                ]);
+            } else {
+                // Update existing document record
+                $memberDocument->update([
+                    'hard_copy_submitted' => $validated['hard_copy_submitted'],
+                    'remarks' => $validated['remarks'] ?? null,
+                ]);
+            }
+
+            DB::commit();
+
+            // Return updated user data
+            $updatedUser = User::with(['memberProfile', 'memberProfile.documents'])->find($id);
+
+            return response()->json([
+                'message' => 'Hard copy status updated successfully',
+                'user' => $updatedUser
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'User not found'
+            ], 404);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Hard copy status update error: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Failed to update hard copy status',
+                'error' => env('APP_DEBUG') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
     /**
      * Scan member by ID number
      */

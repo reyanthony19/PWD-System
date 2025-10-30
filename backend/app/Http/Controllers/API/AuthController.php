@@ -249,7 +249,7 @@ class AuthController extends Controller
         ]);
     }
     /**
-     * Update status
+     * Update Member status
      */
     public function updateStatus(Request $request, $id)
     {

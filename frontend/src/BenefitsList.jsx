@@ -13,7 +13,9 @@ import {
   Users,
   TrendingUp,
   Archive,
-  RefreshCw
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import api from "./api";
 import Layout from "./Layout";
@@ -28,7 +30,6 @@ const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes in milliseconds
 
 // Cache utility functions
 const cache = {
-  // Get data from cache
   get: (key) => {
     try {
       const item = localStorage.getItem(key);
@@ -36,7 +37,6 @@ const cache = {
       
       const { data, timestamp } = JSON.parse(item);
       
-      // Check if cache is still valid
       if (Date.now() - timestamp > CACHE_DURATION) {
         cache.clear(key);
         return null;
@@ -49,7 +49,6 @@ const cache = {
     }
   },
   
-  // Set data in cache
   set: (key, data) => {
     try {
       const item = {
@@ -62,7 +61,6 @@ const cache = {
     }
   },
   
-  // Clear specific cache
   clear: (key) => {
     try {
       localStorage.removeItem(key);
@@ -71,14 +69,12 @@ const cache = {
     }
   },
   
-  // Clear all benefits cache
   clearAll: () => {
     Object.values(CACHE_KEYS).forEach(key => {
       cache.clear(key);
     });
   },
   
-  // Check if cache is valid
   isValid: (key) => {
     const data = cache.get(key);
     return data !== null;
@@ -96,6 +92,9 @@ function BenefitsList() {
   const [sortOption, setSortOption] = useState("name-asc");
   const [updatingStatus, setUpdatingStatus] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage] = useState(10);
+
   const navigate = useNavigate();
 
   // Load initial data from cache
@@ -115,7 +114,6 @@ function BenefitsList() {
         setLoading(true);
       }
 
-      // Check cache first unless force refresh
       const cachedBenefits = !forceRefresh && cache.get(CACHE_KEYS.BENEFITS);
       if (cachedBenefits && !forceRefresh) {
         setBenefits(cachedBenefits);
@@ -132,7 +130,6 @@ function BenefitsList() {
       console.error(err);
       setError("Failed to load benefits.");
       
-      // If API fails, try to use cached data as fallback
       const cachedBenefits = cache.get(CACHE_KEYS.BENEFITS);
       if (cachedBenefits) {
         setBenefits(cachedBenefits);
@@ -143,15 +140,12 @@ function BenefitsList() {
     }
   }, []);
 
-  // Fetch benefits
   useEffect(() => {
     fetchBenefits();
-    // Increase interval since we have caching now
-    const interval = setInterval(() => fetchBenefits(), 300000); // 5 minutes
+    const interval = setInterval(() => fetchBenefits(), 300000);
     return () => clearInterval(interval);
   }, [fetchBenefits]);
 
-  // Manual refresh function
   const handleRefresh = () => {
     cache.clear(CACHE_KEYS.BENEFITS);
     fetchBenefits(true);
@@ -176,6 +170,16 @@ function BenefitsList() {
         return 0;
       });
   }, [benefits, typeFilter, statusFilter, searchTerm, sortOption]);
+
+  // Pagination
+  const totalPages = Math.ceil(filteredBenefits.length / rowsPerPage);
+  const indexOfLastRow = currentPage * rowsPerPage;
+  const indexOfFirstRow = indexOfLastRow - rowsPerPage;
+  const currentRows = filteredBenefits.slice(indexOfFirstRow, indexOfLastRow);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, typeFilter, statusFilter]);
 
   // Memoized counts
   const typeCounts = useMemo(() => {
@@ -211,7 +215,6 @@ function BenefitsList() {
 
       await api.delete(`/benefits/${benefitId}`);
       
-      // Update cache after successful status change
       const updatedBenefits = benefits.map(benefit => 
         benefit.id === benefitId 
           ? { ...benefit, status: newStatus }
@@ -257,34 +260,34 @@ function BenefitsList() {
       case "cash":
         return {
           color: "bg-green-100 text-green-800 border-green-200",
-          icon: <DollarSign className="w-4 h-4" />,
-          gradient: "from-green-500 to-green-600"
+          icon: <DollarSign className="w-4 h-4" />
         };
       case "relief":
         return {
           color: "bg-orange-100 text-orange-800 border-orange-200",
-          icon: <Package className="w-4 h-4" />,
-          gradient: "from-orange-500 to-orange-600"
+          icon: <Package className="w-4 h-4" />
         };
       default:
         return {
           color: "bg-gray-100 text-gray-800 border-gray-200",
-          icon: <Gift className="w-4 h-4" />,
-          gradient: "from-gray-500 to-gray-600"
+          icon: <Gift className="w-4 h-4" />
         };
     }
+  };
+
+  const clearAllFilters = () => {
+    setSearchTerm("");
+    setTypeFilter("all");
+    setStatusFilter("active");
   };
 
   if (loading) {
     return (
       <Layout>
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-100 flex items-center justify-center">
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
           <div className="text-center">
-            <div className="w-20 h-20 border-8 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto"></div>
-            <p className="mt-4 text-xl font-semibold text-blue-600 animate-pulse">
-              Loading Benefits...
-            </p>
-            <p className="text-gray-600 text-sm mt-2">Please wait a moment 🎁</p>
+            <div className="w-16 h-16 border-4 border-gray-300 border-t-blue-600 rounded-full animate-spin mx-auto"></div>
+            <p className="mt-4 text-lg font-medium text-gray-600">Loading Benefits...</p>
           </div>
         </div>
       </Layout>
@@ -294,8 +297,8 @@ function BenefitsList() {
   if (error && benefits.length === 0) {
     return (
       <Layout>
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-100 flex items-center justify-center">
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-8 max-w-md text-center">
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 max-w-md text-center">
             <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <XCircle className="w-8 h-8 text-red-600" />
             </div>
@@ -315,147 +318,96 @@ function BenefitsList() {
 
   return (
     <Layout>
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-100 py-8 px-4">
-        {/* Background Decoration */}
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse-slow"></div>
-          <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-indigo-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse-slow delay-1000"></div>
-        </div>
-
-        <div className="max-w-7xl mx-auto relative">
-          {/* Cache Status Indicator */}
-          <div className="mb-4 flex justify-between items-center">
-            <div className="text-sm text-gray-600">
-              {cache.isValid(CACHE_KEYS.BENEFITS) ? (
-                <span className="text-green-600 flex items-center gap-2">
-                  <CheckCircle size={16} />
-                  Using cached data
-                </span>
-              ) : (
-                <span className="text-yellow-600 flex items-center gap-2">
-                  <RefreshCw size={16} />
-                  Fetching fresh data
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-4">
-              {lastUpdated && (
-                <span className="text-xs text-gray-500">
-                  Last updated: {lastUpdated.toLocaleTimeString()}
-                </span>
-              )}
-              <button
-                onClick={handleRefresh}
-                disabled={refreshing}
-                className="flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-700 
-                         rounded-lg text-sm font-medium hover:bg-blue-200 
-                         transition-colors disabled:opacity-50"
-              >
-                <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
-                {refreshing ? "Refreshing..." : "Refresh"}
-              </button>
-            </div>
-          </div>
-
+      <div className="min-h-screen bg-gray-50 py-6 px-4">
+        <div className="max-w-7xl mx-auto">
+          
           {/* Header */}
-          <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 p-8 mb-8">
-            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-8">
-              <div className="flex items-start gap-6">
-                <div className="bg-gradient-to-br from-blue-500 to-purple-600 p-4 rounded-2xl shadow-lg">
-                  <Gift className="w-8 h-8 text-white" />
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-6">
+            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+              <div className="flex items-start gap-4">
+                <div className="bg-blue-600 p-3 rounded-xl">
+                  <Gift className="w-6 h-6 text-white" />
                 </div>
                 <div className="flex-1">
-                  <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                    Benefits Management
-                  </h1>
-                  <div className="mt-4 space-y-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                      <h2 className="text-lg font-semibold text-gray-800">
-                        Manage and distribute member benefits
-                      </h2>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
-                      <span className="flex items-center gap-2 bg-blue-50 px-3 py-1 rounded-full">
-                        <Gift className="w-4 h-4 text-blue-500" />
-                        Total Benefits: {benefits.length}
-                      </span>
-                      <span className="flex items-center gap-2 bg-green-50 px-3 py-1 rounded-full">
-                        <CheckCircle className="w-4 h-4 text-green-500" />
-                        Active: {statusCounts.active || 0}
-                      </span>
-                      <span className="flex items-center gap-2 bg-orange-50 px-3 py-1 rounded-full">
-                        <DollarSign className="w-4 h-4 text-orange-500" />
-                        Cash: {typeCounts.cash || 0}
-                      </span>
-                    </div>
+                  <h1 className="text-2xl font-bold text-gray-900">Benefits Management</h1>
+                  <p className="text-gray-600 mt-2">Manage and distribute member benefits</p>
+                  <div className="flex flex-wrap items-center gap-4 mt-4 text-sm text-gray-600">
+                    <span className="flex items-center gap-2 bg-gray-100 px-3 py-1 rounded-full">
+                      <Gift className="w-4 h-4 text-gray-500" />
+                      Total Benefits: {benefits.length}
+                    </span>
+                    <span className="flex items-center gap-2 bg-green-100 px-3 py-1 rounded-full">
+                      <CheckCircle className="w-4 h-4 text-green-600" />
+                      Active: {statusCounts.active || 0}
+                    </span>
+                    <span className="flex items-center gap-2 bg-orange-100 px-3 py-1 rounded-full">
+                      <DollarSign className="w-4 h-4 text-orange-600" />
+                      Cash: {typeCounts.cash || 0}
+                    </span>
                   </div>
                 </div>
               </div>
 
               {/* Statistics */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 min-w-[400px]">
-                <div className="bg-gradient-to-br from-green-500 to-green-600 text-white p-5 rounded-2xl shadow-lg text-center">
-                  <CheckCircle className="w-7 h-7 mx-auto mb-3 opacity-90" />
-                  <div className="text-2xl font-bold">{statusCounts.active || 0}</div>
-                  <div className="text-green-100 text-xs font-medium">Active</div>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 min-w-[300px]">
+                <div className="bg-white border border-gray-200 p-4 rounded-xl text-center">
+                  <CheckCircle className="w-5 h-5 text-green-600 mx-auto mb-2" />
+                  <div className="text-lg font-bold text-gray-900">{statusCounts.active || 0}</div>
+                  <div className="text-gray-500 text-xs">Active</div>
                 </div>
-                <div className="bg-gradient-to-br from-gray-500 to-gray-600 text-white p-5 rounded-2xl shadow-lg text-center">
-                  <Archive className="w-7 h-7 mx-auto mb-3 opacity-90" />
-                  <div className="text-2xl font-bold">{statusCounts.inactive || 0}</div>
-                  <div className="text-gray-100 text-xs font-medium">Inactive</div>
+                <div className="bg-white border border-gray-200 p-4 rounded-xl text-center">
+                  <Archive className="w-5 h-5 text-gray-600 mx-auto mb-2" />
+                  <div className="text-lg font-bold text-gray-900">{statusCounts.inactive || 0}</div>
+                  <div className="text-gray-500 text-xs">Inactive</div>
                 </div>
-                <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white p-5 rounded-2xl shadow-lg text-center">
-                  <DollarSign className="w-7 h-7 mx-auto mb-3 opacity-90" />
-                  <div className="text-2xl font-bold">{typeCounts.cash || 0}</div>
-                  <div className="text-blue-100 text-xs font-medium">Cash</div>
+                <div className="bg-white border border-gray-200 p-4 rounded-xl text-center">
+                  <DollarSign className="w-5 h-5 text-blue-600 mx-auto mb-2" />
+                  <div className="text-lg font-bold text-gray-900">{typeCounts.cash || 0}</div>
+                  <div className="text-gray-500 text-xs">Cash</div>
                 </div>
-                <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white p-5 rounded-2xl shadow-lg text-center">
-                  <Package className="w-7 h-7 mx-auto mb-3 opacity-90" />
-                  <div className="text-2xl font-bold">{typeCounts.relief || 0}</div>
-                  <div className="text-orange-100 text-xs font-medium">Relief</div>
+                <div className="bg-white border border-gray-200 p-4 rounded-xl text-center">
+                  <Package className="w-5 h-5 text-orange-600 mx-auto mb-2" />
+                  <div className="text-lg font-bold text-gray-900">{typeCounts.relief || 0}</div>
+                  <div className="text-gray-500 text-xs">Relief</div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Search + Filters */}
-          <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-white/20 p-6 mb-8">
-            <div className="flex flex-col lg:flex-row lg:items-end gap-6">
-              {/* Search */}
+          {/* Search and Filters */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-6">
+            <div className="flex flex-col lg:flex-row lg:items-end gap-4 mb-6">
               <div className="flex-1">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Search Benefits
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Search Benefits</label>
                 <div className="relative">
-                  <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input
                     type="text"
                     placeholder="Search benefits by name..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-12 pr-4 py-4 border border-gray-200 rounded-2xl 
-                             bg-white/60 backdrop-blur-sm focus:ring-2 focus:ring-blue-500 
-                             focus:border-blue-500 transition-all duration-200 placeholder-gray-400
-                             shadow-sm hover:shadow-md focus:shadow-lg"
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
                   />
                 </div>
               </div>
+              <button
+                onClick={() => navigate("/benefits/create")}
+                className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all duration-200 font-medium shadow-sm"
+              >
+                <Plus className="w-4 h-4" />
+                Add Benefit
+              </button>
+            </div>
 
-              {/* Type Filter */}
-              <div className="w-full lg:w-64">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Filter by Type
-                </label>
+            {/* Filter Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
                 <div className="relative">
-                  <Filter className="absolute left-4 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <select
                     value={typeFilter}
                     onChange={(e) => setTypeFilter(e.target.value)}
-                    className="w-full pl-12 pr-10 py-4 border border-gray-200 rounded-2xl 
-                             bg-white/60 backdrop-blur-sm focus:ring-2 focus:ring-blue-500 
-                             focus:border-blue-500 transition-all duration-200 appearance-none
-                             shadow-sm hover:shadow-md focus:shadow-lg"
+                    className="w-full pl-3 pr-10 py-3 border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 appearance-none"
                   >
                     {typeOptions.map((option) => (
                       <option key={option.key} value={option.key}>
@@ -463,22 +415,35 @@ function BenefitsList() {
                       </option>
                     ))}
                   </select>
-                  <ChevronDown className="absolute right-4 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                  <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                 </div>
               </div>
 
-              {/* Sort Option */}
-              <div className="w-full lg:w-64">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Sort By
-                </label>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                <div className="relative">
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="w-full pl-3 pr-10 py-3 border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 appearance-none"
+                  >
+                    <option value="all">All Status</option>
+                    {statusOptions.map((option) => (
+                      <option key={option.key} value={option.key}>
+                        {option.label} ({statusCounts[option.key] || 0})
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Sort By</label>
                 <select
                   value={sortOption}
                   onChange={(e) => setSortOption(e.target.value)}
-                  className="w-full px-4 py-4 border border-gray-200 rounded-2xl 
-                           bg-white/60 backdrop-blur-sm focus:ring-2 focus:ring-blue-500 
-                           focus:border-blue-500 transition-all duration-200 appearance-none
-                           shadow-sm hover:shadow-md focus:shadow-lg"
+                  className="w-full px-3 py-3 border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
                 >
                   <option value="name-asc">Name (A-Z)</option>
                   <option value="name-desc">Name (Z-A)</option>
@@ -488,192 +453,101 @@ function BenefitsList() {
                 </select>
               </div>
 
-              {/* Add Benefit Button */}
-              <button
-                onClick={() => navigate("/benefits/create")}
-                className="flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-green-500 to-green-600 
-                         hover:from-green-600 hover:to-green-700 text-white rounded-2xl 
-                         transition-all duration-200 font-semibold shadow-lg hover:shadow-xl 
-                         transform hover:-translate-y-0.5"
-              >
-                <Plus className="w-5 h-5" />
-                Add Benefit
-              </button>
-            </div>
-
-            {/* Status Filter Buttons */}
-            <div className="mt-6">
-              <label className="block text-sm font-semibold text-gray-700 mb-3">
-                Filter by Status
-              </label>
-              <div className="flex flex-wrap gap-3">
-                {statusOptions.map(({ key, label, color, hoverColor, icon }) => (
-                  <button
-                    key={key}
-                    onClick={() => setStatusFilter(key)}
-                    className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-semibold transition-all duration-200 ${
-                      statusFilter === key 
-                        ? "ring-4 ring-blue-200 ring-offset-2 transform scale-105 shadow-lg" 
-                        : `hover:scale-105 hover:shadow-lg ${hoverColor}`
-                    } ${color}`}
-                  >
-                    {icon}
-                    {label}
-                    <span className="bg-white bg-opacity-30 px-2 py-1 rounded-full text-xs font-bold">
-                      {statusCounts[key] || 0}
-                    </span>
-                  </button>
-                ))}
+              <div className="flex items-end">
+                <button
+                  onClick={handleRefresh}
+                  disabled={refreshing}
+                  className="flex items-center gap-2 px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl transition-all duration-200 font-medium"
+                >
+                  <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
+                  {refreshing ? "Refreshing..." : "Refresh"}
+                </button>
               </div>
             </div>
 
             {/* Active Filters Display */}
-            {(searchTerm || typeFilter !== "all" || statusFilter !== "active") && (
-              <div className="flex flex-wrap items-center gap-3 mt-6 pt-6 border-t border-gray-100">
-                <span className="text-sm font-semibold text-gray-600">Active filters:</span>
-                
+            {(searchTerm || typeFilter !== "all" || statusFilter !== "all") && (
+              <div className="flex flex-wrap items-center gap-2 mt-4 pt-4 border-t border-gray-200">
+                <span className="text-sm font-medium text-gray-700">Active filters:</span>
                 {searchTerm && (
-                  <span className="bg-blue-100 text-blue-800 text-sm px-4 py-2 rounded-full flex items-center gap-2 font-medium">
+                  <span className="bg-blue-100 text-blue-800 text-sm px-3 py-1 rounded-full flex items-center gap-2">
                     Search: "{searchTerm}"
-                    <button 
-                      onClick={() => setSearchTerm("")} 
-                      className="text-blue-600 hover:text-blue-800 font-bold text-lg leading-none"
-                    >
-                      ×
-                    </button>
+                    <button onClick={() => setSearchTerm("")} className="text-blue-600 hover:text-blue-800">×</button>
                   </span>
                 )}
-
                 {typeFilter !== "all" && (
-                  <span className="bg-purple-100 text-purple-800 text-sm px-4 py-2 rounded-full flex items-center gap-2 font-medium">
+                  <span className="bg-green-100 text-green-800 text-sm px-3 py-1 rounded-full flex items-center gap-2">
                     Type: {typeOptions.find(opt => opt.key === typeFilter)?.label}
-                    <button 
-                      onClick={() => setTypeFilter("all")} 
-                      className="text-purple-600 hover:text-purple-800 font-bold text-lg leading-none"
-                    >
-                      ×
-                    </button>
+                    <button onClick={() => setTypeFilter("all")} className="text-green-600 hover:text-green-800">×</button>
                   </span>
                 )}
-
-                {statusFilter !== "active" && (
-                  <span className="bg-green-100 text-green-800 text-sm px-4 py-2 rounded-full flex items-center gap-2 font-medium">
+                {statusFilter !== "all" && (
+                  <span className="bg-purple-100 text-purple-800 text-sm px-3 py-1 rounded-full flex items-center gap-2">
                     Status: {statusOptions.find(opt => opt.key === statusFilter)?.label}
-                    <button 
-                      onClick={() => setStatusFilter("active")} 
-                      className="text-green-600 hover:text-green-800 font-bold text-lg leading-none"
-                    >
-                      ×
-                    </button>
+                    <button onClick={() => setStatusFilter("all")} className="text-purple-600 hover:text-purple-800">×</button>
                   </span>
                 )}
-
-                <button
-                  onClick={() => {
-                    setSearchTerm("");
-                    setTypeFilter("all");
-                    setStatusFilter("active");
-                  }}
-                  className="text-sm text-gray-600 hover:text-gray-800 font-semibold underline ml-auto"
-                >
-                  Clear all filters
-                </button>
+                <button onClick={clearAllFilters} className="text-sm text-gray-600 hover:text-gray-800 font-medium ml-auto">Clear all</button>
               </div>
             )}
           </div>
 
           {/* Results Summary */}
-          <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <span className="text-lg font-semibold text-gray-700">
-                {filteredBenefits.length} of {benefits.length} benefits
-              </span>
-              {typeFilter !== "all" && (
-                <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
-                  Type: {typeOptions.find(opt => opt.key === typeFilter)?.label}
-                </span>
-              )}
-              {statusFilter !== "active" && (
-                <span className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm font-medium">
-                  Status: {statusOptions.find(opt => opt.key === statusFilter)?.label}
-                </span>
-              )}
-              {searchTerm && (
-                <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
-                  Matching: "{searchTerm}"
-                </span>
-              )}
+          <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="text-gray-700">
+              Showing {Math.min(filteredBenefits.length, rowsPerPage)} of {filteredBenefits.length} benefits
+              {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
             </div>
-            
             {filteredBenefits.length > 0 && (
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span>Active: {statusCounts.active || 0}</span>
-                <div className="w-2 h-2 bg-gray-500 rounded-full ml-2"></div>
-                <span>Inactive: {statusCounts.inactive || 0}</span>
-                <div className="w-2 h-2 bg-blue-500 rounded-full ml-2"></div>
-                <span>Cash: {typeCounts.cash || 0}</span>
+              <div className="flex items-center gap-4 text-sm text-gray-600">
+                <div className="flex items-center gap-2"><div className="w-2 h-2 bg-green-500 rounded-full"></div><span>Active: {statusCounts.active}</span></div>
+                <div className="flex items-center gap-2"><div className="w-2 h-2 bg-gray-500 rounded-full"></div><span>Inactive: {statusCounts.inactive}</span></div>
+                <div className="flex items-center gap-2"><div className="w-2 h-2 bg-blue-500 rounded-full"></div><span>Cash: {typeCounts.cash}</span></div>
               </div>
             )}
           </div>
 
           {/* Benefits Table */}
-          <section className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 overflow-hidden">
+          <section className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead>
-                  <tr className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
-                    <th className="px-8 py-5 font-semibold text-left text-sm uppercase tracking-wider">
-                      Benefit Information
-                    </th>
-                    <th className="px-8 py-5 font-semibold text-left text-sm uppercase tracking-wider">
-                      Type & Details
-                    </th>
-                    <th className="px-8 py-5 font-semibold text-left text-sm uppercase tracking-wider">
-                      Budget Overview
-                    </th>
-                    <th className="px-8 py-5 font-semibold text-left text-sm uppercase tracking-wider">
-                      Status
-                    </th>
+                  <tr className="bg-gray-50 border-b border-gray-200">
+                    <th className="px-6 py-4 font-semibold text-left text-gray-900 text-sm uppercase tracking-wider">Benefit Information</th>
+                    <th className="px-6 py-4 font-semibold text-left text-gray-900 text-sm uppercase tracking-wider">Type & Details</th>
+                    <th className="px-6 py-4 font-semibold text-left text-gray-900 text-sm uppercase tracking-wider">Budget Overview</th>
+                    <th className="px-6 py-4 font-semibold text-left text-gray-900 text-sm uppercase tracking-wider">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {filteredBenefits.length > 0 ? (
-                    filteredBenefits.map((benefit) => {
+                <tbody className="divide-y divide-gray-200">
+                  {currentRows.length > 0 ? (
+                    currentRows.map((benefit) => {
                       const totalBudget = (benefit.budget_amount || 0) * (benefit.locked_member_count || 0);
                       const typeInfo = getTypeInfo(benefit.type);
 
                       return (
-                        <tr
-                          key={benefit.id}
+                        <tr 
+                          key={benefit.id} 
                           onClick={() => navigate(`/benefits/${benefit.id}/participants`)}
-                          className={`hover:bg-gray-50/80 transition-all duration-150 group cursor-pointer ${
-                            benefit.status === 'inactive' ? 'opacity-75' : ''
-                          }`}
+                          className={`hover:bg-gray-50 transition-colors cursor-pointer ${benefit.status === 'inactive' ? 'opacity-75' : ''}`}
                         >
-                          <td className="px-8 py-5">
+                          <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-purple-100 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                                <Gift className="w-5 h-5 text-blue-600" />
+                              <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
+                                <Gift className="w-4 h-4 text-gray-600" />
                               </div>
                               <div>
-                                <div className="font-semibold text-gray-900">
-                                  {benefit.name}
-                                </div>
-                                <div className="text-xs text-gray-500 mt-1">
-                                  ID: {benefit.id}
-                                </div>
+                                <div className="font-medium text-gray-900">{benefit.name}</div>
+                                <div className="text-xs text-gray-500 mt-1">ID: {benefit.id}</div>
                                 {benefit.status === 'inactive' && (
-                                  <div className="text-xs text-gray-500 mt-1">
-                                    Not available for distribution
-                                  </div>
+                                  <div className="text-xs text-gray-500 mt-1">Not available for distribution</div>
                                 )}
                               </div>
                             </div>
                           </td>
-                          <td className="px-8 py-5">
+                          <td className="px-6 py-4">
                             <div className="flex flex-col gap-2">
-                              <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold border ${typeInfo.color}`}>
+                              <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border ${typeInfo.color}`}>
                                 {typeInfo.icon}
                                 {benefit.type?.charAt(0).toUpperCase() + benefit.type?.slice(1) || 'Other'}
                               </span>
@@ -684,77 +558,50 @@ function BenefitsList() {
                               </div>
                             </div>
                           </td>
-                          <td className="px-8 py-5">
-                            <div className="flex flex-col gap-2">
-                              <div className="flex items-center gap-2 text-gray-700">
-                                <TrendingUp className="w-4 h-4 text-gray-400" />
-                                <span className="text-sm font-medium">
-                                  {benefit.type === "cash"
-                                    ? `₱${Number(totalBudget).toLocaleString()}`
-                                    : `${(benefit.budget_quantity || 0) * (benefit.locked_member_count || 0)} ${benefit.unit || ""}`}
-                                </span>
+                          <td className="px-6 py-4">
+                            <div className="flex flex-col">
+                              <div className="font-medium text-gray-900">
+                                {benefit.type === "cash"
+                                  ? `₱${Number(totalBudget).toLocaleString()}`
+                                  : `${(benefit.budget_quantity || 0) * (benefit.locked_member_count || 0)} ${benefit.unit || ""}`}
                               </div>
-                              <div className="flex items-center gap-2 text-sm text-gray-500">
-                                <Users className="w-3 h-3 text-gray-400" />
-                                <span>
-                                  {benefit.locked_member_count || 0} members • {benefit.records_count || 0} claimed
-                                </span>
+                              <div className="text-sm text-gray-500">
+                                {benefit.locked_member_count || 0} members • {benefit.records_count || 0} claimed
                               </div>
                             </div>
                           </td>
-                          <td className="px-8 py-5">
-                            <div onClick={(e) => e.stopPropagation()}>
-                              <select
-                                value={benefit.status || "active"}
-                                onChange={(e) => handleStatusChange(benefit.id, e.target.value, e)}
-                                disabled={updatingStatus === benefit.id}
-                                className="border border-gray-300 rounded-xl px-4 py-2 bg-white/60 backdrop-blur-sm 
-                                         focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium
-                                         transition-all duration-200 hover:shadow-md"
-                              >
-                                <option value="active">Active</option>
-                                <option value="inactive">Inactive</option>
-                              </select>
-                              {updatingStatus === benefit.id && (
-                                <div className="text-xs text-gray-500 mt-1">Updating...</div>
-                              )}
-                            </div>
+                          <td className="px-6 py-4">
+                            <select
+                              value={benefit.status || "active"}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => handleStatusChange(benefit.id, e.target.value, e)}
+                              disabled={updatingStatus === benefit.id}
+                              className="border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm transition-colors"
+                            >
+                              <option value="active">Active</option>
+                              <option value="inactive">Inactive</option>
+                            </select>
+                            {updatingStatus === benefit.id && (
+                              <div className="text-xs text-gray-500 mt-1">Updating...</div>
+                            )}
                           </td>
                         </tr>
                       );
                     })
                   ) : (
                     <tr>
-                      <td colSpan="4" className="px-8 py-16 text-center">
+                      <td colSpan="4" className="px-6 py-12 text-center">
                         <div className="flex flex-col items-center justify-center text-gray-400">
-                          <Gift className="w-20 h-20 mb-4 opacity-40" />
-                          <p className="text-xl font-semibold text-gray-500 mb-2">No benefits found</p>
+                          <Gift className="w-16 h-16 mb-4 opacity-40" />
+                          <p className="text-lg font-medium text-gray-500 mb-2">No benefits found</p>
                           <p className="text-sm max-w-md">
-                            {searchTerm || typeFilter !== "all" || statusFilter !== "active"
+                            {(searchTerm || typeFilter !== "all" || statusFilter !== "all")
                               ? "Try adjusting your search or filter criteria"
                               : "No benefits have been created yet"
                             }
                           </p>
-                          {(searchTerm || typeFilter !== "all" || statusFilter !== "active") && (
-                            <button
-                              onClick={() => {
-                                setSearchTerm("");
-                                setTypeFilter("all");
-                                setStatusFilter("active");
-                              }}
-                              className="mt-4 text-blue-600 hover:text-blue-700 text-sm font-medium underline"
-                            >
-                              Clear all filters
-                            </button>
-                          )}
-                          {benefits.length === 0 && (
-                            <button
-                              onClick={() => navigate("/benefits/create")}
-                              className="mt-4 inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors"
-                            >
-                              <Plus className="w-4 h-4" />
-                              Create First Benefit
-                            </button>
+                          {(searchTerm || typeFilter !== "all" || statusFilter !== "all") && (
+                            <button onClick={clearAllFilters} className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm">Clear All Filters</button>
                           )}
                         </div>
                       </td>
@@ -763,6 +610,32 @@ function BenefitsList() {
                 </tbody>
               </table>
             </div>
+
+            {/* Pagination */}
+            {filteredBenefits.length > rowsPerPage && (
+              <div className="bg-gray-50 border-t border-gray-200 px-6 py-4">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-gray-700">
+                    Showing {indexOfFirstRow + 1} to {Math.min(indexOfLastRow, filteredBenefits.length)} of {filteredBenefits.length} results
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                      <ChevronLeft className="w-4 h-4" /> Previous
+                    </button>
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                        <button key={page} onClick={() => setCurrentPage(page)} className={`px-3 py-1 text-sm font-medium rounded-lg transition-colors ${currentPage === page ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}>
+                          {page}
+                        </button>
+                      ))}
+                    </div>
+                    <button onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages} className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                      Next <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </section>
         </div>
       </div>

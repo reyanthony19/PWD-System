@@ -35,7 +35,6 @@ Route::get('/scanMember', [MemberController::class, 'scanMember']); // Scan memb
 |
 */
 
-
 Route::middleware('auth:sanctum')->group(function () {
 
     /*
@@ -49,15 +48,21 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // 🧑‍💼 Authenticated user actions
     Route::get('/user', [AuthController::class, 'profile']); // Get current logged-in user info
-    Route::get('/user/documents/{user_id}', [AuthController::class, 'fetchMemberDocuments']); // Fetch member’s documents
+    // In your routes file (api.php)
+    Route::get('/user/documents/{user_id}', [AuthController::class, 'fetchMemberDocuments']); // Fetch member's documents
     Route::get('/users', [AuthController::class, 'listUsers']); // Get list of all users
     Route::get('/user/{id}', [AuthController::class, 'showUser']); // View specific user details
     Route::put('/user/{id}', [AuthController::class, 'updateUser']); // Update user profile (used in mobile)
     Route::patch('/user/{id}/status', [AuthController::class, 'updateStatus']); // Update user active/inactive status
     Route::delete('/user/{id}', [AuthController::class, 'deleteUser']); // Delete user account
     Route::post('/logout', [AuthController::class, 'logout']); // Logout current user
-    Route::put('/member/{userId}/documents', [MemberController::class, 'updateDocument']);   
-    Route::put('/member-documents/{id}/hard-copy-status', [AuthController::class, 'updateHardCopyStatus']); // Update member’s hard copy status
+    
+    Route::put('/member/{userId}/profile', [MemberController::class, 'updateMemberProfile']);   // Update member profile by admin
+
+    // 📄 Member Document Management
+
+    Route::put('/member/{userId}/documents', [MemberController::class, 'updateDocument']); // Update document files
+    Route::put('/member/{id}/hard-copy-status', [MemberController::class, 'updateHardCopyStatus']); // Update hard copy status
 
 
     /*
@@ -89,7 +94,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/benefit-records/{record}', [BenefitController::class, 'showRecord']); // Show single benefit record
     Route::put('/benefit-records/{record}', [BenefitController::class, 'updateRecord']); // Update record
     Route::delete('/benefit-records/{record}', [BenefitController::class, 'destroyRecord']); // Delete record
-    Route::get('/users/{id}/benefits', [BenefitController::class, 'getUserBenefits']); // Get user’s benefits
+    Route::get('/users/{id}/benefits', [BenefitController::class, 'getUserBenefits']); // Get user's benefits
 
     // 🎫 Benefit claims (scanner-based)
     Route::get('/benefits/{benefit}/claims', [BenefitController::class, 'indexClaims']); // Get all claims for benefit

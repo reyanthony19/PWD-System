@@ -2,54 +2,45 @@ import { useEffect, useState, useMemo, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
 import api from "./api";
 import Layout from "./Layout";
-import { Key, Eye, EyeOff, Save, X, Check, Edit, AlertCircle } from "lucide-react";
+import { Key, Eye, EyeOff, Check, Edit } from "lucide-react"; // Added Edit icon
 
-// Cache implementation
 const memberCache = new Map();
 const eventsCache = new Map();
 const benefitsCache = new Map();
 
-// Enhanced Hard Copy Status Manager Component
 function HardCopyStatusManager({ member, onUpdate }) {
-  const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [statusData, setStatusData] = useState({
     submitted: false,
-    status: 'pending',
     remarks: ""
   });
 
-  // Initialize data when member loads
   useEffect(() => {
     if (member?.member_profile?.documents) {
       const docs = member.member_profile.documents;
       setStatusData({
         submitted: Boolean(docs.hard_copy_submitted),
-        status: docs.status || 'pending',
         remarks: docs.remarks || ""
       });
     }
   }, [member]);
 
-  const statusOptions = [
-    { value: 'pending', label: 'Pending Review', color: 'bg-yellow-100 text-yellow-800', icon: '⏳' },
-    { value: 'verified', label: 'Verified', color: 'bg-green-100 text-green-800', icon: '✅' },
-    { value: 'rejected', label: 'Rejected', color: 'bg-red-100 text-red-800', icon: '❌' }
-  ];
-
-  const handleSubmit = async () => {
+  const handleStatusChange = async (newSubmittedStatus) => {
     try {
       setLoading(true);
-      
-      const response = await api.put(`/member-documents/${member.id}/hard-copy-status`, {
-        hard_copy_submitted: statusData.submitted,
-        status: statusData.status,
+
+      const response = await api.put(`/member/${member.id}/hard-copy-status`, {
+        hard_copy_submitted: newSubmittedStatus,
         remarks: statusData.remarks
       });
 
+      setStatusData(prev => ({
+        ...prev,
+        submitted: newSubmittedStatus
+      }));
+
       onUpdate?.(response.data);
-      setEditing(false);
-      
+
       // Show success message
       const toast = document.createElement('div');
       toast.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transform translate-x-full transition-transform duration-300';
@@ -68,10 +59,10 @@ function HardCopyStatusManager({ member, onUpdate }) {
         toast.style.transform = 'translateX(100%)';
         setTimeout(() => { if (toast.parentNode) toast.remove(); }, 300);
       }, 3000);
-      
+
     } catch (err) {
       console.error("Error updating hard copy status:", err);
-      
+
       // Show error message
       const toast = document.createElement('div');
       toast.className = 'fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transform translate-x-full transition-transform duration-300';
@@ -95,160 +86,53 @@ function HardCopyStatusManager({ member, onUpdate }) {
     }
   };
 
-  const cancelEdit = () => {
-    const docs = member?.member_profile?.documents || {};
-    setStatusData({
-      submitted: Boolean(docs.hard_copy_submitted),
-      status: docs.status || 'pending',
-      remarks: docs.remarks || ""
-    });
-    setEditing(false);
-  };
-
-  const getCurrentStatus = () => {
-    return statusOptions.find(opt => opt.value === statusData.status) || statusOptions[0];
-  };
-
-  if (editing) {
-    return (
-      <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
-        <h3 className="text-lg font-semibold text-gray-900">Update Hard Copy Status</h3>
-        
-        {/* Submission Checkbox */}
-        <div className="flex items-center space-x-3">
-          <input
-            type="checkbox"
-            id="submitted"
-            checked={statusData.submitted}
-            onChange={(e) => setStatusData(prev => ({
-              ...prev,
-              submitted: e.target.checked
-            }))}
-            className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-          />
-          <label htmlFor="submitted" className="text-sm font-medium text-gray-700">
-            Hard Copy Documents Submitted
-          </label>
-        </div>
-
-        {/* Status Selection */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Review Status
-          </label>
-          <div className="grid grid-cols-1 gap-2">
-            {statusOptions.map((option) => (
-              <label key={option.value} className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
-                <input
-                  type="radio"
-                  name="status"
-                  value={option.value}
-                  checked={statusData.status === option.value}
-                  onChange={(e) => setStatusData(prev => ({
-                    ...prev,
-                    status: e.target.value
-                  }))}
-                  className="w-4 h-4 text-blue-600"
-                />
-                <span className={`px-2 py-1 rounded text-xs font-medium ${option.color}`}>
-                  {option.icon} {option.label}
-                </span>
-              </label>
-            ))}
-          </div>
-        </div>
-
-        {/* Remarks */}
-        <div>
-          <label htmlFor="remarks" className="block text-sm font-medium text-gray-700 mb-2">
-            Remarks {statusData.status === 'rejected' && <span className="text-red-500">*</span>}
-          </label>
-          <textarea
-            id="remarks"
-            value={statusData.remarks}
-            onChange={(e) => setStatusData(prev => ({
-              ...prev,
-              remarks: e.target.value
-            }))}
-            rows={3}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            placeholder={
-              statusData.status === 'rejected' 
-                ? "Please provide reason for rejection..."
-                : "Add any remarks about the document review..."
-            }
-            required={statusData.status === 'rejected'}
-          />
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex gap-3 pt-2">
-          <button
-            onClick={handleSubmit}
-            disabled={loading || (statusData.status === 'rejected' && !statusData.remarks.trim())}
-            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {loading ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save size={16} />
-                Save Changes
-              </>
-            )}
-          </button>
-          <button
-            onClick={cancelEdit}
-            disabled={loading}
-            className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            <X size={16} />
-            Cancel
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-6">
       <div className="flex justify-between items-start mb-4">
         <div>
           <h3 className="text-lg font-semibold text-gray-900">Hard Copy Documents</h3>
-          <p className="text-sm text-gray-600 mt-1">Track physical document submission and review status</p>
+          <p className="text-sm text-gray-600 mt-1">Track physical document submission status</p>
         </div>
-        <button
-          onClick={() => setEditing(true)}
-          className="inline-flex items-center px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium"
-        >
-          <Edit size={14} className="mr-1" />
-          Update Status
-        </button>
       </div>
 
-      {/* Status Display */}
+      {/* Status Display with Checkbox */}
       <div className="space-y-4">
+        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+          <div className="flex items-center space-x-3">
+            <input
+              type="checkbox"
+              id="hardCopySubmitted"
+              checked={statusData.submitted}
+              onChange={(e) => handleStatusChange(e.target.checked)}
+              disabled={loading}
+              className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 disabled:opacity-50"
+            />
+            <label htmlFor="hardCopySubmitted" className="text-sm font-medium text-gray-700">
+              Hard Copy Documents Submitted
+            </label>
+          </div>
+          {loading && (
+            <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          )}
+        </div>
+
+        {/* Status Indicators */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Submission Status */}
-          <div className={`p-4 rounded-lg border ${
-            statusData.submitted 
-              ? 'bg-green-50 border-green-200' 
+          <div className={`p-4 rounded-lg border ${statusData.submitted
+              ? 'bg-green-50 border-green-200'
               : 'bg-yellow-50 border-yellow-200'
-          }`}>
+            }`}>
             <div className="flex items-center gap-3">
-              <div className={`w-3 h-3 rounded-full ${
-                statusData.submitted ? 'bg-green-500' : 'bg-yellow-500'
-              }`} />
+              <div className={`w-3 h-3 rounded-full ${statusData.submitted ? 'bg-green-500' : 'bg-yellow-500'
+                }`} />
               <div>
                 <p className="font-medium text-gray-900">
                   {statusData.submitted ? 'Documents Submitted' : 'Documents Not Submitted'}
                 </p>
                 <p className="text-sm text-gray-600 mt-1">
-                  {statusData.submitted 
-                    ? 'Physical copies have been received' 
+                  {statusData.submitted
+                    ? 'Physical copies have been received'
                     : 'Waiting for document submission'
                   }
                 </p>
@@ -257,17 +141,21 @@ function HardCopyStatusManager({ member, onUpdate }) {
           </div>
 
           {/* Review Status */}
-          <div className={`p-4 rounded-lg border ${
-            getCurrentStatus().color.replace('bg-', 'bg-').replace('text-', 'border-')
-          }`}>
+          <div className={`p-4 rounded-lg border ${statusData.submitted
+              ? 'bg-blue-50 border-blue-200'
+              : 'bg-gray-50 border-gray-200'
+            }`}>
             <div className="flex items-center gap-3">
-              <span className="text-lg">{getCurrentStatus().icon}</span>
+              <span className="text-lg">{statusData.submitted ? '📋' : '⏳'}</span>
               <div>
-                <p className="font-medium text-gray-900">{getCurrentStatus().label}</p>
+                <p className="font-medium text-gray-900">
+                  {statusData.submitted ? 'Ready for Review' : 'Pending Submission'}
+                </p>
                 <p className="text-sm text-gray-600 mt-1">
-                  {statusData.status === 'pending' && 'Awaiting review'}
-                  {statusData.status === 'verified' && 'Documents verified and approved'}
-                  {statusData.status === 'rejected' && 'Documents require correction'}
+                  {statusData.submitted
+                    ? 'Documents are ready for verification'
+                    : 'Awaiting document submission'
+                  }
                 </p>
               </div>
             </div>
@@ -281,22 +169,191 @@ function HardCopyStatusManager({ member, onUpdate }) {
             <p className="text-sm text-gray-600">{statusData.remarks}</p>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
 
-        {/* Status Guide */}
-        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-          <div className="flex items-start gap-3">
-            <AlertCircle size={18} className="text-blue-600 mt-0.5 flex-shrink-0" />
-            <div className="text-sm text-blue-700">
-              <p className="font-medium">Status Guide:</p>
-              <ul className="mt-1 space-y-1">
-                <li>• <strong>Pending:</strong> Documents submitted, awaiting verification</li>
-                <li>• <strong>Verified:</strong> Documents reviewed and approved</li>
-                <li>• <strong>Rejected:</strong> Documents require resubmission or correction</li>
-              </ul>
+// Enhanced Profile Completion Component
+function ProfileCompletion({ member }) {
+  const completionData = useMemo(() => {
+    if (!member || member.role !== "member" || !member.member_profile) {
+      return { percentage: 0, isComplete: false, lackingFields: [] };
+    }
+
+    const profile = member.member_profile;
+    const documents = profile.documents || {};
+    const hardCopySubmitted = Boolean(documents.hard_copy_submitted);
+
+    const fieldWeights = {
+      personal: {
+        fields: [
+          { name: 'first_name', label: 'First Name', weight: 2 },
+          { name: 'last_name', label: 'Last Name', weight: 2 },
+          { name: 'birthdate', label: 'Birthdate', weight: 1 },
+          { name: 'sex', label: 'Sex', weight: 1 },
+        ],
+        totalWeight: 6
+      },
+      contact: {
+        fields: [
+          { name: 'contact_number', label: 'Contact Number', weight: 1 },
+          { name: 'address', label: 'Address', weight: 1 },
+          { name: 'barangay', label: 'Barangay', weight: 1 },
+        ],
+        totalWeight: 3
+      },
+      medical: {
+        fields: [
+          { name: 'disability_type', label: 'Disability Type', weight: 2 },
+          { name: 'blood_type', label: 'Blood Type', weight: 1 },
+        ],
+        totalWeight: 3
+      },
+      government: {
+        fields: [
+          { name: 'sss_number', label: 'SSS Number', weight: 1 },
+          { name: 'philhealth_number', label: 'PhilHealth Number', weight: 1 },
+        ],
+        totalWeight: 2
+      },
+      guardian: {
+        fields: [
+          { name: 'guardian_full_name', label: 'Guardian Full Name', weight: 1 },
+          { name: 'guardian_relationship', label: 'Guardian Relationship', weight: 1 },
+          { name: 'guardian_contact_number', label: 'Guardian Contact', weight: 1 },
+          { name: 'guardian_address', label: 'Guardian Address', weight: 1 },
+        ],
+        totalWeight: 4
+      },
+      documents: {
+        fields: [
+          { name: 'barangay_indigency', label: 'Barangay Indigency', weight: 1 },
+          { name: 'medical_certificate', label: 'Medical Certificate', weight: 1 },
+          { name: 'picture_2x2', label: '2x2 Picture', weight: 1 },
+          { name: 'birth_certificate', label: 'Birth Certificate', weight: 1 },
+        ],
+        totalWeight: 4
+      },
+      hardCopy: {
+        fields: [
+          { name: 'hard_copy_submitted', label: 'Hard Copy Submitted', weight: 2 },
+        ],
+        totalWeight: 2
+      }
+    };
+
+    let totalScore = 0;
+    let maxScore = 0;
+    const lackingFields = [];
+
+    Object.keys(fieldWeights).forEach(category => {
+      const categoryConfig = fieldWeights[category];
+      categoryConfig.fields.forEach(field => {
+        maxScore += field.weight;
+        let fieldValue;
+
+        if (category === 'documents') {
+          fieldValue = documents[field.name];
+        } else if (category === 'hardCopy') {
+          fieldValue = hardCopySubmitted;
+        } else {
+          fieldValue = profile[field.name];
+        }
+
+        const isFilled = fieldValue !== null &&
+          fieldValue !== undefined &&
+          fieldValue !== "" &&
+          fieldValue !== " " &&
+          fieldValue !== false &&
+          (!Array.isArray(fieldValue) || fieldValue.length > 0);
+
+        if (isFilled) {
+          totalScore += field.weight;
+        } else {
+          lackingFields.push(field.label);
+        }
+      });
+    });
+
+    const percentage = Math.round((totalScore / maxScore) * 100);
+    const isComplete = percentage === 100;
+
+    return { percentage, isComplete, lackingFields };
+  }, [member]);
+
+  const getCompletionColor = (percentage) => {
+    if (percentage === 100) return "bg-green-500";
+    if (percentage >= 90) return "bg-green-400";
+    if (percentage >= 70) return "bg-blue-500";
+    if (percentage >= 50) return "bg-yellow-500";
+    return "bg-red-500";
+  };
+
+  const getCompletionStatus = (percentage) => {
+    if (percentage === 100) return "Complete";
+    if (percentage >= 90) return "Excellent";
+    if (percentage >= 70) return "Good";
+    if (percentage >= 50) return "Fair";
+    return "Needs Improvement";
+  };
+
+  if (completionData.isComplete) {
+    return (
+      <div className="bg-white border border-green-200 rounded-lg p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+              <Check className="w-6 h-6 text-green-600" />
             </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Profile Complete!</h3>
+              <p className="text-green-600 font-medium">All requirements are fulfilled</p>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-2xl font-bold text-green-600">100%</div>
+            <div className="text-sm text-gray-500">Complete</div>
           </div>
         </div>
       </div>
+    );
+  }
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg p-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+        <div className="flex-1">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-gray-700">
+              Profile Completion
+            </span>
+            <span className="text-sm font-semibold text-gray-900">
+              {completionData.percentage}% - {getCompletionStatus(completionData.percentage)}
+            </span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-3">
+            <div
+              className={`h-3 rounded-full transition-all duration-500 ${getCompletionColor(completionData.percentage)}`}
+              style={{ width: `${completionData.percentage}%` }}
+            ></div>
+          </div>
+        </div>
+      </div>
+
+      {/* Lacking Fields */}
+      {completionData.lackingFields.length > 0 && (
+        <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <h4 className="text-sm font-medium text-yellow-800 mb-2">
+            Required fields to complete:
+          </h4>
+          <ul className="text-sm text-yellow-700 list-disc list-inside space-y-1">
+            {completionData.lackingFields.map((field, index) => (
+              <li key={index}>{field}</li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
@@ -652,183 +709,6 @@ function MemberProfile() {
     });
   };
 
-  // Calculate profile completion percentage including images/documents
-  const calculateProfileCompletion = useMemo(() => {
-    if (!member || member.role !== "member" || !member.member_profile) return 0;
-
-    const profile = member.member_profile;
-    const documents = profile.documents || {};
-
-    const fieldWeights = {
-      personal: {
-        fields: [
-          { name: 'first_name', label: 'First Name', weight: 2 },
-          { name: 'last_name', label: 'Last Name', weight: 2 },
-          { name: 'birthdate', label: 'Birthdate', weight: 1 },
-          { name: 'sex', label: 'Sex', weight: 1 },
-        ],
-        totalWeight: 6
-      },
-      contact: {
-        fields: [
-          { name: 'contact_number', label: 'Contact Number', weight: 1 },
-          { name: 'address', label: 'Address', weight: 1 },
-          { name: 'barangay', label: 'Barangay', weight: 1 },
-        ],
-        totalWeight: 3
-      },
-      medical: {
-        fields: [
-          { name: 'disability_type', label: 'Disability Type', weight: 2 },
-          { name: 'blood_type', label: 'Blood Type', weight: 1 },
-        ],
-        totalWeight: 3
-      },
-      government: {
-        fields: [
-          { name: 'sss_number', label: 'SSS Number', weight: 1 },
-          { name: 'philhealth_number', label: 'PhilHealth Number', weight: 1 },
-        ],
-        totalWeight: 2
-      },
-      guardian: {
-        fields: [
-          { name: 'guardian_full_name', label: 'Guardian Full Name', weight: 1 },
-          { name: 'guardian_relationship', label: 'Guardian Relationship', weight: 1 },
-          { name: 'guardian_contact_number', label: 'Guardian Contact', weight: 1 },
-          { name: 'guardian_address', label: 'Guardian Address', weight: 1 },
-        ],
-        totalWeight: 4
-      },
-      documents: {
-        fields: [
-          { name: 'barangay_indigency', label: 'Barangay Indigency', weight: 1 },
-          { name: 'medical_certificate', label: 'Medical Certificate', weight: 1 },
-          { name: 'picture_2x2', label: '2x2 Picture', weight: 1 },
-          { name: 'birth_certificate', label: 'Birth Certificate', weight: 1 },
-        ],
-        totalWeight: 4
-      }
-    };
-
-    let totalScore = 0;
-    let maxScore = 0;
-
-    Object.keys(fieldWeights).forEach(category => {
-      const categoryConfig = fieldWeights[category];
-      categoryConfig.fields.forEach(field => {
-        maxScore += field.weight;
-        let fieldValue;
-        if (category === 'documents') {
-          fieldValue = documents[field.name];
-        } else {
-          fieldValue = profile[field.name];
-        }
-
-        const isFilled = fieldValue !== null &&
-          fieldValue !== undefined &&
-          fieldValue !== "" &&
-          fieldValue !== " " &&
-          (!Array.isArray(fieldValue) || fieldValue.length > 0);
-
-        if (isFilled) totalScore += field.weight;
-      });
-    });
-
-    return Math.round((totalScore / maxScore) * 100);
-  }, [member]);
-
-  // Get profile completion color based on percentage
-  const getCompletionColor = (percentage) => {
-    if (percentage >= 90) return "bg-green-500";
-    if (percentage >= 70) return "bg-blue-500";
-    if (percentage >= 50) return "bg-yellow-500";
-    return "bg-red-500";
-  };
-
-  // Get completion status text
-  const getCompletionStatus = (percentage) => {
-    if (percentage >= 90) return "Excellent";
-    if (percentage >= 70) return "Good";
-    if (percentage >= 50) return "Fair";
-    return "Needs Improvement";
-  };
-
-  // Get detailed completion breakdown
-  const getCompletionBreakdown = useMemo(() => {
-    if (!member || member.role !== "member" || !member.member_profile) return [];
-
-    const profile = member.member_profile;
-    const documents = profile.documents || {};
-
-    const categories = [
-      {
-        name: "Personal Information",
-        fields: [
-          { label: "First Name", value: profile.first_name },
-          { label: "Last Name", value: profile.last_name },
-          { label: "Birthdate", value: profile.birthdate },
-          { label: "Sex", value: profile.sex },
-        ]
-      },
-      {
-        name: "Contact Information",
-        fields: [
-          { label: "Contact Number", value: profile.contact_number },
-          { label: "Address", value: profile.address },
-          { label: "Barangay", value: profile.barangay },
-        ]
-      },
-      {
-        name: "Medical Information",
-        fields: [
-          { label: "Disability Type", value: profile.disability_type },
-          { label: "Blood Type", value: profile.blood_type },
-        ]
-      },
-      {
-        name: "Government IDs",
-        fields: [
-          { label: "SSS Number", value: profile.sss_number },
-          { label: "PhilHealth Number", value: profile.philhealth_number },
-        ]
-      },
-      {
-        name: "Guardian Information",
-        fields: [
-          { label: "Guardian Full Name", value: profile.guardian_full_name },
-          { label: "Guardian Relationship", value: profile.guardian_relationship },
-          { label: "Guardian Contact", value: profile.guardian_contact_number },
-          { label: "Guardian Address", value: profile.guardian_address },
-        ]
-      },
-      {
-        name: "Required Documents",
-        fields: [
-          { label: "Barangay Indigency", value: documents.barangay_indigency },
-          { label: "Medical Certificate", value: documents.medical_certificate },
-          { label: "2x2 Picture", value: documents.picture_2x2 },
-          { label: "Birth Certificate", value: documents.birth_certificate },
-        ]
-      }
-    ];
-
-    return categories.map(category => {
-      const filledFields = category.fields.filter(field =>
-        field.value !== null &&
-        field.value !== undefined &&
-        field.value !== "" &&
-        field.value !== " " &&
-        (!Array.isArray(field.value) || field.value.length > 0)
-      ).length;
-
-      const totalFields = category.fields.length;
-      const percentage = Math.round((filledFields / totalFields) * 100);
-
-      return { ...category, filledFields, totalFields, percentage };
-    });
-  }, [member]);
-
   // Calculate fullName and profile from member data using useMemo
   const fullName = useMemo(() => {
     if (!member) return "";
@@ -1167,60 +1047,10 @@ function MemberProfile() {
               </div>
             </div>
 
-            {/* Profile Completion Progress Bar */}
+            {/* Enhanced Profile Completion Section */}
             {member.role === "member" && (
               <div className="bg-white border-t border-gray-200 p-6">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-gray-700">
-                        Profile Completion
-                      </span>
-                      <span className="text-sm font-semibold text-gray-900">
-                        {calculateProfileCompletion}% - {getCompletionStatus(calculateProfileCompletion)}
-                      </span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-3">
-                      <div
-                        className={`h-3 rounded-full transition-all duration-500 ${getCompletionColor(calculateProfileCompletion)}`}
-                        style={{ width: `${calculateProfileCompletion}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                  {calculateProfileCompletion < 100 && (
-                    <div className="text-sm text-gray-500 text-center sm:text-right">
-                      Complete all fields for full profile benefits
-                    </div>
-                  )}
-                </div>
-
-                {/* Detailed Breakdown */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
-                  {getCompletionBreakdown.map((category, index) => (
-                    <div key={index} className="bg-gray-50 rounded-lg p-3">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-xs font-medium text-gray-700">
-                          {category.name}
-                        </span>
-                        <span className="text-xs font-semibold text-gray-900">
-                          {category.percentage}%
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className={`h-2 rounded-full ${category.percentage >= 90 ? 'bg-green-400' :
-                            category.percentage >= 70 ? 'bg-blue-400' :
-                              category.percentage >= 50 ? 'bg-yellow-400' : 'bg-red-400'
-                            }`}
-                          style={{ width: `${category.percentage}%` }}
-                        ></div>
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        {category.filledFields} of {category.totalFields} fields completed
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <ProfileCompletion member={member} />
               </div>
             )}
           </div>
@@ -1255,13 +1085,17 @@ function MemberProfile() {
                 <div className="flex justify-between items-center mb-6">
                   <div>
                     <h2 className="text-2xl font-bold text-gray-800">Personal Information</h2>
-                    <p className="text-gray-600 mt-1">
-                      Profile completion: <span className={`font-semibold ${getCompletionColor(calculateProfileCompletion).replace('bg-', 'text-')}`}>
-                        {calculateProfileCompletion}%
-                      </span>
-                    </p>
                   </div>
                   <div className="flex gap-3">
+                    {/* Edit Profile Button - ADDED HERE */}
+                    <Link
+                      to={`/members/${id}/edit`}
+                      className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold"
+                    >
+                      <Edit size={16} className="mr-2" />
+                      Edit Profile
+                    </Link>
+
                     {/* Reset Password Button */}
                     <button
                       onClick={() => setShowPasswordModal(true)}
@@ -1355,7 +1189,7 @@ function MemberProfile() {
 
                 {/* Enhanced Hard Copy Status Section */}
                 <div className="mb-6">
-                  <HardCopyStatusManager 
+                  <HardCopyStatusManager
                     member={member}
                     onUpdate={(updatedData) => {
                       setMember(prev => ({
@@ -1483,7 +1317,7 @@ function MemberProfile() {
               <p className="text-gray-600 text-center mb-6">
                 Set a new password for <span className="font-semibold">{fullName}</span>
               </p>
-              
+
               {/* New Password Field */}
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
